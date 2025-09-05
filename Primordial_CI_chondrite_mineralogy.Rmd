@@ -1,0 +1,1444 @@
+---
+title: "Primordial CI chondrite mineralogy"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+# ===========================================================================
+# Primordial CI Chondrite Mineralogy Reconstruction with Precise Densities
+# ===========================================================================
+
+library(ggplot2)
+library(dplyr)
+
+# ===========================================
+# 1. Define input parameters with precise densities
+# ===========================================
+
+# Current mineralogy from King et al. (2015)
+current_minerals <- data.frame(
+  mineral = c("Serpentine/saponite", "Magnetite", "Sulfides", "Carbonates", "Ferrihydrite"),
+  vol_min = c(81, 6, 4, 0, 0),
+  vol_max = c(84, 10, 7, 3, 4),
+  vol_mean = c(83, 8, 5.5, 2, 1.5)
+)
+
+# Precise density values for endmember minerals
+forsterite_density <- 3.271  # g/cm³
+fayalite_density <- 4.390    # g/cm³
+enstatite_density <- 3.200   # g/cm³
+ferrosilite_density <- 3.960 # g/cm³
+kamacite_density <- 7.900    # g/cm³ (α-Fe,Ni with ~5-7% Ni)
+taenite_density <- 8.200     # g/cm³ (γ-Fe,Ni with higher Ni)
+troilite_density <- 4.610    # g/cm³
+pyrrhotite_density <- 4.580  # g/cm³
+anorthite_density <- 2.760   # g/cm³
+albite_density <- 2.620      # g/cm³
+magnetite_density <- 5.175   # g/cm³
+serpentine_density <- 2.550  # g/cm³ (adjusted for Fe content)
+saponite_density <- 2.300    # g/cm³
+dolomite_density <- 2.870    # g/cm³
+ferrihydrite_density <- 3.800 # g/cm³
+amorphous_density <- 2.200   # g/cm³
+
+# Calculation of solid solution densities based on composition
+# Olivine (Fo₉₀Fa₁₀)
+olivine_fo_fraction <- 0.90
+olivine_fa_fraction <- 0.10
+olivine_density <- (olivine_fo_fraction * forsterite_density) + 
+                   (olivine_fa_fraction * fayalite_density)
+
+# Pyroxene (En₈₅Fs₁₅)
+pyroxene_en_fraction <- 0.85
+pyroxene_fs_fraction <- 0.15
+pyroxene_density <- (pyroxene_en_fraction * enstatite_density) + 
+                    (pyroxene_fs_fraction * ferrosilite_density)
+
+# Plagioclase (An₈₀Ab₂₀)
+plagioclase_an_fraction <- 0.80
+plagioclase_ab_fraction <- 0.20
+plagioclase_density <- (plagioclase_an_fraction * anorthite_density) + 
+                       (plagioclase_ab_fraction * albite_density)
+
+# Metal (93% Fe, 7% Ni)
+metal_density <- kamacite_density  # Dominated by kamacite in primitive material
+
+# Create updated density dataframe
+densities <- data.frame(
+  mineral = c("Serpentine", "Saponite", "Olivine", "Pyroxene", "Magnetite", 
+              "Fe-Ni metal", "Troilite", "Pyrrhotite", "Plagioclase", 
+              "Dolomite", "Ferrihydrite", "Amorphous silicate"),
+  density_mean = c(serpentine_density, saponite_density, olivine_density, pyroxene_density, 
+                  magnetite_density, metal_density, troilite_density, pyrrhotite_density, 
+                  plagioclase_density, dolomite_density, ferrihydrite_density, amorphous_density),
+  density_err = c(0.05, 0.05, 0.05, 0.05, 0.05, 
+                  0.10, 0.03, 0.05, 0.03, 
+                  0.03, 0.10, 0.10)
+)
+
+cat("Calculated precise densities for mineral solid solutions:\n")
+cat(sprintf("Olivine (Fo₉₀Fa₁₀): %.3f g/cm³\n", olivine_density))
+cat(sprintf("Pyroxene (En₈₅Fs₁₅): %.3f g/cm³\n", pyroxene_density))
+cat(sprintf("Plagioclase (An₈₀Ab₂₀): %.3f g/cm³\n", plagioclase_density))
+
+# ===========================================
+# 2. Define key relationships and parameters
+# ===========================================
+
+# Serpentine:Saponite ratio in phyllosilicates (Tomeoka & Buseck, 1988)
+serp_ratio <- 0.7  # 70% serpentine
+sap_ratio <- 0.3   # 30% saponite
+serp_ratio_err <- 0.05  # uncertainty
+
+# Volume expansion factors during hydration
+vol_exp_ol_serp <- 1.35  # Olivine to serpentine expansion
+vol_exp_ol_serp_err <- 0.05
+vol_exp_px_sap <- 1.30   # Pyroxene to saponite expansion
+vol_exp_px_sap_err <- 0.05
+
+# Magnetite origin distribution based on multiple studies
+mag_from_metal_ratio <- 0.35  # 35% from Fe,Ni metal oxidation
+mag_from_sulfide_ratio <- 0.20  # 20% from sulfide oxidation
+mag_from_serp_ratio <- 0.30  # 30% from serpentinization of Fe in olivine
+mag_from_primary_ratio <- 0.15  # 15% primary nebular magnetite
+mag_ratio_err <- 0.05  # uncertainty in these ratios
+
+# Volume expansion during Fe-metal to magnetite conversion
+metal_to_mag_exp <- 1.4  # 40% volume increase
+metal_to_mag_exp_err <- 0.1
+
+# Chemical composition parameters
+# Weight fractions of elements in minerals
+ca_in_dolomite <- 0.22  # Ca weight fraction in dolomite
+al_in_saponite <- 0.09  # Al weight fraction in saponite
+ca_in_anorthite <- 0.14  # Ca weight fraction in anorthite
+al_in_anorthite <- 0.19  # Al weight fraction in anorthite
+fe_in_olivine <- 0.15  # Fe weight fraction in olivine (Fa15 component)
+
+# ===========================================
+# 3. Custom simple error propagation functions
+# ===========================================
+
+# Function to get density for a mineral
+get_density <- function(mineral_name) {
+  density_row <- densities[densities$mineral == mineral_name, ]
+  return(list(
+    mean = density_row$density_mean,
+    err = density_row$density_err
+  ))
+}
+
+# Simple error propagation for multiplication: z = x * y
+mult_error <- function(x, x_err, y, y_err) {
+  z <- x * y
+  z_err <- sqrt((x_err/x)^2 + (y_err/y)^2) * z
+  return(list(mean = z, err = z_err))
+}
+
+# Simple error propagation for division: z = x / y
+div_error <- function(x, x_err, y, y_err) {
+  z <- x / y
+  z_err <- sqrt((x_err/x)^2 + (y_err/y)^2) * z
+  return(list(mean = z, err = z_err))
+}
+
+# Simple error propagation for addition: z = x + y
+add_error <- function(x, x_err, y, y_err) {
+  z <- x + y
+  z_err <- sqrt(x_err^2 + y_err^2)
+  return(list(mean = z, err = z_err))
+}
+
+# Simple error propagation for subtraction: z = x - y
+sub_error <- function(x, x_err, y, y_err) {
+  z <- x - y
+  z_err <- sqrt(x_err^2 + y_err^2)
+  return(list(mean = z, err = z_err))
+}
+
+# ===========================================
+# 4. Perform the calculations
+# ===========================================
+
+# 4.1 Separate serpentine and saponite components
+serp_vol <- current_minerals$vol_mean[1] * serp_ratio
+serp_vol_err <- sqrt((current_minerals$vol_mean[1] * serp_ratio_err)^2 + 
+                      (serp_ratio * (current_minerals$vol_max[1] - current_minerals$vol_min[1])/2)^2)
+
+sap_vol <- current_minerals$vol_mean[1] * sap_ratio
+sap_vol_err <- sqrt((current_minerals$vol_mean[1] * serp_ratio_err)^2 + 
+                      (sap_ratio * (current_minerals$vol_max[1] - current_minerals$vol_min[1])/2)^2)
+
+cat("\nPhyllosilicate components:\n")
+cat(sprintf("Serpentine: %.1f ± %.1f vol%%\n", serp_vol, serp_vol_err))
+cat(sprintf("Saponite: %.1f ± %.1f vol%%\n", sap_vol, sap_vol_err))
+
+# 4.2 Calculate olivine from serpentine
+
+# Get densities
+d_serp <- get_density("Serpentine")
+d_ol <- get_density("Olivine")
+
+# Mass of serpentine
+serp_mass_result <- mult_error(serp_vol, serp_vol_err, d_serp$mean, d_serp$err)
+serp_mass <- serp_mass_result$mean
+serp_mass_err <- serp_mass_result$err
+
+# Convert mass to equivalent olivine mass
+ol_mass_result <- mult_error(serp_mass, serp_mass_err, d_ol$mean/d_serp$mean, 
+                            sqrt((d_ol$err/d_ol$mean)^2 + (d_serp$err/d_serp$mean)^2) * (d_ol$mean/d_serp$mean))
+ol_mass <- ol_mass_result$mean
+ol_mass_err <- ol_mass_result$err
+
+# Convert to volume
+ol_vol_result <- div_error(ol_mass, ol_mass_err, d_ol$mean, d_ol$err)
+ol_vol <- ol_vol_result$mean
+ol_vol_err <- ol_vol_result$err
+
+# Apply volume correction for hydration expansion
+ol_orig_vol_result <- div_error(ol_vol, ol_vol_err, vol_exp_ol_serp, vol_exp_ol_serp_err)
+ol_orig_vol <- ol_orig_vol_result$mean
+ol_orig_vol_err <- ol_orig_vol_result$err
+
+# Account for magnetite from serpentinization
+# Some Fe from olivine forms magnetite during serpentinization
+# Adjust olivine volume to account for this Fe loss
+# Rough calculation based on Fe in olivine that goes to magnetite
+fe_to_mag_fraction <- 0.3  # ~30% of Fe in olivine forms magnetite
+ol_adj_factor <- 1 + (olivine_fa_fraction * fe_to_mag_fraction)
+ol_final_vol <- ol_orig_vol * ol_adj_factor
+ol_final_vol_err <- ol_orig_vol_err * ol_adj_factor
+
+cat("\nOlivine calculation:\n")
+cat(sprintf("Original olivine (accounting for Fe loss to magnetite): %.1f ± %.1f vol%%\n", 
+            ol_final_vol, ol_final_vol_err))
+
+# 4.3 Calculate pyroxene from saponite
+
+# Get densities
+d_sap <- get_density("Saponite")
+d_px <- get_density("Pyroxene")
+
+# Mass of saponite
+sap_mass_result <- mult_error(sap_vol, sap_vol_err, d_sap$mean, d_sap$err)
+sap_mass <- sap_mass_result$mean
+sap_mass_err <- sap_mass_result$err
+
+# Convert mass to equivalent pyroxene mass
+px_mass_result <- mult_error(sap_mass, sap_mass_err, d_px$mean/d_sap$mean, 
+                            sqrt((d_px$err/d_px$mean)^2 + (d_sap$err/d_sap$mean)^2) * (d_px$mean/d_sap$mean))
+px_mass <- px_mass_result$mean
+px_mass_err <- px_mass_result$err
+
+# Convert to volume
+px_vol_result <- div_error(px_mass, px_mass_err, d_px$mean, d_px$err)
+px_vol <- px_vol_result$mean
+px_vol_err <- px_vol_result$err
+
+# Apply volume correction for hydration expansion
+px_orig_vol_result <- div_error(px_vol, px_vol_err, vol_exp_px_sap, vol_exp_px_sap_err)
+px_orig_vol <- px_orig_vol_result$mean
+px_orig_vol_err <- px_orig_vol_result$err
+
+cat("\nPyroxene calculation:\n")
+cat(sprintf("Original pyroxene: %.1f ± %.1f vol%%\n", px_orig_vol, px_orig_vol_err))
+
+# 4.4 Magnetite analysis
+mag_vol <- current_minerals$vol_mean[2]
+mag_vol_err <- (current_minerals$vol_max[2] - current_minerals$vol_min[2])/2
+
+# Partition magnetite by origin
+mag_from_metal_vol <- mag_vol * mag_from_metal_ratio
+mag_from_metal_vol_err <- sqrt((mag_vol_err * mag_from_metal_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_from_sulfide_vol <- mag_vol * mag_from_sulfide_ratio
+mag_from_sulfide_vol_err <- sqrt((mag_vol_err * mag_from_sulfide_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_from_serp_vol <- mag_vol * mag_from_serp_ratio
+mag_from_serp_vol_err <- sqrt((mag_vol_err * mag_from_serp_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_primary_vol <- mag_vol * mag_from_primary_ratio
+mag_primary_vol_err <- sqrt((mag_vol_err * mag_from_primary_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+cat("\nMagnetite origins:\n")
+cat(sprintf("From Fe-Ni metal: %.1f ± %.1f vol%%\n", mag_from_metal_vol, mag_from_metal_vol_err))
+cat(sprintf("From sulfides: %.1f ± %.1f vol%%\n", mag_from_sulfide_vol, mag_from_sulfide_vol_err))
+cat(sprintf("From serpentinization: %.1f ± %.1f vol%%\n", mag_from_serp_vol, mag_from_serp_vol_err))
+cat(sprintf("Primary nebular: %.1f ± %.1f vol%%\n", mag_primary_vol, mag_primary_vol_err))
+
+# 4.5 Calculate Fe,Ni metal from magnetite
+d_mag <- get_density("Magnetite")
+d_metal <- get_density("Fe-Ni metal")
+
+# Volume correction for metal oxidation to magnetite
+metal_vol_from_mag_result <- div_error(mag_from_metal_vol, mag_from_metal_vol_err, metal_to_mag_exp, metal_to_mag_exp_err)
+metal_vol_from_mag <- metal_vol_from_mag_result$mean
+metal_vol_from_mag_err <- metal_vol_from_mag_result$err
+
+# Density correction
+metal_vol_orig_result <- mult_error(metal_vol_from_mag, metal_vol_from_mag_err, d_mag$mean/d_metal$mean, 
+                                  sqrt((d_mag$err/d_mag$mean)^2 + (d_metal$err/d_metal$mean)^2) * (d_mag$mean/d_metal$mean))
+metal_vol_orig <- metal_vol_orig_result$mean
+metal_vol_orig_err <- metal_vol_orig_result$err
+
+cat("\nFe,Ni metal calculation:\n")
+cat(sprintf("Original Fe,Ni metal: %.1f ± %.1f vol%%\n", metal_vol_orig, metal_vol_orig_err))
+
+# 4.6 Calculate original troilite from current sulfides and magnetite
+d_troilite <- get_density("Troilite")
+d_pyrrhotite <- get_density("Pyrrhotite")
+
+sulfide_vol <- current_minerals$vol_mean[3]
+sulfide_vol_err <- (current_minerals$vol_max[3] - current_minerals$vol_min[3])/2
+
+# Current sulfides to troilite (accounting for Fe loss in pyrrhotite)
+troilite_from_sulfide_result <- mult_error(sulfide_vol, sulfide_vol_err, d_pyrrhotite$mean/d_troilite$mean, 
+                                         sqrt((d_pyrrhotite$err/d_pyrrhotite$mean)^2 + (d_troilite$err/d_troilite$mean)^2) * (d_pyrrhotite$mean/d_troilite$mean))
+troilite_from_sulfide_vol <- troilite_from_sulfide_result$mean
+troilite_from_sulfide_vol_err <- troilite_from_sulfide_result$err
+
+# Troilite from magnetite (that formed from sulfide oxidation)
+# Note: Factor 0.8 accounts for O addition and mass balance
+mag_factor <- 0.8
+troilite_from_mag_result <- mult_error(mag_from_sulfide_vol, mag_from_sulfide_vol_err, (d_mag$mean/d_troilite$mean) * mag_factor, 
+                                     sqrt((d_mag$err/d_mag$mean)^2 + (d_troilite$err/d_troilite$mean)^2) * (d_mag$mean/d_troilite$mean) * mag_factor)
+troilite_from_mag_vol <- troilite_from_mag_result$mean
+troilite_from_mag_vol_err <- troilite_from_mag_result$err
+
+# Total original troilite
+troilite_orig_result <- add_error(troilite_from_sulfide_vol, troilite_from_sulfide_vol_err, troilite_from_mag_vol, troilite_from_mag_vol_err)
+troilite_orig_vol <- troilite_orig_result$mean
+troilite_orig_vol_err <- troilite_orig_result$err
+
+cat("\nTroilite calculation:\n")
+cat(sprintf("Original troilite: %.1f ± %.1f vol%%\n", troilite_orig_vol, troilite_orig_vol_err))
+
+# 4.7 Calculate plagioclase/anorthite
+d_dolomite <- get_density("Dolomite")
+d_anorthite <- get_density("Plagioclase")
+
+carbonate_vol <- current_minerals$vol_mean[4]
+carbonate_vol_err <- (current_minerals$vol_max[4] - current_minerals$vol_min[4])/2
+
+# Ca contribution from carbonates
+carbonate_ca_contrib_result <- mult_error(carbonate_vol, carbonate_vol_err, d_dolomite$mean * ca_in_dolomite, d_dolomite$err * ca_in_dolomite)
+carbonate_ca_contrib <- carbonate_ca_contrib_result$mean
+carbonate_ca_contrib_err <- carbonate_ca_contrib_result$err
+
+# Al contribution from saponite
+saponite_al_contrib_result <- mult_error(sap_vol, sap_vol_err, d_sap$mean * al_in_saponite, d_sap$err * al_in_saponite)
+saponite_al_contrib <- saponite_al_contrib_result$mean
+saponite_al_contrib_err <- saponite_al_contrib_result$err
+
+# Convert to anorthite volume
+anorthite_from_ca_result <- div_error(carbonate_ca_contrib, carbonate_ca_contrib_err, d_anorthite$mean * ca_in_anorthite, d_anorthite$err * ca_in_anorthite)
+anorthite_from_ca_vol <- anorthite_from_ca_result$mean
+anorthite_from_ca_vol_err <- anorthite_from_ca_result$err
+
+anorthite_from_al_result <- div_error(saponite_al_contrib, saponite_al_contrib_err, d_anorthite$mean * al_in_anorthite, d_anorthite$err * al_in_anorthite)
+anorthite_from_al_vol <- anorthite_from_al_result$mean
+anorthite_from_al_vol_err <- anorthite_from_al_result$err
+
+# Consider overlap (don't double-count)
+anorthite_orig_vol <- max(anorthite_from_ca_vol, anorthite_from_al_vol)
+anorthite_orig_vol_err <- ifelse(
+  anorthite_from_ca_vol > anorthite_from_al_vol,
+  anorthite_from_ca_vol_err,
+  anorthite_from_al_vol_err
+)
+
+# Adjustment factor based on Al and Ca budgets
+anorthite_correction <- 0.8  # Only ~80% of theoretical Al/Ca forms anorthite
+anorthite_final_vol <- anorthite_orig_vol * anorthite_correction
+anorthite_final_vol_err <- anorthite_orig_vol_err * anorthite_correction
+
+cat("\nPlagioclase/anorthite calculation:\n")
+cat(sprintf("Original plagioclase: %.1f ± %.1f vol%%\n", anorthite_final_vol, anorthite_final_vol_err))
+
+# 4.8 Calculate amorphous silicate component
+d_amorphous <- get_density("Amorphous silicate")
+
+# Sum of all crystalline components
+crystalline_sum_result <- add_error(
+  ol_final_vol, ol_final_vol_err,
+  add_error(
+    px_orig_vol, px_orig_vol_err,
+    add_error(
+      metal_vol_orig, metal_vol_orig_err,
+      add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$mean, add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$err
+    )$mean, add_error(
+      metal_vol_orig, metal_vol_orig_err,
+      add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$mean, add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$err
+    )$err
+  )$mean, add_error(
+    px_orig_vol, px_orig_vol_err,
+    add_error(
+      metal_vol_orig, metal_vol_orig_err,
+      add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$mean, add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$err
+    )$mean, add_error(
+      metal_vol_orig, metal_vol_orig_err,
+      add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$mean, add_error(
+        troilite_orig_vol, troilite_orig_vol_err,
+        add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$mean, add_error(
+          anorthite_final_vol, anorthite_final_vol_err,
+          mag_primary_vol, mag_primary_vol_err
+        )$err
+      )$err
+    )$err
+  )$err
+)
+
+crystalline_sum <- crystalline_sum_result$mean
+crystalline_sum_err <- crystalline_sum_result$err
+
+# Alternative simpler calculation for crystalline sum (use this if the nested approach is too complex)
+crystalline_sum_simple <- ol_final_vol + px_orig_vol + metal_vol_orig + troilite_orig_vol + anorthite_final_vol + mag_primary_vol
+crystalline_sum_err_simple <- sqrt(ol_final_vol_err^2 + px_orig_vol_err^2 + metal_vol_orig_err^2 + 
+                                 troilite_orig_vol_err^2 + anorthite_final_vol_err^2 + mag_primary_vol_err^2)
+
+# Use the simpler approach for clarity
+crystalline_sum <- crystalline_sum_simple
+crystalline_sum_err <- crystalline_sum_err_simple
+
+# Calculate remaining volume
+amorphous_vol <- 100 - crystalline_sum
+amorphous_vol_err <- crystalline_sum_err
+
+cat("\nAmorphous silicate calculation:\n")
+cat(sprintf("Amorphous silicate: %.1f ± %.1f vol%%\n", amorphous_vol, amorphous_vol_err))
+
+# ===========================================
+# 5. Calculate endmember components by weight and mole
+# ===========================================
+
+# 5.1 Olivine endmember calculation
+# Convert volume to mass
+ol_mass <- ol_final_vol * d_ol$mean
+ol_fo_mass <- ol_mass * olivine_fo_fraction * (forsterite_density/olivine_density)
+ol_fa_mass <- ol_mass * olivine_fa_fraction * (fayalite_density/olivine_density)
+
+# Calculate molar amounts (simplified)
+mol_mass_fo <- 140.69  # g/mol for Mg₂SiO₄
+mol_mass_fa <- 203.78  # g/mol for Fe₂SiO₄
+ol_fo_moles <- ol_fo_mass / mol_mass_fo
+ol_fa_moles <- ol_fa_mass / mol_mass_fa
+ol_total_moles <- ol_fo_moles + ol_fa_moles
+
+# Molar percentages
+ol_fo_mol_percent <- ol_fo_moles / ol_total_moles * 100
+ol_fa_mol_percent <- ol_fa_moles / ol_total_moles * 100
+
+# 5.2 Pyroxene endmember calculation
+# Convert volume to mass
+px_mass <- px_orig_vol * d_px$mean
+px_en_mass <- px_mass * pyroxene_en_fraction * (enstatite_density/pyroxene_density)
+px_fs_mass <- px_mass * pyroxene_fs_fraction * (ferrosilite_density/pyroxene_density)
+
+# Calculate molar amounts
+mol_mass_en <- 100.39  # g/mol for MgSiO₃
+mol_mass_fs <- 131.93  # g/mol for FeSiO₃
+px_en_moles <- px_en_mass / mol_mass_en
+px_fs_moles <- px_fs_mass / mol_mass_fs
+px_total_moles <- px_en_moles + px_fs_moles
+
+# Molar percentages
+px_en_mol_percent <- px_en_moles / px_total_moles * 100
+px_fs_mol_percent <- px_fs_moles / px_total_moles * 100
+
+# 5.3 Plagioclase endmember calculation
+# Convert volume to mass
+pl_mass <- anorthite_final_vol * d_anorthite$mean
+pl_an_mass <- pl_mass * plagioclase_an_fraction * (anorthite_density/plagioclase_density)
+pl_ab_mass <- pl_mass * plagioclase_ab_fraction * (albite_density/plagioclase_density)
+
+# Calculate molar amounts
+mol_mass_an <- 278.21  # g/mol for CaAl₂Si₂O₈
+mol_mass_ab <- 262.22  # g/mol for NaAlSi₃O₈
+pl_an_moles <- pl_an_mass / mol_mass_an
+pl_ab_moles <- pl_ab_mass / mol_mass_ab
+pl_total_moles <- pl_an_moles + pl_ab_moles
+
+# Molar percentages
+pl_an_mol_percent <- pl_an_moles / pl_total_moles * 100
+pl_ab_mol_percent <- pl_ab_moles / pl_total_moles * 100
+
+# 5.4 Fe,Ni metal composition (weight percentages)
+metal_fe_wt_percent <- 93.0  # Typical for primitive Fe,Ni metal
+metal_ni_wt_percent <- 7.0
+
+# 5.5 Amorphous silicate composition (approximate molar ratios)
+amorphous_mgsi_ratio <- 1.1  # Mg/Si
+amorphous_fesi_ratio <- 0.4  # Fe/Si
+amorphous_alsi_ratio <- 0.08 # Al/Si
+amorphous_casi_ratio <- 0.06 # Ca/Si
+amorphous_nasi_ratio <- 0.05 # Na/Si
+
+# ===========================================
+# 6. Generate final results table with endmember breakdown
+# ===========================================
+
+# Create summary table with endmember compositions
+primordial_mineralogy <- data.frame(
+  mineral = c("Olivine", "Low-Ca Pyroxene", "Fe,Ni metal", 
+              "Troilite", "Plagioclase", "Primary magnetite", "Amorphous silicate"),
+  vol_percent = c(ol_final_vol, px_orig_vol, metal_vol_orig, 
+                 troilite_orig_vol, anorthite_final_vol, mag_primary_vol, amorphous_vol),
+  vol_error = c(ol_final_vol_err, px_orig_vol_err, metal_vol_orig_err, 
+               troilite_orig_vol_err, anorthite_final_vol_err, mag_primary_vol_err, amorphous_vol_err),
+  vol_range = c(
+    paste(round(ol_final_vol - ol_final_vol_err), "-", round(ol_final_vol + ol_final_vol_err)),
+    paste(round(px_orig_vol - px_orig_vol_err), "-", round(px_orig_vol + px_orig_vol_err)),
+    paste(round(metal_vol_orig - metal_vol_orig_err), "-", round(metal_vol_orig + metal_vol_orig_err)),
+    paste(round(troilite_orig_vol - troilite_orig_vol_err), "-", round(troilite_orig_vol + troilite_orig_vol_err)),
+    paste(round(anorthite_final_vol - anorthite_final_vol_err), "-", round(anorthite_final_vol + anorthite_final_vol_err)),
+    paste(round(mag_primary_vol - mag_primary_vol_err), "-", round(mag_primary_vol + mag_primary_vol_err)),
+    paste(round(amorphous_vol - amorphous_vol_err), "-", round(amorphous_vol + amorphous_vol_err))
+  ),
+  density = c(olivine_density, pyroxene_density, metal_density, 
+             troilite_density, plagioclase_density, magnetite_density, amorphous_density),
+  composition = c(
+    sprintf("Fo₉₀Fa₁₀ (%.1f mol%% Mg₂SiO₄, %.1f mol%% Fe₂SiO₄)", ol_fo_mol_percent, ol_fa_mol_percent),
+    sprintf("En₈₅Fs₁₅ (%.1f mol%% MgSiO₃, %.1f mol%% FeSiO₃)", px_en_mol_percent, px_fs_mol_percent),
+    sprintf("Fe₉₃Ni₇ (%.1f wt%% Fe, %.1f wt%% Ni)", metal_fe_wt_percent, metal_ni_wt_percent),
+    "FeS (pure)",
+    sprintf("An₈₀Ab₂₀ (%.1f mol%% CaAl₂Si₂O₈, %.1f mol%% NaAlSi₃O₈)", pl_an_mol_percent, pl_ab_mol_percent),
+    "Fe₃O₄ (pure)",
+    sprintf("GEMS-like (Mg/Si=%.1f, Fe/Si=%.1f, Al/Si=%.2f)", amorphous_mgsi_ratio, amorphous_fesi_ratio, amorphous_alsi_ratio)
+  )
+)
+
+# Calculate mass percentages
+primordial_mineralogy$mass_percent <- primordial_mineralogy$vol_percent * primordial_mineralogy$density
+primordial_mineralogy$mass_percent <- primordial_mineralogy$mass_percent / sum(primordial_mineralogy$mass_percent) * 100
+
+# Print final table
+cat("\n========== RECONSTRUCTED PRIMORDIAL CI CHONDRITE MINERALOGY ==========\n")
+print(primordial_mineralogy[, c("mineral", "vol_percent", "vol_error", "vol_range", "mass_percent", "density", "composition")])
+cat("=====================================================================\n")
+
+# ===========================================
+# 7. Generate detailed endmember breakdown table
+# ===========================================
+
+# Create detailed endmember breakdown
+endmember_breakdown <- data.frame(
+  component = c(
+    "Forsterite (Mg₂SiO₄)", 
+    "Fayalite (Fe₂SiO₄)", 
+    "Enstatite (MgSiO₃)", 
+    "Ferrosilite (FeSiO₃)", 
+    "Kamacite (Fe,Ni metal)", 
+    "Troilite (FeS)", 
+    "Anorthite (CaAl₂Si₂O₈)", 
+    "Albite (NaAlSi₃O₈)", 
+    "Primary Magnetite (Fe₃O₄)",
+    "Amorphous silicate"
+  ),
+  vol_percent = c(
+    ol_final_vol * olivine_fo_fraction, 
+    ol_final_vol * olivine_fa_fraction,
+    px_orig_vol * pyroxene_en_fraction,
+    px_orig_vol * pyroxene_fs_fraction,
+    metal_vol_orig,
+    troilite_orig_vol,
+    anorthite_final_vol * plagioclase_an_fraction,
+    anorthite_final_vol * plagioclase_ab_fraction,
+    mag_primary_vol,
+    amorphous_vol
+  ),
+  density = c(
+    forsterite_density,
+    fayalite_density,
+    enstatite_density,
+    ferrosilite_density,
+    kamacite_density,
+    troilite_density,
+    anorthite_density,
+    albite_density,
+    magnetite_density,
+    amorphous_density
+  ),
+  formula = c(
+    "Mg₂SiO₄",
+    "Fe₂SiO₄",
+    "MgSiO₃",
+    "FeSiO₃",
+    "Fe₉₃Ni₇",
+    "FeS",
+    "CaAl₂Si₂O₈",
+    "NaAlSi₃O₈",
+    "Fe₃O₄",
+    "Variable (GEMS-like)"
+  )
+)
+
+# Calculate mass percentages for each endmember
+endmember_breakdown$mass <- endmember_breakdown$vol_percent * endmember_breakdown$density
+endmember_breakdown$mass_percent <- endmember_breakdown$mass / sum(endmember_breakdown$mass) * 100
+
+cat("\n========== DETAILED ENDMEMBER BREAKDOWN ==========\n")
+print(endmember_breakdown[, c("component", "vol_percent", "mass_percent", "density", "formula")])
+cat("====================================================\n")
+
+# ===========================================
+# 8. Visualize results
+# ===========================================
+
+# Create bar plot with error bars
+ggplot(primordial_mineralogy, aes(x = reorder(mineral, vol_percent), y = vol_percent)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_errorbar(aes(ymin = vol_percent - vol_error, ymax = vol_percent + vol_error), width = 0.2) +
+  coord_flip() +
+  labs(
+    title = "Reconstructed Primordial CI Chondrite Mineralogy",
+    subtitle = "Volume percentages with uncertainties",
+    x = NULL,
+    y = "Volume %"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12)
+  )
+
+# Create pie chart of endmember components
+endmember_breakdown$component <- factor(endmember_breakdown$component, 
+                                      levels = endmember_breakdown$component[order(endmember_breakdown$mass_percent, decreasing = TRUE)])
+
+ggplot(endmember_breakdown, aes(x = "", y = mass_percent, fill = component)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(
+    title = "Primordial CI Chondrite Mineral Endmember Distribution",
+    subtitle = "Mass percentages",
+    fill = "Mineral Component"
+  ) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+```{r}
+# ===========================================================================
+# Primordial CI Chondrite Mineralogy Reconstruction with Phosphorus
+# ===========================================================================
+
+library(ggplot2)
+library(dplyr)
+
+# ===========================================
+# 1. Define input parameters with precise densities
+# ===========================================
+
+# Current mineralogy from King et al. (2015)
+current_minerals <- data.frame(
+  mineral = c("Serpentine/saponite", "Magnetite", "Sulfides", "Carbonates", "Ferrihydrite"),
+  vol_min = c(81, 6, 4, 0, 0),
+  vol_max = c(84, 10, 7, 3, 4),
+  vol_mean = c(83, 8, 5.5, 2, 1.5)
+)
+
+# Phosphorus content from Alexander (2019)
+bulk_p_content_wt_percent <- 0.145  # wt% P in CI chondrites
+bulk_p_content_ppm <- 1450  # ppm P (equivalent)
+
+# Precise density values for endmember minerals
+forsterite_density <- 3.271  # g/cm³
+fayalite_density <- 4.390    # g/cm³
+enstatite_density <- 3.200   # g/cm³
+ferrosilite_density <- 3.960 # g/cm³
+kamacite_density <- 7.900    # g/cm³ (α-Fe,Ni with ~5-7% Ni)
+taenite_density <- 8.200     # g/cm³ (γ-Fe,Ni with higher Ni)
+troilite_density <- 4.610    # g/cm³
+pyrrhotite_density <- 4.580  # g/cm³
+anorthite_density <- 2.760   # g/cm³
+albite_density <- 2.620      # g/cm³
+magnetite_density <- 5.175   # g/cm³
+serpentine_density <- 2.550  # g/cm³ (adjusted for Fe content)
+saponite_density <- 2.300    # g/cm³
+dolomite_density <- 2.870    # g/cm³
+ferrihydrite_density <- 3.800 # g/cm³
+amorphous_density <- 2.200   # g/cm³
+
+# Phosphorus-bearing minerals
+schreibersite_density <- 7.100  # g/cm³ for (Fe,Ni)₃P
+apatite_density <- 3.200        # g/cm³ for Ca₅(PO₄)₃(OH,F,Cl)
+whitlockite_density <- 3.120    # g/cm³ for Ca₃(PO₄)₂
+
+# Phosphorus content in phosphorus-bearing minerals
+p_in_schreibersite <- 0.154  # 15.4 wt% P in (Fe,Ni)₃P
+p_in_apatite <- 0.185        # ~18.5 wt% P in apatite
+p_in_whitlockite <- 0.200    # ~20.0 wt% P in whitlockite
+
+cat("Phosphorus budget calculation:\n")
+cat(sprintf("Bulk P content in CI chondrites: %.3f wt%% (%.0f ppm)\n", bulk_p_content_wt_percent, bulk_p_content_ppm))
+
+# Calculation of solid solution densities based on composition
+# Olivine (Fo₉₀Fa₁₀)
+olivine_fo_fraction <- 0.90
+olivine_fa_fraction <- 0.10
+olivine_density <- (olivine_fo_fraction * forsterite_density) + 
+                   (olivine_fa_fraction * fayalite_density)
+
+# Pyroxene (En₈₅Fs₁₅)
+pyroxene_en_fraction <- 0.85
+pyroxene_fs_fraction <- 0.15
+pyroxene_density <- (pyroxene_en_fraction * enstatite_density) + 
+                    (pyroxene_fs_fraction * ferrosilite_density)
+
+# Plagioclase (An₈₀Ab₂₀)
+plagioclase_an_fraction <- 0.80
+plagioclase_ab_fraction <- 0.20
+plagioclase_density <- (plagioclase_an_fraction * anorthite_density) + 
+                       (plagioclase_ab_fraction * albite_density)
+
+# Metal (93% Fe, 7% Ni)
+metal_density <- kamacite_density  # Dominated by kamacite in primitive material
+
+# Create updated density dataframe including P-bearing minerals
+densities <- data.frame(
+  mineral = c("Serpentine", "Saponite", "Olivine", "Pyroxene", "Magnetite", 
+              "Fe-Ni metal", "Troilite", "Pyrrhotite", "Plagioclase", 
+              "Dolomite", "Ferrihydrite", "Amorphous silicate", 
+              "Schreibersite", "Apatite", "Whitlockite"),
+  density_mean = c(serpentine_density, saponite_density, olivine_density, pyroxene_density, 
+                  magnetite_density, metal_density, troilite_density, pyrrhotite_density, 
+                  plagioclase_density, dolomite_density, ferrihydrite_density, amorphous_density,
+                  schreibersite_density, apatite_density, whitlockite_density),
+  density_err = c(0.05, 0.05, 0.05, 0.05, 0.05, 
+                  0.10, 0.03, 0.05, 0.03, 
+                  0.03, 0.10, 0.10,
+                  0.10, 0.05, 0.05)
+)
+
+cat("Calculated precise densities for mineral solid solutions:\n")
+cat(sprintf("Olivine (Fo₉₀Fa₁₀): %.3f g/cm³\n", olivine_density))
+cat(sprintf("Pyroxene (En₈₅Fs₁₅): %.3f g/cm³\n", pyroxene_density))
+cat(sprintf("Plagioclase (An₈₀Ab₂₀): %.3f g/cm³\n", plagioclase_density))
+
+# ===========================================
+# 2. Define key relationships and parameters
+# ===========================================
+
+# Serpentine:Saponite ratio in phyllosilicates (Tomeoka & Buseck, 1988)
+serp_ratio <- 0.7  # 70% serpentine
+sap_ratio <- 0.3   # 30% saponite
+serp_ratio_err <- 0.05  # uncertainty
+
+# Volume expansion factors during hydration
+vol_exp_ol_serp <- 1.35  # Olivine to serpentine expansion
+vol_exp_ol_serp_err <- 0.05
+vol_exp_px_sap <- 1.30   # Pyroxene to saponite expansion
+vol_exp_px_sap_err <- 0.05
+
+# Magnetite origin distribution based on multiple studies
+mag_from_metal_ratio <- 0.35  # 35% from Fe,Ni metal oxidation
+mag_from_sulfide_ratio <- 0.20  # 20% from sulfide oxidation
+mag_from_serp_ratio <- 0.30  # 30% from serpentinization of Fe in olivine
+mag_from_primary_ratio <- 0.15  # 15% primary nebular magnetite
+mag_ratio_err <- 0.05  # uncertainty in these ratios
+
+# Volume expansion during Fe-metal to magnetite conversion
+metal_to_mag_exp <- 1.4  # 40% volume increase
+metal_to_mag_exp_err <- 0.1
+
+# Phosphorus distribution in primordial material
+# Based on studies of primitive chondrites, P is primarily in schreibersite
+p_in_schreibersite_fraction <- 0.85  # 85% of P in schreibersite
+p_in_phosphates_fraction <- 0.15     # 15% of P in phosphate minerals (mainly apatite)
+p_fraction_err <- 0.05
+
+# Chemical composition parameters
+# Weight fractions of elements in minerals
+ca_in_dolomite <- 0.22  # Ca weight fraction in dolomite
+al_in_saponite <- 0.09  # Al weight fraction in saponite
+ca_in_anorthite <- 0.14  # Ca weight fraction in anorthite
+al_in_anorthite <- 0.19  # Al weight fraction in anorthite
+fe_in_olivine <- 0.15  # Fe weight fraction in olivine (Fa15 component)
+
+# ===========================================
+# 3. Custom simple error propagation functions
+# ===========================================
+
+# Function to get density for a mineral
+get_density <- function(mineral_name) {
+  density_row <- densities[densities$mineral == mineral_name, ]
+  return(list(
+    mean = density_row$density_mean,
+    err = density_row$density_err
+  ))
+}
+
+# Simple error propagation functions
+mult_error <- function(x, x_err, y, y_err) {
+  z <- x * y
+  z_err <- sqrt((x_err/x)^2 + (y_err/y)^2) * z
+  return(list(mean = z, err = z_err))
+}
+
+div_error <- function(x, x_err, y, y_err) {
+  z <- x / y
+  z_err <- sqrt((x_err/x)^2 + (y_err/y)^2) * z
+  return(list(mean = z, err = z_err))
+}
+
+add_error <- function(x, x_err, y, y_err) {
+  z <- x + y
+  z_err <- sqrt(x_err^2 + y_err^2)
+  return(list(mean = z, err = z_err))
+}
+
+sub_error <- function(x, x_err, y, y_err) {
+  z <- x - y
+  z_err <- sqrt(x_err^2 + y_err^2)
+  return(list(mean = z, err = z_err))
+}
+
+# ===========================================
+# 4. Calculate phosphorus-bearing minerals first
+# ===========================================
+
+# 4.1 Calculate schreibersite abundance
+# Mass of schreibersite needed to account for bulk P (assuming 85% of P is in schreibersite)
+p_in_schreibersite_total <- bulk_p_content_wt_percent * p_in_schreibersite_fraction
+schreibersite_mass_percent <- p_in_schreibersite_total / p_in_schreibersite
+schreibersite_mass_percent_err <- schreibersite_mass_percent * sqrt((p_fraction_err/p_in_schreibersite_fraction)^2 + 0.01) # small additional uncertainty
+
+# Convert mass percent to volume percent
+# Assume average density of CI chondrite material ~2.2 g/cm³ (close to current CI bulk density)
+average_ci_density <- 2.2
+schreibersite_vol_percent <- schreibersite_mass_percent * (average_ci_density / schreibersite_density)
+schreibersite_vol_percent_err <- schreibersite_mass_percent_err * (average_ci_density / schreibersite_density)
+
+cat("\nPhosphorus mineralogy calculation:\n")
+cat(sprintf("P in schreibersite: %.3f wt%% (%.1f%% of total P)\n", p_in_schreibersite_total, p_in_schreibersite_fraction*100))
+cat(sprintf("Schreibersite abundance: %.3f wt%% (%.3f vol%%)\n", schreibersite_mass_percent, schreibersite_vol_percent))
+
+# 4.2 Calculate phosphate mineral abundance
+# Remaining P goes to phosphate minerals (primarily apatite in primitive materials)
+p_in_phosphates_total <- bulk_p_content_wt_percent * p_in_phosphates_fraction
+apatite_mass_percent <- p_in_phosphates_total / p_in_apatite
+apatite_mass_percent_err <- apatite_mass_percent * sqrt((p_fraction_err/p_in_phosphates_fraction)^2 + 0.01)
+
+# Convert to volume percent
+apatite_vol_percent <- apatite_mass_percent * (average_ci_density / apatite_density)
+apatite_vol_percent_err <- apatite_mass_percent_err * (average_ci_density / apatite_density)
+
+cat(sprintf("P in phosphates: %.3f wt%% (%.1f%% of total P)\n", p_in_phosphates_total, p_in_phosphates_fraction*100))
+cat(sprintf("Apatite abundance: %.3f wt%% (%.3f vol%%)\n", apatite_mass_percent, apatite_vol_percent))
+
+# ===========================================
+# 5. Perform the main mineral calculations (adjusted for P minerals)
+# ===========================================
+
+# 5.1 Separate serpentine and saponite components
+serp_vol <- current_minerals$vol_mean[1] * serp_ratio
+serp_vol_err <- sqrt((current_minerals$vol_mean[1] * serp_ratio_err)^2 + 
+                      (serp_ratio * (current_minerals$vol_max[1] - current_minerals$vol_min[1])/2)^2)
+
+sap_vol <- current_minerals$vol_mean[1] * sap_ratio
+sap_vol_err <- sqrt((current_minerals$vol_mean[1] * serp_ratio_err)^2 + 
+                      (sap_ratio * (current_minerals$vol_max[1] - current_minerals$vol_min[1])/2)^2)
+
+cat("\nPhyllosilicate components:\n")
+cat(sprintf("Serpentine: %.1f ± %.1f vol%%\n", serp_vol, serp_vol_err))
+cat(sprintf("Saponite: %.1f ± %.1f vol%%\n", sap_vol, sap_vol_err))
+
+# 5.2 Calculate olivine from serpentine
+d_serp <- get_density("Serpentine")
+d_ol <- get_density("Olivine")
+
+serp_mass_result <- mult_error(serp_vol, serp_vol_err, d_serp$mean, d_serp$err)
+ol_mass_result <- mult_error(serp_mass_result$mean, serp_mass_result$err, d_ol$mean/d_serp$mean, 
+                            sqrt((d_ol$err/d_ol$mean)^2 + (d_serp$err/d_serp$mean)^2) * (d_ol$mean/d_serp$mean))
+ol_vol_result <- div_error(ol_mass_result$mean, ol_mass_result$err, d_ol$mean, d_ol$err)
+ol_orig_vol_result <- div_error(ol_vol_result$mean, ol_vol_result$err, vol_exp_ol_serp, vol_exp_ol_serp_err)
+
+# Account for magnetite from serpentinization
+fe_to_mag_fraction <- 0.3
+ol_adj_factor <- 1 + (olivine_fa_fraction * fe_to_mag_fraction)
+ol_final_vol <- ol_orig_vol_result$mean * ol_adj_factor
+ol_final_vol_err <- ol_orig_vol_result$err * ol_adj_factor
+
+cat("\nOlivine calculation:\n")
+cat(sprintf("Original olivine (accounting for Fe loss to magnetite): %.1f ± %.1f vol%%\n", 
+            ol_final_vol, ol_final_vol_err))
+
+# 5.3 Calculate pyroxene from saponite
+d_sap <- get_density("Saponite")
+d_px <- get_density("Pyroxene")
+
+sap_mass_result <- mult_error(sap_vol, sap_vol_err, d_sap$mean, d_sap$err)
+px_mass_result <- mult_error(sap_mass_result$mean, sap_mass_result$err, d_px$mean/d_sap$mean, 
+                            sqrt((d_px$err/d_px$mean)^2 + (d_sap$err/d_sap$mean)^2) * (d_px$mean/d_sap$mean))
+px_vol_result <- div_error(px_mass_result$mean, px_mass_result$err, d_px$mean, d_px$err)
+px_orig_vol_result <- div_error(px_vol_result$mean, px_vol_result$err, vol_exp_px_sap, vol_exp_px_sap_err)
+
+px_orig_vol <- px_orig_vol_result$mean
+px_orig_vol_err <- px_orig_vol_result$err
+
+cat("\nPyroxene calculation:\n")
+cat(sprintf("Original pyroxene: %.1f ± %.1f vol%%\n", px_orig_vol, px_orig_vol_err))
+
+# 5.4 Magnetite analysis
+mag_vol <- current_minerals$vol_mean[2]
+mag_vol_err <- (current_minerals$vol_max[2] - current_minerals$vol_min[2])/2
+
+mag_from_metal_vol <- mag_vol * mag_from_metal_ratio
+mag_from_metal_vol_err <- sqrt((mag_vol_err * mag_from_metal_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_from_sulfide_vol <- mag_vol * mag_from_sulfide_ratio
+mag_from_sulfide_vol_err <- sqrt((mag_vol_err * mag_from_sulfide_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_from_serp_vol <- mag_vol * mag_from_serp_ratio
+mag_from_serp_vol_err <- sqrt((mag_vol_err * mag_from_serp_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+mag_primary_vol <- mag_vol * mag_from_primary_ratio
+mag_primary_vol_err <- sqrt((mag_vol_err * mag_from_primary_ratio)^2 + (mag_vol * mag_ratio_err)^2)
+
+cat("\nMagnetite origins:\n")
+cat(sprintf("From Fe-Ni metal: %.1f ± %.1f vol%%\n", mag_from_metal_vol, mag_from_metal_vol_err))
+cat(sprintf("From sulfides: %.1f ± %.1f vol%%\n", mag_from_sulfide_vol, mag_from_sulfide_vol_err))
+cat(sprintf("From serpentinization: %.1f ± %.1f vol%%\n", mag_from_serp_vol, mag_from_serp_vol_err))
+cat(sprintf("Primary nebular: %.1f ± %.1f vol%%\n", mag_primary_vol, mag_primary_vol_err))
+
+# 5.5 Calculate Fe,Ni metal from magnetite (adjusted for schreibersite)
+d_mag <- get_density("Magnetite")
+d_metal <- get_density("Fe-Ni metal")
+
+metal_vol_from_mag_result <- div_error(mag_from_metal_vol, mag_from_metal_vol_err, metal_to_mag_exp, metal_to_mag_exp_err)
+metal_vol_orig_result <- mult_error(metal_vol_from_mag_result$mean, metal_vol_from_mag_result$err, d_mag$mean/d_metal$mean, 
+                                  sqrt((d_mag$err/d_mag$mean)^2 + (d_metal$err/d_metal$mean)^2) * (d_mag$mean/d_metal$mean))
+
+# Add volume for schreibersite (which would have been associated with metal)
+# Schreibersite is typically found as inclusions in or associated with Fe,Ni metal
+total_metal_schreibersite_vol <- metal_vol_orig_result$mean + schreibersite_vol_percent
+total_metal_schreibersite_vol_err <- sqrt(metal_vol_orig_result$err^2 + schreibersite_vol_percent_err^2)
+
+metal_vol_orig <- metal_vol_orig_result$mean
+metal_vol_orig_err <- metal_vol_orig_result$err
+
+cat("\nFe,Ni metal and schreibersite calculation:\n")
+cat(sprintf("Original Fe,Ni metal: %.1f ± %.1f vol%%\n", metal_vol_orig, metal_vol_orig_err))
+cat(sprintf("Schreibersite: %.3f ± %.3f vol%%\n", schreibersite_vol_percent, schreibersite_vol_percent_err))
+cat(sprintf("Total metal+schreibersite: %.1f ± %.1f vol%%\n", total_metal_schreibersite_vol, total_metal_schreibersite_vol_err))
+
+# 5.6 Calculate original troilite
+d_troilite <- get_density("Troilite")
+d_pyrrhotite <- get_density("Pyrrhotite")
+
+sulfide_vol <- current_minerals$vol_mean[3]
+sulfide_vol_err <- (current_minerals$vol_max[3] - current_minerals$vol_min[3])/2
+
+troilite_from_sulfide_result <- mult_error(sulfide_vol, sulfide_vol_err, d_pyrrhotite$mean/d_troilite$mean, 
+                                         sqrt((d_pyrrhotite$err/d_pyrrhotite$mean)^2 + (d_troilite$err/d_troilite$mean)^2) * (d_pyrrhotite$mean/d_troilite$mean))
+
+mag_factor <- 0.8
+troilite_from_mag_result <- mult_error(mag_from_sulfide_vol, mag_from_sulfide_vol_err, (d_mag$mean/d_troilite$mean) * mag_factor, 
+                                     sqrt((d_mag$err/d_mag$mean)^2 + (d_troilite$err/d_troilite$mean)^2) * (d_mag$mean/d_troilite$mean) * mag_factor)
+
+troilite_orig_result <- add_error(troilite_from_sulfide_result$mean, troilite_from_sulfide_result$err, 
+                                 troilite_from_mag_result$mean, troilite_from_mag_result$err)
+troilite_orig_vol <- troilite_orig_result$mean
+troilite_orig_vol_err <- troilite_orig_result$err
+
+cat("\nTroilite calculation:\n")
+cat(sprintf("Original troilite: %.1f ± %.1f vol%%\n", troilite_orig_vol, troilite_orig_vol_err))
+
+# 5.7 Calculate plagioclase/anorthite
+d_dolomite <- get_density("Dolomite")
+d_anorthite <- get_density("Plagioclase")
+
+carbonate_vol <- current_minerals$vol_mean[4]
+carbonate_vol_err <- (current_minerals$vol_max[4] - current_minerals$vol_min[4])/2
+
+carbonate_ca_contrib_result <- mult_error(carbonate_vol, carbonate_vol_err, d_dolomite$mean * ca_in_dolomite, d_dolomite$err * ca_in_dolomite)
+saponite_al_contrib_result <- mult_error(sap_vol, sap_vol_err, d_sap$mean * al_in_saponite, d_sap$err * al_in_saponite)
+
+anorthite_from_ca_result <- div_error(carbonate_ca_contrib_result$mean, carbonate_ca_contrib_result$err, d_anorthite$mean * ca_in_anorthite, d_anorthite$err * ca_in_anorthite)
+anorthite_from_al_result <- div_error(saponite_al_contrib_result$mean, saponite_al_contrib_result$err, d_anorthite$mean * al_in_anorthite, d_anorthite$err * al_in_anorthite)
+
+anorthite_orig_vol <- max(anorthite_from_ca_result$mean, anorthite_from_al_result$mean)
+anorthite_orig_vol_err <- ifelse(
+  anorthite_from_ca_result$mean > anorthite_from_al_result$mean,
+  anorthite_from_ca_result$err,
+  anorthite_from_al_result$err
+)
+
+anorthite_correction <- 0.8
+anorthite_final_vol <- anorthite_orig_vol * anorthite_correction
+anorthite_final_vol_err <- anorthite_orig_vol_err * anorthite_correction
+
+cat("\nPlagioclase/anorthite calculation:\n")
+cat(sprintf("Original plagioclase: %.1f ± %.1f vol%%\n", anorthite_final_vol, anorthite_final_vol_err))
+
+# 5.8 Calculate amorphous silicate component
+crystalline_sum_simple <- ol_final_vol + px_orig_vol + metal_vol_orig + troilite_orig_vol + anorthite_final_vol + mag_primary_vol + schreibersite_vol_percent + apatite_vol_percent
+crystalline_sum_err_simple <- sqrt(ol_final_vol_err^2 + px_orig_vol_err^2 + metal_vol_orig_err^2 + 
+                                 troilite_orig_vol_err^2 + anorthite_final_vol_err^2 + mag_primary_vol_err^2 + 
+                                 schreibersite_vol_percent_err^2 + apatite_vol_percent_err^2)
+
+amorphous_vol <- 100 - crystalline_sum_simple
+amorphous_vol_err <- crystalline_sum_err_simple
+
+cat("\nAmorphous silicate calculation:\n")
+cat(sprintf("Amorphous silicate: %.1f ± %.1f vol%%\n", amorphous_vol, amorphous_vol_err))
+
+# ===========================================
+# 6. Calculate endmember components by weight and mole
+# ===========================================
+
+# [Previous endmember calculations remain the same...]
+# Calculate molar amounts for olivine, pyroxene, plagioclase as before
+ol_mass <- ol_final_vol * d_ol$mean
+ol_fo_mass <- ol_mass * olivine_fo_fraction * (forsterite_density/olivine_density)
+ol_fa_mass <- ol_mass * olivine_fa_fraction * (fayalite_density/olivine_density)
+
+mol_mass_fo <- 140.69  # g/mol for Mg₂SiO₄
+mol_mass_fa <- 203.78  # g/mol for Fe₂SiO₄
+ol_fo_moles <- ol_fo_mass / mol_mass_fo
+ol_fa_moles <- ol_fa_mass / mol_mass_fa
+ol_total_moles <- ol_fo_moles + ol_fa_moles
+
+ol_fo_mol_percent <- ol_fo_moles / ol_total_moles * 100
+ol_fa_mol_percent <- ol_fa_moles / ol_total_moles * 100
+
+# Pyroxene endmembers
+px_mass <- px_orig_vol * d_px$mean
+px_en_mass <- px_mass * pyroxene_en_fraction * (enstatite_density/pyroxene_density)
+px_fs_mass <- px_mass * pyroxene_fs_fraction * (ferrosilite_density/pyroxene_density)
+
+mol_mass_en <- 100.39  # g/mol for MgSiO₃
+mol_mass_fs <- 131.93  # g/mol for FeSiO₃
+px_en_moles <- px_en_mass / mol_mass_en
+px_fs_moles <- px_fs_mass / mol_mass_fs
+px_total_moles <- px_en_moles + px_fs_moles
+
+px_en_mol_percent <- px_en_moles / px_total_moles * 100
+px_fs_mol_percent <- px_fs_moles / px_total_moles * 100
+
+# Plagioclase endmembers
+pl_mass <- anorthite_final_vol * d_anorthite$mean
+pl_an_mass <- pl_mass * plagioclase_an_fraction * (anorthite_density/plagioclase_density)
+pl_ab_mass <- pl_mass * plagioclase_ab_fraction * (albite_density/plagioclase_density)
+
+mol_mass_an <- 278.21  # g/mol for CaAl₂Si₂O₈
+mol_mass_ab <- 262.22  # g/mol for NaAlSi₃O₈
+pl_an_moles <- pl_an_mass / mol_mass_an
+pl_ab_moles <- pl_ab_mass / mol_mass_ab
+pl_total_moles <- pl_an_moles + pl_ab_moles
+
+pl_an_mol_percent <- pl_an_moles / pl_total_moles * 100
+pl_ab_mol_percent <- pl_ab_moles / pl_total_moles * 100
+
+# Metal composition
+metal_fe_wt_percent <- 93.0
+metal_ni_wt_percent <- 7.0
+
+# Schreibersite composition (Fe,Ni)₃P
+# Typical composition is ~85% Fe, ~7% Ni, ~15% P (by weight)
+schreibersite_fe_wt_percent <- 78.0
+schreibersite_ni_wt_percent <- 7.6
+schreibersite_p_wt_percent <- 15.4
+
+# Amorphous silicate composition
+amorphous_mgsi_ratio <- 1.1
+amorphous_fesi_ratio <- 0.4
+amorphous_alsi_ratio <- 0.08
+amorphous_casi_ratio <- 0.06
+amorphous_nasi_ratio <- 0.05
+
+# ===========================================
+# 7. Generate final results table with P minerals included
+# ===========================================
+
+primordial_mineralogy <- data.frame(
+  mineral = c("Olivine", "Low-Ca Pyroxene", "Fe,Ni metal", "Schreibersite",
+              "Troilite", "Plagioclase", "Apatite", "Primary magnetite", "Amorphous silicate"),
+  vol_percent = c(ol_final_vol, px_orig_vol, metal_vol_orig, schreibersite_vol_percent,
+                 troilite_orig_vol, anorthite_final_vol, apatite_vol_percent, mag_primary_vol, amorphous_vol),
+  vol_error = c(ol_final_vol_err, px_orig_vol_err, metal_vol_orig_err, schreibersite_vol_percent_err,
+               troilite_orig_vol_err, anorthite_final_vol_err, apatite_vol_percent_err, mag_primary_vol_err, amorphous_vol_err),
+  vol_range = c(
+    paste(round(ol_final_vol - ol_final_vol_err, 1), "-", round(ol_final_vol + ol_final_vol_err, 1)),
+    paste(round(px_orig_vol - px_orig_vol_err, 1), "-", round(px_orig_vol + px_orig_vol_err, 1)),
+    paste(round(metal_vol_orig - metal_vol_orig_err, 1), "-", round(metal_vol_orig + metal_vol_orig_err, 1)),
+    paste(round(schreibersite_vol_percent - schreibersite_vol_percent_err, 3), "-", round(schreibersite_vol_percent + schreibersite_vol_percent_err, 3)),
+    paste(round(troilite_orig_vol - troilite_orig_vol_err, 1), "-", round(troilite_orig_vol + troilite_orig_vol_err, 1)),
+    paste(round(anorthite_final_vol - anorthite_final_vol_err, 1), "-", round(anorthite_final_vol + anorthite_final_vol_err, 1)),
+    paste(round(apatite_vol_percent - apatite_vol_percent_err, 3), "-", round(apatite_vol_percent + apatite_vol_percent_err, 3)),
+    paste(round(mag_primary_vol - mag_primary_vol_err, 1), "-", round(mag_primary_vol + mag_primary_vol_err, 1)),
+    paste(round(amorphous_vol - amorphous_vol_err, 1), "-", round(amorphous_vol + amorphous_vol_err, 1))
+  ),
+  density = c(olivine_density, pyroxene_density, metal_density, schreibersite_density,
+             troilite_density, plagioclase_density, apatite_density, magnetite_density, amorphous_density),
+  composition = c(
+    sprintf("Fo₉₀Fa₁₀ (%.1f mol%% Mg₂SiO₄, %.1f mol%% Fe₂SiO₄)", ol_fo_mol_percent, ol_fa_mol_percent),
+    sprintf("En₈₅Fs₁₅ (%.1f mol%% MgSiO₃, %.1f mol%% FeSiO₃)", px_en_mol_percent, px_fs_mol_percent),
+    sprintf("Fe₉₃Ni₇ (%.1f wt%% Fe, %.1f wt%% Ni)", metal_fe_wt_percent, metal_ni_wt_percent),
+    sprintf("(Fe,Ni)₃P (%.1f wt%% Fe, %.1f wt%% Ni, %.1f wt%% P)", schreibersite_fe_wt_percent, schreibersite_ni_wt_percent, schreibersite_p_wt_percent),
+    "FeS (pure)",
+    sprintf("An₈₀Ab₂₀ (%.1f mol%% CaAl₂Si₂O₈, %.1f mol%% NaAlSi₃O₈)", pl_an_mol_percent, pl_ab_mol_percent),
+    "Ca₅(PO₄)₃(OH,F,Cl)",
+    "Fe₃O₄ (pure)",
+    sprintf("GEMS-like (Mg/Si=%.1f, Fe/Si=%.1f, Al/Si=%.2f)", amorphous_mgsi_ratio, amorphous_fesi_ratio, amorphous_alsi_ratio)
+  )
+)
+
+# Calculate mass percentages
+primordial_mineralogy$mass_percent <- primordial_mineralogy$vol_percent * primordial_mineralogy$density
+primordial_mineralogy$mass_percent <- primordial_mineralogy$mass_percent / sum(primordial_mineralogy$mass_percent) * 100
+
+# Print final table
+cat("\n========== RECONSTRUCTED PRIMORDIAL CI CHONDRITE MINERALOGY (WITH PHOSPHORUS) ==========\n")
+print(primordial_mineralogy[, c("mineral", "vol_percent", "vol_error", "vol_range", "mass_percent", "density", "composition")])
+cat("======================================================================================\n")
+
+# ===========================================
+# 8. Phosphorus mass balance verification
+# ===========================================
+
+# Calculate total P content from reconstructed mineralogy
+total_p_from_schreibersite <- (schreibersite_vol_percent * schreibersite_density * schreibersite_p_wt_percent / 100) / average_ci_density * 100
+total_p_from_apatite <- (apatite_vol_percent * apatite_density * p_in_apatite) / average_ci_density * 100
+total_p_calculated <- total_p_from_schreibersite + total_p_from_apatite
+
+cat("\n========== PHOSPHORUS MASS BALANCE VERIFICATION ==========\n")
+cat(sprintf("Expected bulk P content: %.3f wt%%\n", bulk_p_content_wt_percent))
+cat(sprintf("P from schreibersite: %.3f wt%%\n", total_p_from_schreibersite))
+cat(sprintf("P from apatite: %.3f wt%%\n", total_p_from_apatite))
+cat(sprintf("Total calculated P: %.3f wt%%\n", total_p_calculated))
+cat(sprintf("Difference: %.3f wt%% (%.1f%% relative error)\n", 
+            total_p_calculated - bulk_p_content_wt_percent, 
+            abs(total_p_calculated - bulk_p_content_wt_percent)/bulk_p_content_wt_percent * 100))
+cat("=========================================================\n")
+
+# ===========================================
+# 9. Generate detailed endmember breakdown with P minerals
+# ===========================================
+
+endmember_breakdown <- data.frame(
+  component = c(
+    "Forsterite (Mg₂SiO₄)", 
+    "Fayalite (Fe₂SiO₄)", 
+    "Enstatite (MgSiO₃)", 
+    "Ferrosilite (FeSiO₃)", 
+    "Kamacite (Fe,Ni metal)", 
+    "Schreibersite ((Fe,Ni)₃P)",
+    "Troilite (FeS)", 
+    "Anorthite (CaAl₂Si₂O₈)", 
+    "Albite (NaAlSi₃O₈)", 
+    "Apatite (Ca₅(PO₄)₃(OH,F,Cl))",
+    "Primary Magnetite (Fe₃O₄)",
+    "Amorphous silicate"
+  ),
+  vol_percent = c(
+    ol_final_vol * olivine_fo_fraction, 
+    ol_final_vol * olivine_fa_fraction,
+    px_orig_vol * pyroxene_en_fraction,
+    px_orig_vol * pyroxene_fs_fraction,
+    metal_vol_orig,
+    schreibersite_vol_percent,
+    troilite_orig_vol,
+    anorthite_final_vol * plagioclase_an_fraction,
+    anorthite_final_vol * plagioclase_ab_fraction,
+    apatite_vol_percent,
+    mag_primary_vol,
+    amorphous_vol
+  ),
+  density = c(
+    forsterite_density,
+    fayalite_density,
+    enstatite_density,
+    ferrosilite_density,
+    kamacite_density,
+    schreibersite_density,
+    troilite_density,
+    anorthite_density,
+    albite_density,
+    apatite_density,
+    magnetite_density,
+    amorphous_density
+  ),
+  formula = c(
+    "Mg₂SiO₄",
+    "Fe₂SiO₄",
+    "MgSiO₃",
+    "FeSiO₃",
+    "Fe₉₃Ni₇",
+    "(Fe,Ni)₃P",
+    "FeS",
+    "CaAl₂Si₂O₈",
+    "NaAlSi₃O₈",
+    "Ca₅(PO₄)₃(OH,F,Cl)",
+    "Fe₃O₄",
+    "Variable (GEMS-like)"
+  )
+)
+
+# Calculate mass percentages for each endmember
+endmember_breakdown$mass <- endmember_breakdown$vol_percent * endmember_breakdown$density
+endmember_breakdown$mass_percent <- endmember_breakdown$mass / sum(endmember_breakdown$mass) * 100
+
+cat("\n========== DETAILED ENDMEMBER BREAKDOWN (WITH PHOSPHORUS) ==========\n")
+print(endmember_breakdown[, c("component", "vol_percent", "mass_percent", "density", "formula")])
+cat("====================================================================\n")
+
+# ===========================================
+# 10. Visualize results
+# ===========================================
+
+# Create bar plot with error bars (excluding very small phases for clarity)
+major_phases <- primordial_mineralogy[primordial_mineralogy$vol_percent > 0.1, ]
+
+ggplot(major_phases, aes(x = reorder(mineral, vol_percent), y = vol_percent)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_errorbar(aes(ymin = vol_percent - vol_error, ymax = vol_percent + vol_error), width = 0.2) +
+  coord_flip() +
+  labs(
+    title = "Reconstructed Primordial CI Chondrite Mineralogy",
+    subtitle = "Volume percentages with uncertainties (phases >0.1 vol%)",
+    x = NULL,
+    y = "Volume %"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12)
+  )
+
+# Create pie chart showing all endmembers
+endmember_breakdown$component <- factor(endmember_breakdown$component, 
+                                      levels = endmember_breakdown$component[order(endmember_breakdown$mass_percent, decreasing = TRUE)])
+
+# Combine small phases for cleaner visualization
+endmember_vis <- endmember_breakdown
+small_phases <- endmember_vis$mass_percent < 1
+if(sum(small_phases) > 0) {
+  other_mass <- sum(endmember_vis$mass_percent[small_phases])
+  endmember_vis <- endmember_vis[!small_phases, ]
+  endmember_vis <- rbind(endmember_vis, 
+                        data.frame(component = "Other minor phases", 
+                                  vol_percent = NA, density = NA, formula = "Various",
+                                  mass = NA, mass_percent = other_mass))
+}
+
+ggplot(endmember_vis, aes(x = "", y = mass_percent, fill = component)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(
+    title = "Primordial CI Chondrite Mineral Endmember Distribution",
+    subtitle = "Mass percentages (minor phases <1% combined)",
+    fill = "Mineral Component"
+  ) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# Solving for IOM molecular composition factors
+# Target formula: C60.611H45.639O9.941N3.284S1.154
+# Components: x*C128H68O7 + y*C5H5N + z*S + m*O
+
+library(MASS)  # For ginv() function if needed
+
+# Define the target elemental composition
+target <- c(C = 60.611, H = 45.639, O = 9.941, N = 3.284, S = 1.154)
+
+# Define the coefficient matrix A
+# Columns represent: x (i.e. KerogenC128 = C128H68O7), y (i.e. pyridine = C5H5N), z (i.e. S), m (i.e. O).
+# Rows represent: C, H, O, N, S
+A <- matrix(c(
+  128, 5, 0, 0,  # Carbon coefficients
+  68,  5, 0, 0,  # Hydrogen coefficients
+  7,   0, 0, 1,  # Oxygen coefficients
+  0,   1, 0, 0,  # Nitrogen coefficients
+  0,   0, 1, 0   # Sulfur coefficients
+), nrow = 5, byrow = TRUE)
+
+# Target vector b
+b <- as.vector(target)
+
+# Method 1: Least squares solution using QR decomposition
+solution_ls <- qr.solve(A, b)
+names(solution_ls) <- c("x", "y", "z", "m")
+
+# Method 2: Using pseudoinverse (Moore-Penrose)
+solution_pinv <- ginv(A) %*% b
+names(solution_pinv) <- c("x", "y", "z", "m")
+
+# Print results
+cat("=== LEAST SQUARES SOLUTION ===\n")
+cat("Coefficients:\n")
+print(solution_ls)
+
+# Verify the solution
+reconstructed <- A %*% solution_ls
+residuals <- b - reconstructed
+
+cat("\n=== VERIFICATION ===\n")
+verification_df <- data.frame(
+  Element = c("C", "H", "O", "N", "S"),
+  Target = b,
+  Reconstructed = as.vector(reconstructed),
+  Residual = as.vector(residuals),
+  Relative_Error = abs(residuals/b) * 100
+)
+print(verification_df)
+
+# Calculate total error
+total_error <- sqrt(sum(residuals^2))
+cat("\nTotal RMSE:", total_error, "\n")
+
+# Alternative: Constrained optimization for non-negative solutions
+# If you need non-negative coefficients
+library(quadprog)
+
+# Set up for quadratic programming (minimize ||Ax - b||^2)
+Dmat <- t(A) %*% A
+dvec <- t(A) %*% b
+
+# Constraints: all coefficients >= 0
+Amat <- diag(4)
+bvec <- rep(0, 4)
+
+# Solve with non-negativity constraints
+solution_constrained <- solve.QP(Dmat, dvec, Amat, bvec)$solution
+names(solution_constrained) <- c("x", "y", "z", "m")
+
+cat("\n=== NON-NEGATIVE CONSTRAINED SOLUTION ===\n")
+print(solution_constrained)
+
+# Verify constrained solution
+reconstructed_const <- A %*% solution_constrained
+residuals_const <- b - reconstructed_const
+
+verification_const_df <- data.frame(
+  Element = c("C", "H", "O", "N", "S"),
+  Target = b,
+  Reconstructed = as.vector(reconstructed_const),
+  Residual = as.vector(residuals_const)
+)
+print(verification_const_df)
+
+# Function to check solution with custom coefficients
+check_composition <- function(x, y, z, m) {
+  result <- c(
+    C = 128*x + 5*y,
+    H = 68*x + 5*y,
+    O = 7*x + m,
+    N = y,
+    S = z
+  )
+  
+  comparison <- data.frame(
+    Element = names(target),
+    Target = target,
+    Calculated = result,
+    Difference = target - result
+  )
+  
+  return(comparison)
+}
+
+# Example usage of the checking function
+cat("\n=== CHECKING UNCONSTRAINED SOLUTION ===\n")
+print(check_composition(solution_ls[1], solution_ls[2], solution_ls[3], solution_ls[4]))
+
+# Plotting the results (optional)
+if (require(ggplot2)) {
+  library(ggplot2)
+  library(tidyr)
+  
+  # Prepare data for plotting
+  plot_data <- verification_df
+  plot_data$Element <- factor(plot_data$Element, levels = c("C", "H", "O", "N", "S"))
+  
+  plot_data_long <- pivot_longer(plot_data[,1:3], 
+                                  cols = c("Target", "Reconstructed"),
+                                  names_to = "Type", 
+                                  values_to = "Value")
+  
+  # Create comparison plot
+  p <- ggplot(plot_data_long, aes(x = Element, y = Value, fill = Type)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(title = "Target vs Reconstructed Elemental Composition",
+         y = "Number of atoms",
+         x = "Element") +
+    theme_minimal() +
+    scale_fill_manual(values = c("Target" = "steelblue", "Reconstructed" = "coral"))
+  
+  print(p)
+}
+```
+

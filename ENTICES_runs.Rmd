@@ -1,0 +1,218 @@
+---
+title: "ENTICES runs"
+output: html_notebook
+---
+
+```{r}
+# Create Enceladus configuration
+enceladus <- EnceladusConfig$new()
+```
+
+
+```{r}
+props <- enceladus$get_derived_properties()
+```
+
+
+```{r}
+# Print initial configuration details
+print("Initial configuration properties:")
+print(props)
+```
+
+
+```{r}
+# Plot gravity profile
+enceladus$plot_gravity_profile()
+seafloor_g <- enceladus$calculate_gravity(enceladus$core_radius)
+print(paste("Gravity at seafloor:", seafloor_g, "m/s^2"))
+```
+
+
+```{r}
+# Create and run hydrothermal simulator
+sim <- Simulator$new(
+  k = 1e-12,              # Permeability [m²]
+  layer_thickness = 600,   # Layer thickness [m]
+  porosity = 0.32,        # Porosity [dimensionless]
+  config = enceladus      # Use our Enceladus configuration
+)
+```
+
+
+```{r}
+# Run simulation
+results <- sim$run_simulation(timesteps = 1000)
+print("Simulation results summary:")
+print(sim$get_summary_metrics())
+```
+
+```{r}
+# Generate simulation plots
+plots <- sim$generate_plots()
+print("Simulation plots:")
+print(plots)
+```
+
+
+```{r}
+# Initialize PHREEQC integration
+phreeqc <- PhreeqcIntegrator$new(sim)
+
+# Generate PHREEQC input file
+phreeqc_file <- phreeqc$generate_phreeqc_input()
+print(paste("PHREEQC input file generated:", phreeqc_file))
+
+# Print PHREEQC parameters
+print("PHREEQC scaling parameters:")
+print(phreeqc$phreeqc_params)
+```
+
+```{r}
+# Run parameter sweep
+print("\nRunning parameter sweep...")
+parameter_sweep <- expand.grid(
+  k = c(1e-13, 1e-12, 1e-11),          # Permeability range
+  layer_thickness = c(500, 1000, 194.2e3),   # Layer thickness range
+  stringsAsFactors = FALSE
+)
+
+
+# Initialize results storage
+sweep_results <- list()
+
+for(i in 1:nrow(parameter_sweep)) {
+  print(sprintf("\nRunning scenario %d of %d:", i, nrow(parameter_sweep)))
+  print(parameter_sweep[i,])
+  
+  tryCatch({
+    # Create and run simulation
+    sim_i <- Simulator$new(
+      k = parameter_sweep$k[i],
+      layer_thickness = parameter_sweep$layer_thickness[i],
+      config = enceladus
+    )
+    
+    sim_i$run_simulation()
+    metrics_i <- sim_i$get_summary_metrics()
+    
+    # Create PHREEQC input
+    phreeqc_i <- PhreeqcIntegrator$new(sim_i)
+    phreeqc_file <- phreeqc_i$generate_phreeqc_input()
+    
+    # Store results with consistent structure
+    sweep_results[[i]] <- list(
+      params = data.frame(
+        k = parameter_sweep$k[i],
+        layer_thickness = parameter_sweep$layer_thickness[i]
+      ),
+      metrics = data.frame(
+        mean_flow_rate_Ls = metrics_i$mean_flow_rate_Ls,
+        circulation_time_years = metrics_i$circulation_time_years
+      ),
+      phreeqc_params = phreeqc_i$phreeqc_params,
+      phreeqc_file = phreeqc_file
+    )
+  }, error = function(e) {
+    warning(sprintf("Error in scenario %d: %s", i, e$message))
+    # Store empty but properly structured result
+    sweep_results[[i]] <- list(
+      params = data.frame(
+        k = parameter_sweep$k[i],
+        layer_thickness = parameter_sweep$layer_thickness[i]
+      ),
+      metrics = data.frame(
+        mean_flow_rate_Ls = NA,
+        circulation_time_years = NA
+      ),
+      phreeqc_params = list(),
+      phreeqc_file = NA
+    )
+  })
+}
+  
+
+
+```
+
+```{r}
+# Summarize sweep results
+print("\nParameter sweep summary:")
+sweep_summary <- do.call(rbind, lapply(sweep_results, function(x) {
+  data.frame(
+    k = x$params$k,
+    layer_thickness = x$params$layer_thickness,
+    mean_flow_rate = x$metrics$mean_flow_rate_Ls,
+    circulation_time = x$metrics$circulation_time_years
+  )
+}))
+print(sweep_summary)
+```
+```{r}
+# Create summary plot
+sweep_plot <- ggplot(sweep_summary, 
+                    aes(x = log10(k), y = layer_thickness, 
+                        size = mean_flow_rate, color = circulation_time)) +
+  geom_point() +
+  scale_color_viridis_c() +
+  labs(x = "log10(Permeability [m²])",
+       y = "Layer Thickness [m]",
+       size = "Mean Flow Rate [L/s]",
+       color = "Circulation Time [years]") +
+  theme_minimal()
+print(sweep_plot)
+```
+```{r}
+# Create integrator with 15% organics
+phreeqc <- PhreeqcIntegrator$new(sim)
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 15)
+phreeqc_file <- phreeqc$generate_phreeqc_input()
+```
+
+
+```{r}
+# STEP 1: Create Enceladus configuration
+config <- EnceladusConfig$new()
+
+# Step 2: Create the hydrothermal simulator
+sim <- Simulator$new(
+  k = 1e-11,              # Permeability [m²] 
+  layer_thickness = 194.2e3,  # Permeable layer thickness [m]
+  porosity = 0.32,        # Porosity [fraction]
+  config = config         # Enceladus configuration
+)
+
+# Step 3: Run the simulation
+results <- sim$run_simulation(timesteps = 1000)
+
+# Step 4: Create PhreeqcIntegrator
+phreeqc <- PhreeqcIntegrator$new(sim)
+
+# Step 5: Calculate PHREEQC parameters with organic content
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 15)
+
+# Step 6: Generate PHREEQC input files for different circulation counts
+#phreeqc_file_1circ <- phreeqc$generate_phreeqc_input(n_circulations = 1)
+#print(paste("1 circulation file:", phreeqc_file_1circ))
+
+phreeqc_file_5circ <- phreeqc$generate_phreeqc_input(n_circulations = 5)
+print(paste("5 circulation file:", phreeqc_file_5circ))
+
+#phreeqc_file_10circ <- phreeqc$generate_phreeqc_input(n_circulations = 10)
+#print(paste("10 circulation file:", phreeqc_file_10circ))
+
+# ALTERNATIVE: Step 6 using a loop for multiple circulation scenarios
+# circulation_counts <- c(1, 5, 10, 20, 50)
+# phreeqc_files <- list()
+# 
+# for(n_circ in circulation_counts) {
+#   filename <- phreeqc$generate_phreeqc_input(n_circulations = n_circ)
+#   phreeqc_files[[paste0("circ_", n_circ)]] <- filename
+#   print(paste("Generated:", basename(filename)))
+# }
+
+# Step 7: View what files were created
+# print("All PHREEQC files created:")
+# print(unlist(phreeqc_files))
+```
+
