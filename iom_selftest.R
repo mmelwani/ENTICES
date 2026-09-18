@@ -2,7 +2,7 @@
 # iom_selftest.R  --  Standalone tests for iom_module.R
 #
 # Runs WITHOUT ENTICES, WITHOUT PHREEQC, and WITHOUT circulation physics.
-# Two kinds of checks:
+# Three kinds of checks:
 #   (A) Pure-R checks on the module itself: config validity, balance
 #       arithmetic, string generation -- fast, no dependencies beyond base R.
 #   (B) A from-scratch Basic-language-equivalent integration of the Arrhenius
@@ -12,13 +12,21 @@
 #       importantly, since yields were fitted) his RESIDUE composition
 #       trajectory -- the test this module has never actually been run
 #       against.
+#   (C) Structural checks on redox_mode (Option 3, coupled/decoupled redox):
+#       confirms the mechanics of switching formulas work and bad input is
+#       rejected. Deliberately does NOT and CANNOT check the thing
+#       PROGRESS.md Part 3 actually cares about (whether decoupled mode
+#       conserves elements in real PHREEQC output) -- that is blocked on
+#       PHREEQC access, not something this script fakes. See Part C's own
+#       header and iom_default_config()'s docstring.
 #
 # This does NOT call PHREEQC. It re-implements the same first-order
 # Arrhenius ODE that the generated RATES blocks encode, so it validates the
 # KINETICS/RATES numbers before they ever reach PHREEQC. It is not a
 # substitute for actually running the generated PHREEQC text (do that too,
-# once ENTICES is wired up) -- it is a fast, dependency-free check of the
-# calibration itself.
+# once ENTICES is wired up, and once PHREEQC access is available in this
+# environment) -- it is a fast, dependency-free check of the calibration
+# itself.
 #
 # Usage: Rscript iom_selftest.R
 # =============================================================================
@@ -288,6 +296,53 @@ for (i in seq_len(nrow(miller_measured))) {
          sprintf("pred=%.4f meas=%.4f", o_c_pred, o_c_meas))
   }
 }
+
+cat("\n=============================================================\n")
+cat("PART C: redox_mode (Option 3) structural checks\n")
+cat("=============================================================\n")
+cat("Pure-R structure checks only. Does NOT and CANNOT verify that decoupled\n")
+cat("mode behaves correctly in PHREEQC -- see the note below and\n")
+cat("iom_default_config()'s docstring for why the 'element conservation'\n")
+cat("check PROGRESS.md Part 3 calls for is a claim about actual PHREEQC\n")
+cat("output (solution+gas+precipitate), not about these config strings, and\n")
+cat("remains BLOCKED on PHREEQC access (no CLI/R-binding found in this\n")
+cat("environment as of 2026-09-18).\n\n")
+
+pass("default redox_mode (all coupled) is unchanged from calling with no args",
+     identical(iom_default_config(), iom_default_config(c(C = "coupled", N = "coupled", S = "coupled"))))
+
+cfg_decoupled_N <- iom_default_config(c(C = "coupled", N = "decoupled", S = "coupled"))
+pass("decoupled N uses the Amm formula, leaves other channels' formula untouched",
+     cfg_decoupled_N$formula[cfg_decoupled_N$name == "IOM_N"] == "Amm 1" &&
+     all(cfg_decoupled_N$formula[cfg_decoupled_N$name == "IOM_S"] == cfg$formula[cfg$name == "IOM_S"]) &&
+     all(cfg_decoupled_N$formula[startsWith(cfg_decoupled_N$name, "IOM_CO2")] ==
+         cfg$formula[startsWith(cfg$name, "IOM_CO2")]))
+# NOT a bug: iom_validate_config()'s element-balance check tokenizes formula
+# strings expecting real periodic-table symbols, so it has no way to know
+# "Amm" represents N+4H -- it correctly rejects any decoupled formula as an
+# "unknown element", meaning decoupled-mode configs currently CANNOT be
+# validated at all. Closing this gap needs the same pseudo-species-to-real-
+# element mapping already discussed and deliberately NOT built into
+# production code above (see iom_default_config()'s docstring) -- doing so
+# only for validate_config(), quietly, would be worse than the current
+# honest failure, since it would look like "decoupled mode is validated"
+# when it isn't.
+pass("decoupled N formula is correctly REJECTED by validate_config (known gap, not a bug)",
+     tryCatch({ iom_validate_config(cfg_decoupled_N); FALSE },
+              error = function(e) grepl("Amm", conditionMessage(e))))
+
+cfg_decoupled_S <- iom_default_config(c(C = "coupled", N = "coupled", S = "decoupled"))
+pass("decoupled S uses the S(-2) formula",
+     cfg_decoupled_S$formula[cfg_decoupled_S$name == "IOM_S"] == "S(-2) 1 H 1")
+
+pass("requesting decoupled C is rejected (IOM_CHn has no decoupled formula)",
+     tryCatch({ iom_default_config(c(C = "decoupled", N = "coupled", S = "coupled")); FALSE },
+              error = function(e) TRUE))
+
+pass("invalid redox_mode value is rejected",
+     tryCatch({ iom_default_config(c(C = "coupled", N = "sort-of", S = "coupled")); FALSE },
+              error = function(e) TRUE))
+cat("\n")
 
 cat("\n=============================================================\n")
 cat(sprintf("SUMMARY: %d failure(s) across all asserted checks.\n", failures))

@@ -183,11 +183,48 @@ iom_bulk_formula <- function() {
 #'     bound, not merged in.
 #'   - CHn's m0 (2% of C, from coal) and its borrowed shift are unconstrained
 #'     by any IOM-specific measurement.
-#'   - Option 3 (coupled/decoupled redox at low temperature) is designed in
-#'     PROGRESS.md Part 3 but not implemented -- this config's -formula
-#'     values are the COUPLED-mode ones only.
-#' @return data.frame, one row per sub-pool/channel.
-iom_default_config <- function() {
+#'   - Option 3 (coupled/decoupled redox at low temperature), PROGRESS.md
+#'     Part 3: partially implemented 2026-09-18. `redox_mode` below lets N
+#'     and S switch to decoupled-species formulas (Amm, S(-2)); CO2/CH4/CHn
+#'     CANNOT be decoupled yet because CHn has no decoupled formula defined
+#'     (PROGRESS.md's sketch predates CHn and its H/C=1.8 doesn't map onto
+#'     Mtg's canonical CH4 stoichiometry without a design decision -- see
+#'     DECOUPLED_FORMULAS below).
+#'     ALSO: iom_validate_config() cannot currently validate ANY decoupled
+#'     config at all -- its element-balance check tokenizes -formula strings
+#'     expecting real periodic-table symbols, so "Amm"/"Mtg"/"S(-2)" are
+#'     rejected as unknown elements (confirmed: iom_selftest.R Part C). This
+#'     is left as an honest failure rather than quietly taught to recognize
+#'     decoupled pseudo-species, since doing that without also fixing the
+#'     (still-unbuilt, PHREEQC-dependent) conservation check would make
+#'     decoupled mode LOOK validated when it isn't.
+#'     More importantly: the "element conservation"
+#'     self-test the design calls for (PROGRESS.md Part 3, "write this check
+#'     before the database work") turns out to NOT be a property you can
+#'     check by comparing the two -formula strings in pure R -- Amm's
+#'     implicit NH4 stoichiometry (4 H) legitimately differs from the coupled
+#'     N-channel's explicit release (2 H) BY DESIGN, because PHREEQC draws
+#'     the difference from water automatically; that's the whole reason
+#'     decoupled mode needs its own formula column rather than reusing the
+#'     coupled one. So "do the two modes' total system element balance
+#'     agree" is a claim about ACTUAL PHREEQC OUTPUT (solution+gas+
+#'     precipitate), not about these config strings, and remains UNTESTED --
+#'     blocked on PHREEQC access (see iom_selftest.R's Part C header). Do not
+#'     build a fake version of this check that just compares formula-string
+#'     elemental sums; it would be testing the wrong thing and could pass or
+#'     fail for reasons unrelated to whether decoupled mode actually works.
+#' @param redox_mode named character vector, e.g. c(C="coupled", N="coupled",
+#'   S="coupled") (the default -- fully backward compatible, identical output
+#'   to calling with no argument). Each element indepedently "coupled" or
+#'   "decoupled"; C covers IOM_CO2/IOM_CH4/IOM_CHn together (can't be split
+#'   further while CHn has no decoupled formula). "decoupled" for C is not
+#'   yet supported (stops with an error) until CHn's decoupled formula is
+#'   designed.
+#' @return data.frame, one row per sub-pool/channel. Carries formula (the
+#'   ACTIVE one, selected by redox_mode -- this is what every other function
+#'   in this file reads) plus formula_coupled/formula_decoupled for
+#'   reference/switching.
+iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = "coupled")) {
   R_GAS <- 8.314
   CAL_TO_J <- 4184
   logA <- log10(2e15)  # 15.301; Burnham (2019) Table 1, "Vitrimat 2018", A=2e15/s
@@ -207,26 +244,68 @@ iom_default_config <- function() {
   chn_shift <- co2_shift  # borrowed; no independent CHn constraint
   chn_m0_tot <- 0.02 * iom_bulk_formula()[["C"]]  # Burnham's c(oil) = 2% of C
 
-  subpool_rows <- function(prefix, bins, w, shift, m0_tot, formula) {
+  # DECOUPLED-mode formulas (PROGRESS.md Part 3's sketch, verbatim -- DRAFT,
+  # UNVERIFIED against real PHREEQC: neither the acceptance of valence-state
+  # notation like "C(4)" in a KINETICS -formula, nor the charge/electron
+  # bookkeeping when mixing a decoupled pseudo-element (Mtg, Amm, S(-2)) with
+  # free H, has been tested). Requires the target database (a copy of
+  # Core11_idealgas_mod, decoupled per PROGRESS.md Part 3 step 1) to define
+  # Mtg/Amm/valence-tagged-C/valence-tagged-S as separate master species, the
+  # way stock phreeqc.dat does for Mtg and Amm already. CHn has NO decoupled
+  # formula: it postdates this sketch, and its H/C=1.8 doesn't cleanly map
+  # onto Mtg's canonical CH4 (4 H) stoichiometry -- routing CHn's carbon into
+  # Mtg would need either borrowing ~2.2 H/mol from solution or a different
+  # decoupled bucket entirely. That is a design decision for whoever revisits
+  # this, not something to guess here.
+  DECOUPLED_FORMULAS <- list(
+    IOM_CO2 = "C(4) 1 H 1 O 1.3115",
+    IOM_CH4 = "Mtg 1 H 0.435",
+    IOM_N   = "Amm 1",
+    IOM_S   = "S(-2) 1 H 1"
+  )
+
+  subpool_rows <- function(prefix, bins, w, shift, m0_tot, formula_coupled, family) {
     data.frame(
-      name      = sprintf("%s_%d", prefix, bins),
-      m0_per_kg = w * m0_tot,
-      formula   = formula,
-      Ea_J      = (bins + shift) * CAL_TO_J,
-      logA      = logA,
+      name            = sprintf("%s_%d", prefix, bins),
+      m0_per_kg       = w * m0_tot,
+      formula_coupled = formula_coupled,
+      formula_decoupled = if (is.null(DECOUPLED_FORMULAS[[prefix]])) NA_character_ else DECOUPLED_FORMULAS[[prefix]],
+      family          = family,
+      Ea_J            = (bins + shift) * CAL_TO_J,
+      logA            = logA,
       stringsAsFactors = FALSE
     )
   }
 
-  rbind(
-    subpool_rows("IOM_CO2", co2_bins, co2_w, co2_shift, co2_m0_tot, "C 1 H 1 O 1.3115"),
-    subpool_rows("IOM_CH4", ch4_bins, ch4_w, ch4_shift, ch4_m0_tot, "C 1 H 4.435"),
-    subpool_rows("IOM_CHn", chn_bins, chn_w, chn_shift, chn_m0_tot, "C 1 H 1.8"),
-    data.frame(name = "IOM_N", m0_per_kg = 0.875, formula = "N 1 H 2",
+  cfg <- rbind(
+    subpool_rows("IOM_CO2", co2_bins, co2_w, co2_shift, co2_m0_tot, "C 1 H 1 O 1.3115", "C"),
+    subpool_rows("IOM_CH4", ch4_bins, ch4_w, ch4_shift, ch4_m0_tot, "C 1 H 4.435", "C"),
+    subpool_rows("IOM_CHn", chn_bins, chn_w, chn_shift, chn_m0_tot, "C 1 H 1.8", "C"),
+    data.frame(name = "IOM_N", m0_per_kg = 0.875, formula_coupled = "N 1 H 2",
+               formula_decoupled = DECOUPLED_FORMULAS[["IOM_N"]], family = "N",
                Ea_J = 242.8e3, logA = logA, stringsAsFactors = FALSE),
-    data.frame(name = "IOM_S", m0_per_kg = 0.462, formula = "S 1 H 1",
+    data.frame(name = "IOM_S", m0_per_kg = 0.462, formula_coupled = "S 1 H 1",
+               formula_decoupled = DECOUPLED_FORMULAS[["IOM_S"]], family = "S",
                Ea_J = 242.8e3, logA = logA, stringsAsFactors = FALSE)
   )
+
+  # --- select the ACTIVE formula per redox_mode (default: all coupled, i.e.
+  # identical behavior to before redox_mode existed) ---
+  allowed <- c("coupled", "decoupled")
+  for (el in names(redox_mode)) {
+    if (!redox_mode[[el]] %in% allowed)
+      stop("iom_default_config: redox_mode['", el, "'] must be 'coupled' or 'decoupled'")
+  }
+  if (identical(redox_mode[["C"]], "decoupled"))
+    stop("iom_default_config: decoupled mode for C is not yet supported -- ",
+         "IOM_CHn has no decoupled formula (see DECOUPLED_FORMULAS comment). ",
+         "Design one before requesting redox_mode = c(C = 'decoupled', ...).")
+  cfg$formula <- ifelse(redox_mode[cfg$family] == "decoupled",
+                         cfg$formula_decoupled, cfg$formula_coupled)
+  if (any(is.na(cfg$formula)))
+    stop("iom_default_config: decoupled mode requested for a family with no ",
+         "decoupled formula defined: ", paste(unique(cfg$name[is.na(cfg$formula)]), collapse = ", "))
+  cfg
 }
 
 #' Parse a "-formula" string ("C 1 H 1 O 1.3115") into a named numeric vector.
