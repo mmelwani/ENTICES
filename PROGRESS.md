@@ -187,6 +187,18 @@ unverified.** PHREEQC's acceptance of valence-state notation like `C(4)` in a
 KINETICS `-formula`, and the exact charge/electron bookkeeping when mixing a
 decoupled pseudo-element with free H, both need testing before use.
 
+**UPDATE 2026-09-18, checked against the real database, not stock
+phreeqc.dat:** `HANDOVER_option3_database_findings_2026-09-18.md` found that
+two of these four are wrong, not just unverified. `Core11_idealgas_mod_v4.dat`
+has no `Amm` species at all (only `Ntg` = decoupled N2, the wrong end of the
+ladder for IOM_N's reduced-nitrogen release), and `S(-2)` is a coupled-ladder
+valence tag, not a decoupled species (the real one is `Sg` = H2S). `Mtg` is
+confirmed correct and already in the database (added by the user in 2024).
+Read that handover doc before touching this table or `iom_module.R`'s
+`DECOUPLED_FORMULAS` -- it lays out two real design options for IOM_N/CO2
+rather than a fix, since fixing it needs a decision this document can't make
+on its own.
+
 ## The invariant that makes this testable
 
 **Total elements released from the solid must be identical in both modes.**

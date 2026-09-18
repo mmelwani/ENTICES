@@ -245,14 +245,38 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   chn_m0_tot <- 0.02 * iom_bulk_formula()[["C"]]  # Burnham's c(oil) = 2% of C
 
   # DECOUPLED-mode formulas (PROGRESS.md Part 3's sketch, verbatim -- DRAFT,
-  # UNVERIFIED against real PHREEQC: neither the acceptance of valence-state
-  # notation like "C(4)" in a KINETICS -formula, nor the charge/electron
-  # bookkeeping when mixing a decoupled pseudo-element (Mtg, Amm, S(-2)) with
-  # free H, has been tested). Requires the target database (a copy of
-  # Core11_idealgas_mod, decoupled per PROGRESS.md Part 3 step 1) to define
-  # Mtg/Amm/valence-tagged-C/valence-tagged-S as separate master species, the
-  # way stock phreeqc.dat does for Mtg and Amm already. CHn has NO decoupled
-  # formula: it postdates this sketch, and its H/C=1.8 doesn't cleanly map
+  # now KNOWN WRONG for two of the four, per
+  # HANDOVER_option3_database_findings_2026-09-18.md (read that before
+  # touching this list): checked against the actual project database
+  # (Core11_idealgas_mod_v4.dat, added to the repo 2026-09-18) rather than
+  # assumed from stock phreeqc.dat. Findings:
+  #   IOM_CH4 (Mtg): CONFIRMED correct. Mtg is a real, genuinely-decoupled
+  #     master species in this database ("# Redox-uncoupled gases", CH4 gas).
+  #   IOM_S (S(-2)): WRONG species name. "S(-2)" is just a valence tag inside
+  #     the normal COUPLED sulfur ladder (shares a mass balance with S(+6)
+  #     etc.) -- it does not decouple anything. The real decoupled species is
+  #     "Sg" (= H2S, 2 H per S; the user added this themselves in 2024). Left
+  #     uncorrected here rather than guessed, since the H-balance (coupled
+  #     IOM_S only releases 1 H per S, Sg needs 2) needs the same kind of
+  #     check as Mtg's and is naturally reviewed together with IOM_N/CO2.
+  #   IOM_N (Amm): DOES NOT EXIST in this database at all. The only decoupled
+  #     nitrogen species is "Ntg" (N2 gas) -- the wrong end of the redox
+  #     ladder for what IOM_N releases (reduced, NH2-like N meant to become
+  #     NH4+/NH3, not N2). Needs a real design decision, not a guess.
+  #   IOM_CO2 (C(4)): doesn't decouple anything either -- no decoupled
+  #     oxidized-carbon species exists in this database at all (only Mtg,
+  #     covering the reduced/methane end). Also needs a design decision.
+  # Do NOT "fix" IOM_N/IOM_S/IOM_CO2's decoupled formulas here without that
+  # decision being made first (see the handover doc for the two live
+  # options). The values below are left as the original (now flagged-wrong)
+  # draft so this comment and that file stay the record of what's known,
+  # rather than silently patching in another guess.
+  # ORIGINAL SKETCH (verbatim), for reference: neither the acceptance of
+  # valence-state notation like "C(4)" in a KINETICS -formula, nor the
+  # charge/electron bookkeeping when mixing a decoupled pseudo-element (Mtg,
+  # Amm, S(-2)) with free H, had been tested at the time it was written.
+  # CHn has NO decoupled formula either way: it postdates this sketch, and
+  # its H/C=1.8 doesn't cleanly map
   # onto Mtg's canonical CH4 (4 H) stoichiometry -- routing CHn's carbon into
   # Mtg would need either borrowing ~2.2 H/mol from solution or a different
   # decoupled bucket entirely. That is a design decision for whoever revisits
