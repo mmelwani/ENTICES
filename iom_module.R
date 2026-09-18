@@ -30,10 +30,16 @@
 #   set, it should build a whole replacement config via iom_default_config()
 #   -> modify -> iom_validate_config(), not patch individual strings.
 #
-# STATUS: channel structure and calibration described in
-#   PATCH_C_final_and_PATCH_E_redox.md. NOT YET VALIDATED against Miller's
-#   own residue-trajectory data (Fig. 9) -- see iom_selftest.R companion
-#   script, which runs this module standalone (no ENTICES, no circulation
+# STATUS (2026-09-18): channel structure is now distributed-Ea sub-pools for
+#   CO2/CH4/CHn (single-Ea for N/S), calibrated per PATCH_F_vitrimat2018.md
+#   and PATCH_F_addendum_N_and_CHn.md -- see iom_default_config()'s docstring
+#   for the full derivation and history. Validated so far against Miller's
+#   absolute Murchison gas yields (350C, 500C, both now exact fit points) and
+#   the 350C residue trajectory (independent of the fit; see PROGRESS.md
+#   Part 4). NOT YET validated against ENTICES/PHREEQC itself, and Option 3
+#   (coupled/decoupled redox, PROGRESS.md Part 3) is not implemented -- this
+#   config's -formula values are coupled-mode only. See iom_selftest.R, which
+#   runs this module standalone (no ENTICES, no PHREEQC, no circulation
 #   physics) against the isothermal conditions Miller used.
 # =============================================================================
 
@@ -42,10 +48,15 @@
 # -----------------------------------------------------------------------------
 # Bulk bounded IOM composition (per kg IOM), used only for the balance check
 # in iom_validate_config(), not otherwise referenced by ENTICES.
-#   NOTE: N subscript here (2.142) comes from the gram composition (30 g N/kg
-#   IOM; grams sum to exactly 1000 g/mol). An earlier code comment quoted
-#   N_3.284 (46 g N) -- UNRESOLVED, confirm against source composition before
-#   trusting nitrogen-channel absolute amounts.
+#   NOTE (RESOLVED 2026-09-18, PATCH_F_addendum_N_and_CHn.md sec 1): N = 2.142
+#   is correct. Cody et al. (2024), via Miller Table 1, gives Murchison N/C =
+#   0.036 +/- (2.48 +/- 0.04 wt% N), which on this normalized 1000 g/mol basis
+#   implies N = 2.182 -- within 1.8% of 2.142, inside Cody's own uncertainty.
+#   The old rival figure (N_3.284, "46 g N/kg") was traced to a units mixup:
+#   46 g is this formula's HYDROGEN gram value (H 45.639 mol x 1.0079 g/mol =
+#   46.0 g), misread as nitrogen. 2.142 stays; 2.182 would be a defensible
+#   sub-2%-change tidy-up for exact Cody-consistency, not a fix, and has not
+#   been applied.
 iom_bulk_formula <- function() {
   c(C = 60.611, H = 45.639, O = 9.939, N = 2.142, S = 1.154)
 }
@@ -54,10 +65,11 @@ iom_bulk_formula <- function() {
 #'
 #' Each row is one decomposition channel: a first-order Arrhenius kinetic
 #' reactant whose `-formula` is what the SOLID LOSES (not the product
-#' molecule -- see PATCH_C_final_and_PATCH_E_redox.md sec 1 for why: Miller's
-#' own O mass balance does not close without water contributing oxygen to the
-#' measured CO2, so giving PHREEQC the solid's release stoichiometry lets it
-#' draw the remainder from water and speciate at the ambient redox state).
+#' molecule -- see PATCH_C_final_and_PATCH_E_redox.md sec 1 / PROGRESS.md
+#' Part 1 for why: Miller's own O mass balance does not close without water
+#' contributing oxygen to the measured CO2, so giving PHREEQC the solid's
+#' release stoichiometry lets it draw the remainder from water and speciate
+#' at the ambient redox state).
 #'
 #' m0_per_kg is mol of channel-formula-units released per kg of IOM at full
 #' exhaustion. The UNRELEASED remainder (bulk minus all channels) is treated
@@ -65,54 +77,155 @@ iom_bulk_formula <- function() {
 #' PHREEQC because it never reacts. iom_validate_config() checks that no
 #' element is over-drawn.
 #'
-#' Calibration: Miller et al. (2025) GCA 390:38-56, Tables 2/5/9, Murchison
-#' IOM. Ea values fit directly against the ABSOLUTE m0_per_kg used here and
-#' the ABSOLUTE measured 350C yield (48h, A = 1e13 /s), i.e. solving
-#'   released(350C) = m0_per_kg * (1 - exp(-k*t)),  k = A*exp(-Ea/RT)
-#' for Ea given released(350C) = Miller's measured 350C value and m0_per_kg
-#' = the exhaustion amount used here (NOT Miller's raw 500C yield -- those
-#' differ because the channel formulas carry H and O beyond the carbon Miller
-#' measured, e.g. IOM_CO2's m0 of 4.169 vs Miller's measured CO2 yield of
-#' 3.43 mol C/kg -- the extra amount is the H and O released alongside that
-#' carbon). CORRECTED 2026-09: an earlier version fit Ea to the RATIO of
-#' Miller's two raw measured yields (3.04/3.43) and then applied that Ea to
-#' the larger, formula-scaled m0, which silently changed what fraction was
-#' released -- verified by iom_selftest.R Part B against the absolute
-#' 350C/500C values, not just the ratio. CO2: 214 -> 216.2 kJ/mol; CH4:
-#' 228 -> 229.4 kJ/mol. See PATCH_C_final_and_PATCH_E_redox.md for the
-#' original (now-superseded) derivation.
-#' UPDATED 2026-09-17: IOM_N's Ea has now been through the same absolute-
-#' value check. Miller's Table 9 gives NH4+ release for Murchison at 3 kbar
-#' as both a direct mol/kg figure (umol N/mg sample == mol/kg) and as a %
-#' of starting IOM nitrogen; converting the % via Table 1's Murchison N
-#' content (2.48 wt%, i.e. 1.7705 mol N/kg IOM) reproduces the same absolute
-#' values (0.568 mol/kg @350C, 0.723 mol/kg @500C) as the direct column,
-#' which is a good cross-check on both tables. Refitting Ea_N against the
-#' absolute 350C value (m0_per_kg = 0.875, unchanged) gives 217.3 kJ/mol
-#' (was 215 kJ/mol placeholder). Predicted 500C release comes out at ratio
-#' 1.21 vs Miller's measured value -- the same overshoot seen for CO2 (1.22)
-#' and CH4 (1.22), for the identical reason (m0 is a fixed exhaustion pool,
-#' not Miller's raw yield basis); this consistency across three
-#' independently-fit channels is a check on the method, not a coincidence.
-#'   IOM_S remains fully UNCALIBRATED -- Miller does not measure H2S yield
-#'   at all. Its Ea is still just pinned to IOM_N's (now 217.3 kJ/mol) as a
-#'   placeholder with no independent support; treat it accordingly.
+#' HISTORY (kept because each stage found a real, previously-undetected
+#' error -- see PROGRESS.md and the PATCH_F docs for full derivations):
+#'   1. Original single-Ea fit (PATCH_C): CO2/CH4 Ea fit to the RATIO of
+#'      Miller's two measured yields (3.04/3.43), applied to a differently-
+#'      scaled m0 -- an 18% error, caught by iom_selftest.R Part B.
+#'   2. CORRECTED (2026-09): refit CO2/CH4 to ABSOLUTE 350C yields instead of
+#'      the ratio, at A=1e13. CO2: 214 -> 216.2 kJ/mol; CH4: 228 -> 229.4.
+#'      IOM_N refit the same way: 215 -> 217.3 kJ/mol. All still single-Ea,
+#'      so 500C was a PREDICTION, and overshot Miller's measured yield by
+#'      ~22% for all three channels -- attributed to m0 being a fixed
+#'      exhaustion pool rather than Miller's raw yield basis.
+#'   3. SUPERSEDED (2026-09-18, PATCH_F_vitrimat2018.md): single-Ea was wrong
+#'      by 3-5 ORDERS OF MAGNITUDE at Enceladus temperatures (0-100C), not a
+#'      refinement issue. Reason: our only calibration data are 48h at 350C/
+#'      500C, and at those temperatures a real activation-energy distribution's
+#'      low-Ea tail is already fully converted -- so single-Ea data contain
+#'      almost no information about exactly the tail that controls cold-case
+#'      release. Also A was wrong: 1e13 is the 1989 Vitrimat value; Burnham
+#'      (2019) Table 1 gives A = 2e15 /s ("Vitrimat 2018"), explicitly the
+#'      revision meant for hydrous pyrolysis (which is what Miller ran).
 #'
-#' CAVEATS carried over verbatim from the original derivation:
-#'   - two-point fit only; no 250C Murchison data exist, and single Ea per
-#'     channel is known to under-predict low-temperature (~250C) CO2 release
-#'     seen in Miller's syn-IOM samples. Low-Ea sub-pools are the planned fix
-#'     for cold-Enceladus runs and are NOT yet in this config.
-#'   - S channel is UNCALIBRATED (Miller does not measure H2S yield).
-#' @return data.frame, one row per channel.
+#' CURRENT SCHEME (2026-09-18): CO2, CH4 and CHn are each split into several
+#' sub-pool rows sharing one -formula but each with its own Ea_J, at a
+#' logA = 15.301 (A = 2e15 /s) common to every row in this config (N and S
+#' included). Sub-pool WEIGHTS (fraction of the channel's total m0 in each
+#' Ea bin) are Burnham (2019) Table 1's Vitrimat-2018 distributions --
+#' fitted to vitrinite, not IOM, but validated below. Each channel's total
+#' m0 and a uniform kcal/mol SHIFT applied to every bin are fit to Miller's
+#' two absolute Murchison measured yields (350C, 500C) by 2-point nonlinear
+#' solve (shift given the ratio of the two yields; m0 then follows). Unlike
+#' the old single-Ea fit, THIS makes both 350C and 500C exact fit points, so
+#' the old ~22% 500C overshoot for CO2/CH4 is resolved by construction, not
+#' just explained.
+#'   IOM_CO2: shift +3.587 kcal/mol, m0 4.1687 mol/kg (ENTICES basis).
+#'   IOM_CH4: shift +3.736 kcal/mol, m0 2.2760 mol/kg (ENTICES basis).
+#'   Both independently re-derived (not copied from the patch doc) in a
+#'   2026-09-18 VS Code session; agreed with PATCH_F_vitrimat2018.md's
+#'   hand-computed values to within 0.2%.
+#'
+#' VALIDATION (the actual reason to trust the distribution shape at all):
+#' the UNSHIFTED Vitrimat-2018 CO2 distribution predicts the ratio between
+#' Miller's HC113 250C and 500C yields to 0.991 (see iom_selftest.R Part B),
+#' with zero fitting to our data. That is the strongest evidence this module
+#' has for the shape (not the shift/m0, which ARE fit to Murchison).
+#'
+#' IOM_CHn is new: Burnham/Vitrimat's "oil" (C2+) channel, previously omitted
+#' entirely (silently assuming zero C2+ production). Miller's GC does not
+#' report C2+ species, so CHn's m0 CANNOT be calibrated against Murchison
+#' data at all -- unlike CO2/CH4/N, it is a straight transfer from Burnham's
+#' own vitrinite stoichiometry (c(oil) = 2% of total C, formula C 1 H 1.8),
+#' using the CO2 channel's fitted shift for lack of any independent CHn
+#' constraint. Treat its epistemic status as strictly weaker than CO2/CH4/N.
+#'
+#' IOM_N stays single-Ea (no distribution data exists for it): m0 unchanged
+#' at 0.875 mol/kg (ENTICES basis). Ea = 242.8 kJ/mol.
+#'
+#' CORRECTED 2026-09-18 (caught while re-deriving this for the new A, not
+#' inherited from any patch doc -- both the ORIGINAL 217.3 kJ/mol fit at
+#' A=1e13 and my own first attempt at refitting it to 244.8 kJ/mol at the
+#' new A shared the same latent bug): m0_per_kg is on the ENTICES-normalized
+#' bulk basis (bulk N = 2.142 mol/kg), which is NOT the same basis as
+#' Miller's raw Murchison measurement (real Murchison N = 1.7705 mol/kg,
+#' Table 1) -- they differ by a basis scale factor of 2.142/1.7705 = 1.2098,
+#' analogous to (and independently derived from) the carbon-basis scale
+#' factor of 1.2154 used for CO2/CH4/CHn above. Both fits computed
+#' "target_fraction = Miller's raw 350C value / m0_per_kg" directly, silently
+#' dividing a Murchison-basis absolute value by an ENTICES-basis pool size --
+#' dimensionally inconsistent, and it forced Ea to secretly absorb a ~21%
+#' basis-conversion factor that has nothing to do with the actual activation
+#' energy. This means the WIDELY-REPEATED "~20-22% overshoot at 500C, because
+#' m0 is a fixed exhaustion pool not on Miller's raw yield basis" explanation
+#' recorded in this file's history above and in PROGRESS.md/HANDOVER docs is
+#' the right SIGN but the wrong MECHANISM for at least the IOM_N case: it
+#' isn't an intentional, benign consequence of pool sizing, it is this basis
+#' bug, caught only by explicitly checking the arithmetic before reusing it
+#' at the new A rather than just re-deriving the old number at a new A.
+#'   Correct method: since m0=0.875 is calibrated so that 500C/48h
+#'   approximates full exhaustion of the reactive N pool (via Murchison's own
+#'   raw 500C measurement, scaled up), the physically meaningful fit target
+#'   is the DIMENSIONLESS ratio of Miller's two raw measurements,
+#'   0.5676/0.7229 = 0.7852, matched to (1-exp(-k*t)) -- not an absolute
+#'   value divided by a differently-scaled m0. That gives Ea_N = 242.8
+#'   kJ/mol (not 244.8). Checked: predicted/n_scale reproduces Miller's raw
+#'   350C and 500C values to within 0.06%.
+#'   IOM_CO2/IOM_CH4/IOM_CHn above do NOT share this bug -- their shift/m0
+#'   fit already used the ratio of Miller's two raw measurements to solve
+#'   for shift first (basis-independent by construction), then scaled the
+#'   resulting Murchison-basis m0 up to ENTICES basis as a separate,
+#'   dimensionally-clean step. Re-verify this claim rather than trust it
+#'   before extending the pattern to any new channel.
+#'   IOM_S remains fully UNCALIBRATED -- Miller does not measure H2S yield at
+#'   all. Its Ea is just pinned to IOM_N's (242.8 kJ/mol) as a placeholder
+#'   with zero independent support; treat it accordingly in any
+#'   sulfur-dependent output.
+#'
+#' STILL OPEN (see PROGRESS.md Part 4/5 and the PATCH_F docs for detail):
+#'   - Murchison's fitted shift (+3.6) and HC113's own gas-yield fit (~0.0)
+#'     disagree -- most likely real syn-IOM-vs-meteoritic material
+#'     difference (corroborated by Miller's own Table 10 needing HC113 +8
+#'     kcal/mol vs BS89), but NOT reconciled with Miller's own Table 10
+#'     value for HC113, which is a residue fit at geologic (10C/Myr) heating
+#'     rather than our 48h isothermal gas-yield fit. Do not average the two;
+#'     Murchison is used for production here, HC113 is a separate upper
+#'     bound, not merged in.
+#'   - CHn's m0 (2% of C, from coal) and its borrowed shift are unconstrained
+#'     by any IOM-specific measurement.
+#'   - Option 3 (coupled/decoupled redox at low temperature) is designed in
+#'     PROGRESS.md Part 3 but not implemented -- this config's -formula
+#'     values are the COUPLED-mode ones only.
+#' @return data.frame, one row per sub-pool/channel.
 iom_default_config <- function() {
-  data.frame(
-    name      = c("IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S"),
-    m0_per_kg = c(4.169, 1.908, 0.875, 0.462),
-    formula   = c("C 1 H 1 O 1.3115", "C 1 H 4.435", "N 1 H 2", "S 1 H 1"),
-    Ea_J      = c(216.2e3, 229.4e3, 217.3e3, 217.3e3),
-    logA      = c(13, 13, 13, 13),
-    stringsAsFactors = FALSE
+  R_GAS <- 8.314
+  CAL_TO_J <- 4184
+  logA <- log10(2e15)  # 15.301; Burnham (2019) Table 1, "Vitrimat 2018", A=2e15/s
+
+  # Vitrimat-2018 sub-pool shapes (Burnham 2019 Table 1), Ea bins in kcal/mol
+  # BEFORE the Murchison shift below is added.
+  co2_bins <- c(44, 46, 48, 50, 52, 54, 56); co2_w <- c(10, 15, 15, 15, 15, 15, 15) / 100
+  ch4_bins <- c(52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76)
+  ch4_w    <- c(2, 5, 8, 10, 12, 15, 12, 10, 8, 6, 5, 4, 3) / 100
+  chn_bins <- c(50, 52, 54, 56, 58, 60, 62); chn_w <- c(5, 15, 30, 20, 15, 10, 5) / 100
+  stopifnot(abs(sum(co2_w) - 1) < 1e-9, abs(sum(ch4_w) - 1) < 1e-9, abs(sum(chn_w) - 1) < 1e-9)
+
+  # Fitted shift + total m0 (ENTICES basis), 2026-09-18 -- see the docstring
+  # above for how, and iom_selftest.R Part B for the independent re-derivation.
+  co2_shift <- 3.587; co2_m0_tot <- 4.1687
+  ch4_shift <- 3.736; ch4_m0_tot <- 2.2760
+  chn_shift <- co2_shift  # borrowed; no independent CHn constraint
+  chn_m0_tot <- 0.02 * iom_bulk_formula()[["C"]]  # Burnham's c(oil) = 2% of C
+
+  subpool_rows <- function(prefix, bins, w, shift, m0_tot, formula) {
+    data.frame(
+      name      = sprintf("%s_%d", prefix, bins),
+      m0_per_kg = w * m0_tot,
+      formula   = formula,
+      Ea_J      = (bins + shift) * CAL_TO_J,
+      logA      = logA,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  rbind(
+    subpool_rows("IOM_CO2", co2_bins, co2_w, co2_shift, co2_m0_tot, "C 1 H 1 O 1.3115"),
+    subpool_rows("IOM_CH4", ch4_bins, ch4_w, ch4_shift, ch4_m0_tot, "C 1 H 4.435"),
+    subpool_rows("IOM_CHn", chn_bins, chn_w, chn_shift, chn_m0_tot, "C 1 H 1.8"),
+    data.frame(name = "IOM_N", m0_per_kg = 0.875, formula = "N 1 H 2",
+               Ea_J = 242.8e3, logA = logA, stringsAsFactors = FALSE),
+    data.frame(name = "IOM_S", m0_per_kg = 0.462, formula = "S 1 H 1",
+               Ea_J = 242.8e3, logA = logA, stringsAsFactors = FALSE)
   )
 }
 
@@ -283,6 +396,12 @@ iom_punch_lines <- function(config, start_line = 500) {
 #     highest PUNCH line number (currently ~110 in the reviewed template, so
 #     a default of 200 leaves headroom for a few dozen mineral additions
 #     before colliding -- confirm against the current file before wiring in).
+#     CAUTION (2026-09-18): the distributed-Ea config now has 29 rows, not 4
+#     -- iom_punch_lines() at step 10 needs ~290 lines of Basic line-number
+#     space (e.g. 200..3080 rather than 200..230). Re-check this headroom
+#     claim against ENTICES's current template before wiring in; it may no
+#     longer hold if ENTICES's own PUNCH numbering has grown since it was
+#     last checked.
 #
 # ENTICES's restart function should read the config with iom_default_config()
 # (or store/reload whatever config a run used) and use the same three

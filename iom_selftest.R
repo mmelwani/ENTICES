@@ -117,6 +117,14 @@ run_isothermal <- function(config, T_C, duration_s, n_steps = 2000) {
   released
 }
 
+# CO2/CH4/CHn are now several sub-pool rows each (IOM_CO2_44, IOM_CO2_46, ...)
+# sharing one -formula; sum by family to get the quantity Miller actually
+# measured. Works for both multi-pool families and the still-single-pool
+# IOM_N/IOM_S (falls back to exact-name match).
+family_sum <- function(rel, prefix) {
+  sum(rel[names(rel) == prefix | startsWith(names(rel), paste0(prefix, "_"))])
+}
+
 hours <- 48
 dur_s <- hours * 3600
 
@@ -131,29 +139,107 @@ miller_measured <- data.frame(
 # matches NH3_pct_of_N * murchison_N0 to 3 decimal places.
 murchison_N0 <- (2.48/100) * 1000 / 14.007
 
-cat(sprintf("%-8s %10s %10s %10s | %10s %10s %10s | %10s %10s %10s\n",
+# BASIS NOTE (found 2026-09-18 while re-deriving IOM_N's Ea, see
+# iom_default_config()'s docstring for the full story): cfg's m0_per_kg is on
+# the ENTICES-normalized bulk basis (bulk() = mol per 1000 g of C+H+O+N+S
+# only), NOT the same basis as Miller's raw per-kg-of-real-Murchison-IOM
+# measurements -- real Murchison IOM is only ~82% organic elements by mass
+# (Table 1's wt% sum to 82.1%; the rest is ash/S/P), so ENTICES's kg is a
+# renormalization, not the same kg. Comparing an ENTICES-basis prediction
+# directly to Miller's raw value is dimensionally wrong; divide by the
+# element-specific scale factor first. This bug was previously latent in
+# EVERY single-Ea fit (CO2/CH4/N) -- it happened not to matter for 350C
+# (the sole free Ea parameter absorbed it) but produced the ~20-22% "500C
+# overshoot" that earlier sessions attributed (incorrectly) to "m0 being a
+# fixed exhaustion pool." The distributed CO2/CH4/CHn fit avoids the bug by
+# construction (shift fit from the ratio of two Murchison-basis numbers,
+# basis-independent; m0 scaled up only afterward) -- so only N's comparison
+# below still needs the explicit correction.
+c_scale <- iom_bulk_formula()[["C"]] / 49.871   # Murchison C, Table 1
+n_scale <- iom_bulk_formula()[["N"]] / murchison_N0
+cat(sprintf("Basis scale factors (ENTICES-normalized / real-Murchison): C=%.4f  N=%.4f\n\n",
+            c_scale, n_scale))
+
+cat(sprintf("%-8s %10s %10s %10s | %10s %10s %10s | %10s %10s %10s | %10s\n",
             "T(C)", "CO2_pred", "CO2_meas", "ratio", "CH4_pred", "CH4_meas", "ratio",
-            "N_pred", "N_meas", "ratio"))
+            "N_pred", "N_meas", "ratio", "CHn_pred"))
+released_by_T <- list()
 for (i in seq_len(nrow(miller_measured))) {
   T_C <- miller_measured$T_C[i]
   rel <- run_isothermal(cfg, T_C, dur_s)
-  co2p <- rel[["IOM_CO2"]]; ch4p <- rel[["IOM_CH4"]]; np <- rel[["IOM_N"]]
+  released_by_T[[as.character(T_C)]] <- rel
+  co2p <- family_sum(rel, "IOM_CO2") / c_scale; ch4p <- family_sum(rel, "IOM_CH4") / c_scale
+  np <- family_sum(rel, "IOM_N") / n_scale; chnp <- family_sum(rel, "IOM_CHn") / c_scale
   co2m <- miller_measured$CO2_mol_kg[i]; ch4m <- miller_measured$CH4_mol_kg[i]
   nm <- miller_measured$NH3_pct_of_N[i]/100 * murchison_N0
-  cat(sprintf("%-8g %10.3f %10.3f %10.2f | %10.3f %10.3f %10.2f | %10.3f %10.3f %10.2f\n",
-              T_C, co2p, co2m, co2p/co2m, ch4p, ch4m, ch4p/ch4m, np, nm, np/nm))
+  cat(sprintf("%-8g %10.3f %10.3f %10.2f | %10.3f %10.3f %10.2f | %10.3f %10.3f %10.2f | %10.3f\n",
+              T_C, co2p, co2m, co2p/co2m, ch4p, ch4m, ch4p/ch4m, np, nm, np/nm, chnp))
 }
-cat("(350C ratio ~1.0 is expected for all three: Ea was fit to hit each\n")
-cat(" channel's ABSOLUTE 350C value exactly, so this column is a consistency\n")
-cat(" check on the arithmetic. 500C ratio is NOT expected to be 1.0 for any\n")
-cat(" of them -- each channel's m0_per_kg is a fixed exhaustion pool scaled\n")
-cat(" to bulk IOM content, not Miller's raw measured yield basis, so full\n")
-cat(" exhaustion legitimately exceeds the raw yield at the hotter point.\n")
-cat(" This is why the ORIGINAL CO2/CH4 fit -- which used the ratio of\n")
-cat(" Miller's two measured yields rather than the absolute value -- was\n")
-cat(" wrong: see the CORRECTED note in iom_default_config(). IOM_N was\n")
-cat(" refit the same way on 2026-09-17; IOM_S remains uncalibrated (no H2S\n")
-cat(" data in Miller at all) and is not compared here.)\n\n")
+cat("(All *_pred values above are ENTICES-basis model output divided by the\n")
+cat(" relevant basis scale factor, i.e. converted BACK to Miller's raw\n")
+cat(" Murchison basis for a fair comparison -- see the basis note above.\n")
+cat(" CO2/CH4 are distributed-Ea sub-pools fit to BOTH 350C and 500C as\n")
+cat(" exact targets, so both ratio columns should read ~1.0. IOM_N is still\n")
+cat(" single-Ea (no distribution data exists for it), fit only at 350C, so\n")
+cat(" its 500C ratio is a genuine PREDICTION. CHn has no Miller target at\n")
+cat(" all (GC doesn't report C2+) -- printed for transparency only.)\n\n")
+
+cat("Asserted benchmark checks (tolerances explained inline):\n")
+# CO2/CH4 350C AND 500C are now both exact fit targets (2 unknowns -- shift,
+# m0 -- solved against these 2 equations), so both should match tightly once
+# converted back to Miller's raw basis. 1% tolerance covers the ~0.3-0.5%
+# numerical error of the 2000-step explicit-Euler ODE relative to the
+# closed-form fit.
+rel350 <- released_by_T[["350"]]; rel500 <- released_by_T[["500"]]
+m350 <- miller_measured[miller_measured$T_C == 350, ]
+m500 <- miller_measured[miller_measured$T_C == 500, ]
+nm350 <- m350$NH3_pct_of_N / 100 * murchison_N0
+nm500 <- m500$NH3_pct_of_N / 100 * murchison_N0
+for (ch in c("CO2", "CH4")) {
+  fam <- paste0("IOM_", ch)
+  pass(sprintf("350C %s matches Miller's absolute measured yield (fit target, 1%% tol)", ch),
+       abs((family_sum(rel350, fam)/c_scale) / m350[[sprintf("%s_mol_kg", ch)]] - 1) < 0.01)
+  pass(sprintf("500C %s matches Miller's absolute measured yield (fit target, 1%% tol)", ch),
+       abs((family_sum(rel500, fam)/c_scale) / m500[[sprintf("%s_mol_kg", ch)]] - 1) < 0.01)
+}
+pass("350C N matches Miller's absolute measured yield (fit target, 1% tol)",
+     abs((family_sum(rel350, "IOM_N")/n_scale) / nm350 - 1) < 0.01)
+# 500C N is a genuine prediction (single-Ea, no distribution) -- expected to
+# sit close to full exhaustion of its own m0 pool (Murchison-basis-equivalent
+# ~1.0 vs Miller, since m0 was itself calibrated so 500C approximates full
+# exhaustion). Loose band, informational rather than a strict target.
+n500_ratio <- (family_sum(rel500, "IOM_N")/n_scale) / nm500
+pass("500C N ratio is a sane prediction (informational, 0.95-1.10 loose band)",
+     n500_ratio > 0.95 && n500_ratio < 1.10, sprintf("ratio=%.3f", n500_ratio))
+cat("\n")
+
+# ---------------------------------------------------------------------------
+# Independent shape validation (NOT fit to any of our data): the UNSHIFTED
+# Vitrimat-2018 CO2 distribution should reproduce the RATIO between Miller's
+# HC113 250C and 500C measured yields. This is the strongest evidence the
+# module has for using this distribution's shape at all -- see
+# PATCH_F_vitrimat2018.md sec 3. Deliberately reimplemented here from the
+# raw bins/weights, independent of cfg (cfg's CO2 rows are shifted+fit to
+# Murchison, not HC113, and are the wrong thing to test this against).
+cat("Independent validation: unshifted Vitrimat-2018 CO2 shape vs HC113\n")
+cat("(not fit to any of our data -- a genuine out-of-sample check):\n")
+co2_bins <- c(44, 46, 48, 50, 52, 54, 56)
+co2_w    <- c(10, 15, 15, 15, 15, 15, 15) / 100
+frac_released_shape <- function(bins, w, shift_kcal, T_C, t, A) {
+  TK <- T_C + 273.15
+  Ea_J <- (bins + shift_kcal) * 4184
+  k <- A * exp(-Ea_J / (R_GAS * TK))
+  sum(w * (1 - exp(-k * t)))
+}
+f250 <- frac_released_shape(co2_bins, co2_w, 0, 250, dur_s, 2e15)
+f500 <- frac_released_shape(co2_bins, co2_w, 0, 500, dur_s, 2e15)
+pred_ratio <- f250 / f500
+hc113_ratio <- 1.158 / 2.55
+cat(sprintf("  predicted 250/500 ratio = %.4f, HC113 measured = %.4f, agreement = %.3f\n",
+            pred_ratio, hc113_ratio, pred_ratio / hc113_ratio))
+pass("Unshifted Vitrimat-2018 CO2 shape reproduces HC113 250/500 ratio (2% tol)",
+     abs(pred_ratio / hc113_ratio - 1) < 0.02)
+cat("\n")
 
 cat("Residue trajectory (THIS is the real, previously unexecuted test --\n")
 cat("residue composition was NOT part of the two-point Ea fit):\n\n")
@@ -178,17 +264,38 @@ for (i in seq_len(nrow(miller_measured))) {
     f <- iom_parse_formula(cfg$formula[j])
     for (el in names(f)) resid_now[el] <- resid_now[el] + m_remaining[j] * f[el]
   }
+  h_c_meas <- miller_residue$H_C[miller_residue$T_C == T_C]
+  o_c_meas <- miller_residue$O_C[miller_residue$T_C == T_C]
+  h_c_pred <- resid_now["H"]/resid_now["C"]
+  o_c_pred <- resid_now["O"]/resid_now["C"]
   cat(sprintf("  T=%gC: predicted residue H/C=%.3f O/C=%.4f  |  measured H/C=%s O/C=%s\n",
-              T_C, resid_now["H"]/resid_now["C"], resid_now["O"]/resid_now["C"],
-              miller_residue$H_C[miller_residue$T_C == T_C],
-              miller_residue$O_C[miller_residue$T_C == T_C]))
+              T_C, h_c_pred, o_c_pred, h_c_meas, o_c_meas))
+  # Loose (25%) sanity bound only -- NOT a tight calibration target. The
+  # residue was never part of the two-point Ea fit (that's the whole point
+  # of testing it), and the model is known to be missing a low-Ea decay
+  # tail (see handover notes), which biases residue H/C, O/C high. This
+  # check exists to catch a GROSS error (e.g. a sign flip or unit mixup in
+  # iom_residue_formula/formula parsing), not to enforce a match that the
+  # model isn't expected to hit yet.
+  if (!is.na(h_c_meas)) {
+    pass(sprintf("%gC residue H/C within loose 25%% sanity bound", T_C),
+         abs(h_c_pred / h_c_meas - 1) < 0.25,
+         sprintf("pred=%.3f meas=%.3f", h_c_pred, h_c_meas))
+  }
+  if (!is.na(o_c_meas)) {
+    pass(sprintf("%gC residue O/C within loose 25%% sanity bound", T_C),
+         abs(o_c_pred / o_c_meas - 1) < 0.25,
+         sprintf("pred=%.4f meas=%.4f", o_c_pred, o_c_meas))
+  }
 }
 
 cat("\n=============================================================\n")
-cat(sprintf("SUMMARY: %d failure(s) in Part A checks.\n", failures))
-cat("Part B is diagnostic (compares predicted vs Miller-measured values)\n")
-cat("rather than pass/fail. 500C residue H/C, O/C remain NA -- unmeasured\n")
-cat("in Miller's own Table 5 Murchison row, not a script gap.\n")
+cat(sprintf("SUMMARY: %d failure(s) across all asserted checks.\n", failures))
+cat("Gas-yield ratios, the independent HC113 shape check, and residue\n")
+cat("sanity bounds above are all asserted (pass/fail), not just printed.\n")
+cat("500C residue H/C, O/C remain unmeasured in Miller's own Table 5\n")
+cat("Murchison row -- not checked. IOM_CHn and IOM_S have no Miller target\n")
+cat("at all and are reported for transparency only, never asserted.\n")
 cat("=============================================================\n")
 
 if (failures > 0) quit(status = 1)
