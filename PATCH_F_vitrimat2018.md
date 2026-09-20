@@ -41,7 +41,7 @@ figure was a hand-written guess left in a print statement, the computation is
 |---|---|---|
 | IOM_CO2 | 216.2 | 243.6 |
 | IOM_CH4 | 229.4 | 256.9 |
-| IOM_N | 217.3 | 244.8 |
+| IOM_N | 217.3 | 242.8 [CORRECTED — was 244.8, basis bug; see PROGRESS.md Part 4] |
 
 **Nothing we previously validated breaks** — the 350 C fits are preserved by
 construction. But low-temperature extrapolation changes by ~1-2 orders of
@@ -219,7 +219,7 @@ at 350 C requires a larger pool. Check this against
 (60.611), so the residue stays positive, but re-run the assertion.**
 
 IOM_N and IOM_S stay single-pool (no distribution data for either), but **both
-need `logA = 15.301` and Ea refit to 244.8 kJ/mol** (IOM_N; IOM_S remains
+need `logA = 15.301` and Ea refit to 242.8 [CORRECTED — was 244.8, basis bug; see PROGRESS.md Part 4] kJ/mol** (IOM_N; IOM_S remains
 pinned to IOM_N and uncalibrated).
 
 ---

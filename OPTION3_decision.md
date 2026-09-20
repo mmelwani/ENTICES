@@ -1,12 +1,14 @@
 # Option 3 — decoupling decision, per channel
 
-Date: 2026-09-18 (§0a and §5 updated 2026-09-20)
+Date: 2026-09-18 (§0a and §5 updated 2026-09-20; **§1/§3/§4 RESOLVED BY
+TESTING 2026-09-20 — see `PHREEQC_TEST_RESULTS_2026-09-20.md`**)
 Responds to: `HANDOVER_option3_database_findings_2026-09-18.md`
 Supersedes: the `DECOUPLED_FORMULAS` sketch in `PROGRESS.md` Part 3
-Status of my own claims: the database *reasoning* is verified (see §1); the
-database *file* was not available to this session, so line numbers and species
-spellings are taken on trust from the VS Code session's reading. Two items at
-the end need a PHREEQC run and cannot be settled by argument.
+Status of my own claims: the database *reasoning* in §0/§1 is verified and held
+up. The two open items in §4 have now been **run in PHREEQC** — one confirmed
+the design, the other **corrected it** (§3's Sg reasoning was wrong). Species
+spellings and database line numbers, originally taken on trust, are confirmed by
+those runs.
 
 ---
 
@@ -39,7 +41,7 @@ its identity** — `-formula CO2` adds 1 C + 2 O as elements, which then speciat
 by equilibrium exactly as `C 1 O 2` would.
 
 Someone who has just read that could reasonably ask why the decoupled formulas
-in §3 — `Mtg 1 H 0.435`, `Sg 1 H -1` — are expected to behave any differently.
+in §3 — `Mtg 1 H 0.435`, `Sg 1 H 1` — are expected to behave any differently.
 The answer is the distinction Part 1 draws, applied in the other direction:
 
 - `CH4` is a **molecule name used as stoichiometric shorthand**. PHREEQC expands
@@ -67,7 +69,7 @@ material where kinetics would have left it?*
 | channel | decision | decoupled formula | why |
 |---|---|---|---|
 | `IOM_CH4` | **decouple** | `Mtg 1 H 0.435` | Correct as drafted. `Mtg` exists and is genuinely decoupled. |
-| `IOM_S` | **decouple** | `Sg 1 H -1` (pending §4) | Species name corrected from `S(-2)`. Sulfide/sulfate equilibration is genuinely inhibited at low T. |
+| `IOM_S` | **decouple** | **`Sg 1 H 1`** (tested; was `Sg 1 H -1`) | Species name corrected from `S(-2)`. Sulfide/sulfate equilibration is genuinely inhibited at low T. |
 | `IOM_N` | **leave coupled** | *(none)* | See below — coupled equilibrium already gives the right answer. |
 | `IOM_CO2` | **decouple, via `Hdg`** | *(no new species; see §3)* | Coupled equilibrium gives exactly the wrong answer, but the fix is not a carbon species. |
 | `IOM_CHn` | follows `IOM_CO2` | *(same mechanism)* | Its carbon has the same problem; no separate solution needed. |
@@ -158,7 +160,7 @@ database edit with its calcite caveat accepted and documented.
 
     coupled mode   : all channels as in Part 1 (elements; solver decides)
     decoupled mode : IOM_CH4 -> Mtg 1 H 0.435
-                     IOM_S   -> Sg 1 H -1
+                     IOM_S   -> Sg 1 H 1        (tested; was Sg 1 H -1)
                      IOM_N   -> unchanged (N 1 H 2), deliberately coupled
                      IOM_CO2 -> unchanged formula; decoupling achieved by
                                 Hdg in the database, not by a carbon species
@@ -176,7 +178,23 @@ Part 3's invariant (identical elements released in both modes) holds:
     IOM_CH4  coupled  C 1 H 4.435       H total = 4.435
              decoupled Mtg 1 H 0.435    Mtg carries 4 H + 0.435 free = 4.435  OK
     IOM_S    coupled  S 1 H 1           H total = 1
-             decoupled Sg 1 H -1        H2Sg carries 2 H − 1 free  = 1        OK
+             decoupled Sg 1 H 1         measured dH = +1                      OK
+
+**THE REASONING ABOVE FOR Sg WAS WRONG** (corrected 2026-09-20 by measurement).
+It assumed H2Sg's two hydrogens are *supplied by* the pseudo-element, as Mtg's
+four are, so that 1 had to be subtracted to net +1. In fact the two species are
+defined oppositely in the database:
+
+    Mtg   Mtg    0   Mtg     16.032   <- master-species formula has NO H
+    Sg    H2Sg   1   H2Sg    34.08    <- master-species formula IS H2Sg
+
+Mtg's hydrogens sit **outside** the H mass balance, so `Mtg 1` contributes no H
+and the formula supplies only the surplus 0.435. H2Sg's sit **inside** it and
+are drawn from solution, so `Sg 1` contributes **zero** net H and the formula
+must supply the full 1 H the solid releases. Measured, per mole of reaction:
+`S 1 H 1` = +1.000, `Sg 1 H 1` = +1.000 (match), `Sg 1 H -1` = **−1.000**
+(wrong by 2 — the solid would absorb an H instead of releasing one, driving pe
+to +15.4 and destroying the H2 reservoir), `Sg 1` = 0.000.
 
 Negative coefficients are legal: the PHREEQC manual (KINETICS, `-formula`)
 states that "a negative stoichiometric coefficient and a positive value for
@@ -186,23 +204,42 @@ against the manual text in the project, not from memory.
 
 ---
 
-## 4. The two things that need a PHREEQC run, not more argument
+## 4. RESOLVED BY TESTING, 2026-09-20
 
-Both are for Lucas / the VS Code session; neither can be settled by reading.
+Both questions were run in PHREEQC 3.8.6 against `Core11_idealgas_mod_v4.dat`.
+Full numbers in `PHREEQC_TEST_RESULTS_2026-09-20.md`; inputs
+`test_A4_formulas.pqi`, `test_B2_Hdg_carbon.pqi`.
 
-**(a) Does `Sg 1` implicitly demand H₂Sg's two hydrogens?** The database line
-is `Sg  H2Sg  1  H2Sg  34.08`, so the element `Sg` has master species H₂Sg.
-Writing `Sg 1` adds one mole of element Sg. Whether PHREEQC also pulls the two
-H of H₂Sg from solution automatically, or expects the formula to supply them,
-determines whether the correct form is `Sg 1 H -1`, `Sg 1 H 1`, or `Sg 1`
-alone. Test: add a known amount via each variant to a simple solution and
-check the resulting total H and total S against hand arithmetic.
+**(a) Does `Sg 1` demand its own H? — ANSWERED, and it corrected this document.**
+`Sg 1 H 1` is right; the `Sg 1 H -1` proposed above was wrong by 2 mol H per
+mol S. See the corrected reasoning in §3. Also settled: KINETICS and REACTION
+`-formula` semantics agree exactly, and no variant errors — `Sg 1` runs fine,
+it is just not element-conserving.
 
-**(b) Does decoupling H₂ (`Hdg`) actually stop the carbon runaway?** Test in
-isolation, no ENTICES: a reducing solution with a known H₂ inventory, add
-oxidised carbon, run once with H₂ as `H2` and once as `Hdg`, and compare the
-resulting C(+4)/C(−4) split and pe. This is the cheap decisive test of §2's
-hypothesis, and it should be done before any module or config changes.
+**(b) Does decoupling H₂ (`Hdg`) stop the carbon runaway? — CONFIRMED.**
+In the realistic case (with a real Fe(II) mineral assemblage), carbon reduction
+to methane fell from 10.8% to 0.0004% of total carbon — **suppressed ~26,000×**
+— while pe stayed sensibly reducing at −8.26, set by the mineral assemblage
+rather than left arbitrary. Calcite still precipitated normally (8.16e-04 mol to
+SI = 0), confirming this approach's main advantage over adding a decoupled
+carbon species.
+
+Two caveats worth carrying forward:
+
+- **Without minerals, `Hdg` does not set a redox state at all** (pe drifted to
+  +3.0, essentially arbitrary). Real ENTICES runs always carry the assemblage,
+  so this is not a practical problem, but `Hdg` alone constrains nothing.
+- **Decoupling H₂ is not redox-neutral**, exactly as §2 warned it might not be.
+  Measured in the same small assemblage: magnetite precipitation **2.9× higher**,
+  pyrrhotite dissolution **3.6× higher**, aqueous S **+60%**. So the
+  coupled/decoupled pair can **no longer be read as "identical except for
+  carbon speciation."** Any comparison of the two must report the mineral
+  assemblage alongside the carbon result. This needs a decision: accept and
+  report, or restrict `Hdg` to carbon-relevant cases only.
+
+Test B used a deliberately minimal assemblage (magnetite + pyrrhotite).
+Re-running with ENTICES's actual secondary-phase list would firm up the
+magnitude of that perturbation before it goes in a paper.
 
 ---
 

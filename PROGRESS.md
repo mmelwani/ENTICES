@@ -3,7 +3,12 @@
 Living document. Supersedes `PROGRESS_twobox_superseded.md` for everything
 concerning organic matter.
 
-**Last updated: 2026-09-18**, consolidating four findings that had been living
+**Last updated: 2026-09-20.** Option 3's two open questions have been run in
+PHREEQC (`PHREEQC_TEST_RESULTS_2026-09-20.md`): `Hdg` carbon decoupling is
+CONFIRMED, and the `IOM_S` decoupled formula is CORRECTED to `Sg 1 H 1`. The
+distributed-Ea implementation, decoupled-mode module support and the residue
+re-check are all now DONE, and `Ea_N` is corrected to 242.8 kJ/mol. Originally
+consolidated 2026-09-18 from four findings that had been living
 in separate patch documents (Vitrimat 2018 / A-value; the nitrogen resolution;
 the CHn channel; the Option 3 database correction). Those documents remain as
 the detailed derivations — this file is the current state.
@@ -216,7 +221,7 @@ The four channels are **not** in the same situation, so a uniform
 | channel | decision | decoupled formula | why |
 |---|---|---|---|
 | `IOM_CH4` | decouple | `Mtg 1 H 0.435` | `Mtg` exists and genuinely decouples. Correct as originally drafted. |
-| `IOM_S` | decouple | `Sg 1 H -1` (pending test) | Name corrected from `S(-2)`. Sulfide/sulfate equilibration genuinely inhibited at low T. |
+| `IOM_S` | decouple | **`Sg 1 H 1`** (TESTED; was `Sg 1 H -1`) | Name corrected from `S(-2)`. Sulfide/sulfate equilibration genuinely inhibited at low T. |
 | `IOM_N` | **leave coupled** | *(none)* | Coupled equilibrium already gives the right answer — see below. |
 | `IOM_CO2` | decouple **via `Hdg`** | *(no new species)* | Coupled gives exactly the wrong answer, but the fix is not a carbon species. |
 | `IOM_CHn` | follows `IOM_CO2` | *(same mechanism)* | Same carbon problem, same solution. |
@@ -270,7 +275,18 @@ with the calcite caveat accepted and documented.
     IOM_CH4  coupled  C 1 H 4.435     H total = 4.435
              decoupled Mtg 1 H 0.435  Mtg carries 4 H + 0.435 free = 4.435  OK
     IOM_S    coupled  S 1 H 1         H total = 1
-             decoupled Sg 1 H -1      H2Sg carries 2 H − 1 free  = 1        OK
+             decoupled Sg 1 H 1       measured dH = +1                      OK
+
+**The Sg reasoning here was wrong and is corrected (2026-09-20, by
+measurement).** Mtg and Sg follow OPPOSITE rules, because the database defines
+their master species differently: `Mtg Mtg 0 Mtg 16.032` has no H in the
+master-species formula, so Mtg's four hydrogens sit OUTSIDE the H mass balance
+and the formula supplies only the surplus; `Sg H2Sg 1 H2Sg 34.08` has H2 in it,
+so those hydrogens are drawn FROM solution and `Sg 1` contributes zero net H.
+Measured ΔH per mole: `S 1 H 1` = +1.000, `Sg 1 H 1` = +1.000 (match),
+`Sg 1 H -1` = −1.000 (wrong by 2; drives pe to +15.4 and destroys the H2
+reservoir), `Sg 1` = 0.000. Do not "make the two formulas consistent."
+
 
 Negative coefficients are legal — confirmed against the PHREEQC manual text in
 this project (KINETICS `-formula`: "a negative stoichiometric coefficient and
@@ -283,16 +299,35 @@ is smaller than originally assumed. But `redox_mode` must still be
 **per-element**, because H2 decoupling is a database-level switch while
 Mtg/Sg are formula-level.
 
-## Two things that need a PHREEQC run, not more argument
+## Both PHREEQC questions: ANSWERED 2026-09-20
 
-**(a) Does `Sg 1` implicitly demand H2Sg's two hydrogens?** Determines whether
-the right form is `Sg 1 H -1`, `Sg 1 H 1`, or `Sg 1` alone. Test: add a known
-amount via each variant and check total H and S against hand arithmetic.
+Run in PHREEQC 3.8.6 against `Core11_idealgas_mod_v4.dat`. Full numbers in
+`PHREEQC_TEST_RESULTS_2026-09-20.md`.
 
-**(b) Does decoupling H2 (`Hdg`) actually stop the carbon runaway?** Test in
-isolation, no ENTICES: reducing solution with known H2 inventory, add oxidised
-carbon, run once with `H2` and once with `Hdg`, compare C(+4)/C(−4) and pe.
-This is the decisive cheap test and should precede any module changes.
+**`Sg` hydrogen — answered, and it corrected the design.** `Sg 1 H 1` is right;
+see the corrected reasoning above. Also settled: KINETICS and REACTION
+`-formula` semantics agree exactly.
+
+**`Hdg` carbon decoupling — CONFIRMED.** In the realistic case (real Fe(II)
+assemblage present), carbon reduction to methane fell from 10.8% to 0.0004% of
+total carbon — **suppressed ~26,000×** — with pe staying sensibly reducing at
+−8.26, set by the mineral assemblage. Calcite still precipitated normally
+(8.16e-04 mol to SI = 0), confirming the approach's main advantage over adding a
+decoupled carbon species.
+
+Two caveats now quantified:
+
+- **`Hdg` alone does not set a redox state.** Without minerals, pe drifted to
+  +3.0 (arbitrary). Real ENTICES runs always carry the assemblage, so this is
+  not a practical problem, but it should not be assumed.
+- **Decoupling H2 is NOT redox-neutral.** Magnetite precipitation 2.9× higher,
+  pyrrhotite dissolution 3.6× higher, aqueous S +60%, versus coupled. So the
+  coupled/decoupled pair can **no longer be read as "identical except for
+  carbon speciation"** — any comparison must report the mineral assemblage
+  alongside the carbon result. Needs a decision: accept and report, or restrict
+  `Hdg` to carbon-relevant cases only. Test B used a minimal assemblage
+  (magnetite + pyrrhotite); re-run with ENTICES's real secondary-phase list to
+  firm up the magnitude before publication.
 
 ---
 
@@ -382,7 +417,7 @@ Against the Murchison distribution fit, over 4.5 Gyr: single-Ea is low by
 | IOM_CO2 | 4.1691 | C 1 H 1 O 1.3115 | fitted, Murchison, distributed Ea |
 | IOM_CH4 | 2.2718 | C 1 H 4.435 | fitted, Murchison, distributed Ea |
 | IOM_CHn | 1.2122 | C 1 H 1.8 | **transferred from vitrinite** (Burnham c(oil)=2% of C, n=1.8) |
-| IOM_N | 0.8750 | N 1 H 2 | fitted, Murchison, single Ea 244.8 kJ/mol |
+| IOM_N | 0.8750 | N 1 H 2 | fitted, Murchison, single Ea **242.8** kJ/mol (was 244.8 — basis bug, see below) |
 | IOM_S | 0.4620 | S 1 H 1 | **UNCALIBRATED** — pinned to Ea_N, no data exists |
 
 Element budget on the ENTICES basis — verified, all residues positive:
@@ -401,6 +436,35 @@ measured Murchison yields; CHn is transferred from vitrinite with no
 IOM-specific support; IOM_S has none at all. Flag the last two in any output
 that depends on them.
 
+### Ea_N corrected 242.8 (was 244.8) — a basis bug, found 2026-09-20
+
+The 244.8 value in `claude/PATCH_F_vitrimat2018.md` and `claude/NEXT_STEPS.md`
+mixed two composition bases. `m0_per_kg = 0.875` is on the ENTICES-normalised
+basis (bulk N 2.142 mol/kg), but the fit target used was Miller's **raw**
+Murchison measurement (real Murchison N 1.7705 mol/kg). Those differ by
+2.142/1.7705 = 1.2098, so computing `target = raw_350C / m0_per_kg` silently
+divided one basis by the other and Ea absorbed a ~21% conversion factor that has
+nothing to do with activation energy.
+
+The dimensionally clean target is the **ratio of Miller's two raw
+measurements**, 0.5676/0.7229 = 0.7852, giving **Ea_N = 242.8 kJ/mol**.
+Independently verified: 242.8 reproduces Miller's raw 350 C value exactly
+(0.5676 predicted vs 0.5676 measured), whereas 244.8 predicts 0.4689 — **17.4%
+low**.
+
+Two related points, checked:
+- **CO2/CH4/CHn do NOT share this bug.** Their shifts are fitted to the ratio of
+  two raw measurements (basis-independent), with the ENTICES ×1.215 scaling
+  applied afterwards as a separate step.
+- **`m0_N = 0.875` is fine and should not be "fixed."** The basis-converted 500 C
+  exhaustion value is 0.7229 × 1.2098 = 0.8746, which agrees with 0.875 to
+  0.06%. It arrived by a different route (the ~40%-of-N release figure) but is
+  self-consistent with how Ea_N is now fitted.
+
+This also means the "~20-22% overshoot at 500 C because m0 is a fixed exhaustion
+pool" explanation, repeated across several documents, had the right **sign** but
+the wrong **mechanism** — it was this basis mismatch.
+
 ## Nitrogen — RESOLVED (was open for several sessions)
 
 Cody et al. (2024) via Miller Table 1 is the sole source: Murchison IOM
@@ -418,12 +482,15 @@ Not a competing measurement — a transcription error. Optionally refine 2.142 �
 
 - **250 C CO2 ratio (HC113): 0.991** — independent, passes. Add as a self-test
   assertion.
-- **Murchison 350 C residue**: previous single-Ea prediction overshot at
-  H/C 0.703 vs measured 0.63 (+11%) and O/C 0.104 vs 0.096 (+8%). Both high,
-  attributed to the missing low-Ea tail. **This patch is the direct test of
-  that hypothesis** — and because CHn is H-rich (H/C 1.8), adding it pulls
-  predicted residue H/C *down*, the right direction. Re-run after implementing;
-  it should now resolve or fail visibly.
+- **Murchison 350 C residue — RE-RUN 2026-09-20, partially resolved.** The
+  distributed-Ea + CHn model moved predicted H/C from 0.703 to **0.679**
+  (measured 0.63), i.e. the overshoot fell from +11% to **+7.8%**; O/C from
+  +8% to **+5.3%**. Direction correct, magnitude only partly explained.
+  **So the missing-low-Ea-tail diagnosis is PARTIALLY supported, not
+  confirmed** — and per the pre-registered framing, it should not be repeated
+  as settled. Remaining candidates, unchanged: m0 basis, unreacted channel mass
+  counted as solid, sample heterogeneity. Nothing was tuned to improve the fit,
+  which is the right call.
 - **Murchison 500 C** H/C and O/C are confirmed genuinely blank in Miller's
   Table 5 (that row reports only N/C 0.015, RN/C 0.42, C 55.9 wt%, N 0.99
   wt%). Stop looking for them.
@@ -448,26 +515,47 @@ Not a competing measurement — a transcription error. Optionally refine 2.142 �
 - **Nitrogen discrepancy resolved** and its origin identified.
 - **Option 3 design corrected** per-channel; N stays coupled, `Hdg` proposed
   for carbon.
+- **Option 3 formulas TESTED in PHREEQC** (2026-09-20): `Hdg` carbon decoupling
+  confirmed (~26,000× suppression); `IOM_S` corrected to `Sg 1 H 1`; the
+  Mtg-vs-Sg asymmetry understood and documented.
+- **Distributed Ea implemented** (commit `d21fb57`), decoupled-mode module
+  support added (`3df3eed`), Part B assertions committed.
+- **`Ea_N` corrected to 242.8 kJ/mol** — a composition-basis bug in the 244.8
+  value that several documents carried.
+- **350 C residue re-check run**: overshoot +11% → +7.8%. Partially resolves the
+  low-Ea-tail hypothesis; deliberately not tuned further.
 
-## Next, in recommended order
-1. **Redox budget diagnostic** (Part 2b). Cheapest test; may invalidate
-   existing organic-enabled H2 and mineral predictions. Check H2, pe, *and*
-   Fe phases.
-2. **The two Option 3 PHREEQC tests** (Part 3): does `Sg 1` demand its own H,
-   and does `Hdg` stop the carbon runaway. Both in isolation, no ENTICES.
-   Test (b) decides the whole carbon-decoupling design, so it is high leverage
-   for very little work.
-3. **Implement distributed Ea** (Part 4 / `PATCH_F_vitrimat2018.md` §5):
-   sub-pools for CO2, CH4, CHn; update logA to 15.301 everywhere; refit IOM_N
-   Ea to 244.8. Re-derive the numbers rather than copying them.
-4. **Re-run the Murchison 350 C residue check** — the direct test of the
-   missing-low-Ea-tail hypothesis.
-5. **Module support for decoupled mode** (second formula column for CH4/S
-   only; per-element `redox_mode`), plus the element-conservation assertion.
-6. Wire the module into ENTICES's template generator (`INTEGRATION POINTS` in
-   `iom_module.R`).
+## Next, in recommended order (revised 2026-09-20)
+
+Items 2-5 of the previous list are **done**. What remains:
+
+1. **Redox budget diagnostic on existing ENTICES output** — the only item from
+   the original list still untouched, and still nearly free. Compare an
+   organics-on run against organics-off at matched timesteps: H2, pe, *and* the
+   Fe-bearing assemblage. Now doubly worth doing, because Test B showed
+   decoupling H2 perturbs the Fe/S budget ~3× — so the mineral assemblage is
+   confirmed as a place artefacts show up, not just a place to look.
+2. **Decide the `Hdg` mineral-perturbation question.** Accept and report the
+   Fe/S shift, or restrict `Hdg` to carbon-relevant cases. This is a judgement
+   call about what the coupled/decoupled bracket is claiming, and it should be
+   made before production runs rather than discovered in the results.
+3. **Re-run Test B sims 3/4 with ENTICES's real secondary-phase list**, to size
+   the mineral perturbation properly. Test B used magnetite + pyrrhotite only.
+4. **Wire the module into ENTICES's template generator** (`INTEGRATION POINTS`
+   in `iom_module.R`). The config shape is now stable — distributed Ea,
+   decoupled-mode support and the tested formulas are all in — so the earlier
+   reason to wait no longer applies.
+5. **Decide: `Hdg` globally, or below a temperature threshold?** Unaffected by
+   the tests. Current recommendation unchanged: global per-element switch,
+   letting the bracket carry the uncertainty rather than introducing an
+   arbitrary discontinuity.
+6. **Chase the residual +7.8% residue overshoot**, or accept it. The three
+   candidate causes are listed in Part 4. This is a real open scientific
+   question now, not a known bug.
 7. Syn-IOM 250 C residue comparison via R-ratios, carrying the
    material-difference confound explicitly.
+8. **CHn sensitivity run.** Its m0 (2% of C) is Burnham's coal value with no IOM
+   constraint; for H-rich IOM it could plausibly be several times larger.
 
 ## Still open
 - **IOM_S** uncalibrated; Miller measures no H2S. Will stay that way unless a
@@ -485,8 +573,15 @@ Not a competing measurement — a transcription error. Optionally refine 2.142 �
   an honest bracket; a threshold is more physical but introduces an arbitrary
   discontinuity. Current recommendation: global switch, per-element
   configurable, let the bracket carry the uncertainty.
-- **`iom_module.R` / `INTEGRATION_NOTE.md` drift.** The module copy available
-  to the chat session predates the VS Code IOM_N recalibration, so patch
-  specifications are written as instructions rather than replacement files.
-  Whoever merges the `iom-module` branch should reconcile
-  `INTEGRATION_NOTE.md`'s "what's NOT done" list against this file.
+- **Doc path drift.** `claude/PATCH_F_*.md` and `claude/OPTION3_decision.md` are
+  at the repo root in the VS Code checkout — there is no `claude/` directory
+  there. Paths in this file use the project-knowledge spelling.
+- **`INTEGRATION_NOTE.md`** still needs reconciling against this file when the
+  `iom-module` branch merges; several of its "what's NOT done" items are now
+  done.
+- **`iom_validate_config()` cannot validate a decoupled config** — it tokenizes
+  `-formula` strings expecting real element symbols, so `Mtg`/`Sg` are rejected.
+  Left as an honest failure rather than taught to recognise pseudo-species,
+  since "elements released" is genuinely not comparable between modes as a
+  config-string property (Mtg's hydrogens are outside the H balance by
+  construction). The meaningful check is the PHREEQC one, now done.

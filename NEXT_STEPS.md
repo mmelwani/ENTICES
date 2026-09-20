@@ -1,5 +1,19 @@
 # Next steps — what to do, who does it, and why in this order
 
+> **SUPERSEDED 2026-09-20 (same day).** Items 2-5 below are **DONE** — the two
+> PHREEQC tests were run (`PHREEQC_TEST_RESULTS_2026-09-20.md`), distributed Ea
+> and decoupled-mode support are committed, and the residue check has been
+> re-run. Only item 1 (the redox budget diagnostic) remains untouched.
+> **Use `PROGRESS.md` Part 5 for the current list.** This file is kept because
+> its per-task rationale and pre-registered pass/fail framing are still the
+> record of what was asked and why — notably §5's "if it does not resolve, the
+> diagnosis should be corrected rather than repeated," which is what actually
+> happened (+11% → +7.8%, only partially resolved).
+>
+> Also corrected since writing: `Ea_N` is **242.8** kJ/mol, not 244.8 (a
+> composition-basis bug), and the `IOM_S` decoupled formula is **`Sg 1 H 1`**,
+> not `Sg 1 H -1` (wrong by 2 mol H per mol S).
+
 Date: 2026-09-20
 Reads with: `PROGRESS.md` Part 5 (the canonical list), `claude/OPTION3_decision.md`
 Companion files produced with this note: `test_A_Sg_hydrogen.pqi`,
@@ -105,7 +119,7 @@ Three parts:
 - replace single `IOM_CO2` / `IOM_CH4` with sub-pools on the Vitrimat 2018
   distributions (7 and 13 rows respectively), plus `IOM_CHn` (7 rows)
 - set `logA = 15.301` on **every** row, including IOM_N and IOM_S
-- refit `IOM_N` Ea to 244.8 kJ/mol
+- refit `IOM_N` Ea to 242.8 [CORRECTED — was 244.8, basis bug; see PROGRESS.md Part 4] kJ/mol
 
 **Re-derive the numbers, do not copy mine.** They were computed in Python in a
 session with no R. If your values differ from the tables, yours are probably
