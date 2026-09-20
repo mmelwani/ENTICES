@@ -1,0 +1,151 @@
+TITLE Test B -- does decoupling H2 (Hdg) stop the carbon runaway?
+#
+# PURPOSE
+#   OPTION3_decision.md sec 2 proposes that the reason all released organic
+#   carbon ends up as CH4 is that the large dissolved-H2 reservoir sets
+#   pe ~ -11.5 and acts as the electron donor. If H2 is entered as the
+#   DECOUPLED element Hdg instead of coupled H(0)/H2, it can no longer donate
+#   electrons, so oxidised carbon should stay oxidised.
+#
+#   This is the decisive cheap test of that hypothesis. It is worth running
+#   BEFORE any module or config changes, because if it fails the whole
+#   carbon-decoupling design has to change (fallback = add a decoupled
+#   oxidised-carbon species, with the calcite caveat in sec 2).
+#
+# WHAT SUCCESS LOOKS LIKE
+#   Simulation 1 (coupled H2):   C(-4) >> C(+4)   -- reproduces the artefact
+#   Simulation 2 (decoupled Hdg): C(+4) retained  -- carbon stays oxidised
+#
+#   The number to compare against is from this project's own earlier output
+#   (k1.00e-07_d194200_orb12): at pe -11.5, C(-4)/C(+4) = 3.1e-16 / 7.9e-33,
+#   i.e. ~17 orders of magnitude in favour of methane. Simulation 1 should
+#   reproduce something like that ratio. Simulation 2 should not.
+#
+# IF IT PARTLY WORKS
+#   Watch pe in simulation 2. Decoupling H2 removes one electron donor but
+#   the Fe(II) minerals are still there. If pe stays very low and carbon
+#   still reduces, the hypothesis is wrong in an informative way: the mineral
+#   assemblage, not H2, is setting pe. Record pe in both cases regardless.
+#
+# REQUIREMENTS
+#   Core11_idealgas_mod_v4.dat (Hdg lives there).
+#   Replace the DATABASE path below.
+
+DATABASE /path/to/Core11_idealgas_mod_v4.dat
+
+SELECTED_OUTPUT 1
+    -reset false
+    -high_precision true
+USER_PUNCH 1
+    -headings case pH pe tot_C tot_Hdg m_CH4 m_CO2 m_HCO3 m_CO3 C_ratio_log
+    -start
+    10 PUNCH PARM(1)
+    20 PUNCH -LA("H+"), -LA("e-")
+    30 PUNCH TOTMOLE("C"), TOTMOLE("Hdg")
+    40 PUNCH MOL("CH4"), MOL("CO2"), MOL("HCO3-"), MOL("CO3-2")
+    50 rat = -99
+    60 IF MOL("CO2") > 0 THEN rat = LOG10(MOL("CH4") / MOL("CO2"))
+    70 PUNCH rat
+    -end
+
+# ---------------------------------------------------------------------------
+# CASE 1: COUPLED H2. Reducing solution, H2 entered as normal coupled H(0).
+#   Add oxidised carbon (as HCO3-, i.e. C at +4) and see where it goes.
+#   Expect: nearly all of it becomes CH4. This reproduces the artefact.
+# ---------------------------------------------------------------------------
+SOLUTION 1 coupled-H2 reducing
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3            # oxidised carbon, 1 mmol/kgw
+    H(0)      1e-3            # dissolved H2, COUPLED -- can donate electrons
+    water     1
+USER_PUNCH 1; -start; 10 PUNCH 1; 20 PUNCH -LA("H+"), -LA("e-"); 30 PUNCH TOTMOLE("C"), TOTMOLE("Hdg"); 40 PUNCH MOL("CH4"), MOL("CO2"), MOL("HCO3-"), MOL("CO3-2"); 50 rat = -99; 60 IF MOL("CO2") > 0 THEN rat = LOG10(MOL("CH4") / MOL("CO2")); 70 PUNCH rat; -end
+END
+
+# ---------------------------------------------------------------------------
+# CASE 2: DECOUPLED H2. Identical in every other respect -- same T, pH, Na,
+#   Cl, same total carbon, same H2 inventory -- but H2 entered as Hdg.
+#   Expect (if the hypothesis holds): carbon stays as HCO3-/CO3-2, CH4 stays
+#   negligible, and pe is set by something other than H2.
+# ---------------------------------------------------------------------------
+SOLUTION 2 decoupled-H2 reducing
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3            # same oxidised carbon
+    Hdg       1e-3            # same H2 inventory, DECOUPLED -- inert electron-wise
+    water     1
+USER_PUNCH 1; -start; 10 PUNCH 2; 20 PUNCH -LA("H+"), -LA("e-"); 30 PUNCH TOTMOLE("C"), TOTMOLE("Hdg"); 40 PUNCH MOL("CH4"), MOL("CO2"), MOL("HCO3-"), MOL("CO3-2"); 50 rat = -99; 60 IF MOL("CO2") > 0 THEN rat = LOG10(MOL("CH4") / MOL("CO2")); 70 PUNCH rat; -end
+END
+
+# ---------------------------------------------------------------------------
+# CASE 3 and 4: THE REALISTIC VERSION -- with a reducing mineral assemblage.
+#   Cases 1-2 isolate H2 alone. But in ENTICES, Fe(II) minerals are present
+#   and are the OTHER electron source named in PROGRESS Part 2b. If decoupling
+#   H2 only works in the absence of minerals, that is important to know before
+#   relying on it.
+#
+#   Uses a minimal Fe(II)-bearing assemblage. Substitute the actual ENTICES
+#   secondary-phase list if a closer match is wanted, but keep it small --
+#   the point is to isolate the mechanism, not to reproduce a full run.
+# ---------------------------------------------------------------------------
+USE solution 1
+EQUILIBRIUM_PHASES 1
+    Magnetite   0 0
+    Pyrrhotite  0 0
+    Fe(OH)2     0 0
+USER_PUNCH 1; -start; 10 PUNCH 3; 20 PUNCH -LA("H+"), -LA("e-"); 30 PUNCH TOTMOLE("C"), TOTMOLE("Hdg"); 40 PUNCH MOL("CH4"), MOL("CO2"), MOL("HCO3-"), MOL("CO3-2"); 50 rat = -99; 60 IF MOL("CO2") > 0 THEN rat = LOG10(MOL("CH4") / MOL("CO2")); 70 PUNCH rat; -end
+END
+
+USE solution 2
+EQUILIBRIUM_PHASES 2
+    Magnetite   0 0
+    Pyrrhotite  0 0
+    Fe(OH)2     0 0
+USER_PUNCH 1; -start; 10 PUNCH 4; 20 PUNCH -LA("H+"), -LA("e-"); 30 PUNCH TOTMOLE("C"), TOTMOLE("Hdg"); 40 PUNCH MOL("CH4"), MOL("CO2"), MOL("HCO3-"), MOL("CO3-2"); 50 rat = -99; 60 IF MOL("CO2") > 0 THEN rat = LOG10(MOL("CH4") / MOL("CO2")); 70 PUNCH rat; -end
+END
+
+# ---------------------------------------------------------------------------
+# CASE 5: CARBONATE-MINERAL CHECK (the caveat in OPTION3_decision.md sec 2).
+#   Decoupled carbon would stop seeing calcite. We are NOT decoupling carbon
+#   in the proposed design -- but confirm that with Hdg in play, carbon STILL
+#   participates in calcite saturation. If it does, the design's main selling
+#   point over a decoupled-carbon species is confirmed.
+#   Expect: Calcite SI is computed and finite, and Ca is drawn down if
+#   supersaturated.
+# ---------------------------------------------------------------------------
+SOLUTION 3 decoupled-H2 with Ca
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    Ca        1e-3
+    C         1e-3
+    Hdg       1e-3
+    water     1
+EQUILIBRIUM_PHASES 3
+    Calcite     0 0
+SELECTED_OUTPUT 2
+    -reset false
+    -si Calcite
+    -totals Ca C
+    -molalities CH4 CO2 HCO3- CO3-2
+END
+
+# ---------------------------------------------------------------------------
+# REPORTING
+#   Record for every case: pe, m_CH4, m_CO2, m_HCO3-, and log10(CH4/CO2).
+#   The single number that decides the design is log10(CH4/CO2) in case 2 and
+#   case 4 versus case 1 and case 3.
+#
+#   Also record any PHREEQC warnings verbatim. A charge-balance or
+#   convergence warning in the Hdg cases is itself a finding -- decoupling H2
+#   changes how the proton/electron balance closes, and it may need
+#   -pe or an explicit redox couple to converge cleanly.
+# ---------------------------------------------------------------------------

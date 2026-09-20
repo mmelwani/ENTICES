@@ -300,48 +300,51 @@ for (i in seq_len(nrow(miller_measured))) {
 cat("\n=============================================================\n")
 cat("PART C: redox_mode (Option 3) structural checks\n")
 cat("=============================================================\n")
-cat("Pure-R structure checks only. Does NOT and CANNOT verify that decoupled\n")
-cat("mode behaves correctly in PHREEQC -- see the note below and\n")
-cat("iom_default_config()'s docstring for why the 'element conservation'\n")
-cat("check PROGRESS.md Part 3 calls for is a claim about actual PHREEQC\n")
-cat("output (solution+gas+precipitate), not about these config strings, and\n")
-cat("remains BLOCKED on PHREEQC access (no CLI/R-binding found in this\n")
-cat("environment as of 2026-09-18).\n\n")
+cat("Structure checks on the redox_mode switch. The FORMULAS themselves were\n")
+cat("tested in PHREEQC on 2026-09-20 -- see PHREEQC_TEST_RESULTS_2026-09-20.md\n")
+cat("for the measured numbers (Mtg 1 H 0.435 reproduces the coupled aqueous\n")
+cat("state exactly; Sg 1 H 1 matches the coupled H release, while the\n")
+cat("previously-proposed Sg 1 H -1 was wrong by 2 mol H per mol S). What is\n")
+cat("checked HERE is only that the switch wires those strings up correctly.\n\n")
 
 pass("default redox_mode (all coupled) is unchanged from calling with no args",
      identical(iom_default_config(), iom_default_config(c(C = "coupled", N = "coupled", S = "coupled"))))
 
-cfg_decoupled_N <- iom_default_config(c(C = "coupled", N = "decoupled", S = "coupled"))
-pass("decoupled N uses the Amm formula, leaves other channels' formula untouched",
-     cfg_decoupled_N$formula[cfg_decoupled_N$name == "IOM_N"] == "Amm 1" &&
-     all(cfg_decoupled_N$formula[cfg_decoupled_N$name == "IOM_S"] == cfg$formula[cfg$name == "IOM_S"]) &&
-     all(cfg_decoupled_N$formula[startsWith(cfg_decoupled_N$name, "IOM_CO2")] ==
-         cfg$formula[startsWith(cfg$name, "IOM_CO2")]))
-# NOT a bug: iom_validate_config()'s element-balance check tokenizes formula
-# strings expecting real periodic-table symbols, so it has no way to know
-# "Amm" represents N+4H -- it correctly rejects any decoupled formula as an
-# "unknown element", meaning decoupled-mode configs currently CANNOT be
-# validated at all. Closing this gap needs the same pseudo-species-to-real-
-# element mapping already discussed and deliberately NOT built into
-# production code above (see iom_default_config()'s docstring) -- doing so
-# only for validate_config(), quietly, would be worse than the current
-# honest failure, since it would look like "decoupled mode is validated"
-# when it isn't.
-pass("decoupled N formula is correctly REJECTED by validate_config (known gap, not a bug)",
-     tryCatch({ iom_validate_config(cfg_decoupled_N); FALSE },
-              error = function(e) grepl("Amm", conditionMessage(e))))
+cfg_dS <- iom_default_config(c(C = "coupled", N = "coupled", S = "decoupled"))
+pass("decoupled S uses the PHREEQC-verified 'Sg 1 H 1' formula",
+     cfg_dS$formula[cfg_dS$name == "IOM_S"] == "Sg 1 H 1")
+pass("decoupled S leaves every other channel's formula untouched",
+     all(cfg_dS$formula[cfg_dS$name != "IOM_S"] == cfg$formula[cfg$name != "IOM_S"]))
 
-cfg_decoupled_S <- iom_default_config(c(C = "coupled", N = "coupled", S = "decoupled"))
-pass("decoupled S uses the S(-2) formula",
-     cfg_decoupled_S$formula[cfg_decoupled_S$name == "IOM_S"] == "S(-2) 1 H 1")
+cfg_dC <- iom_default_config(c(C = "decoupled", N = "coupled", S = "coupled"))
+pass("decoupled C switches IOM_CH4 sub-pools to 'Mtg 1 H 0.435'",
+     all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CH4")] == "Mtg 1 H 0.435"))
+# IOM_CO2/IOM_CHn deliberately keep their coupled formulas: their decoupling
+# is the caller entering H2 as Hdg in the solution, which no -formula can
+# express. Verified in PHREEQC (carbon reduction suppressed ~26,000x).
+pass("decoupled C leaves IOM_CO2 and IOM_CHn formulas unchanged (Hdg is solution-level)",
+     all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CO2")] ==
+         cfg$formula[startsWith(cfg$name, "IOM_CO2")]) &&
+     all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CHn")] ==
+         cfg$formula[startsWith(cfg$name, "IOM_CHn")]))
+pass("decoupled C attaches the Hdg reminder attribute",
+     !is.na(attr(cfg_dC, "carbon_decoupling_note")) &&
+     grepl("Hdg", attr(cfg_dC, "carbon_decoupling_note")))
 
-pass("requesting decoupled C is rejected (IOM_CHn has no decoupled formula)",
-     tryCatch({ iom_default_config(c(C = "decoupled", N = "coupled", S = "coupled")); FALSE },
-              error = function(e) TRUE))
+# Decoupling N is a decision made AGAINST, not an unimplemented gap.
+pass("requesting decoupled N is refused, with the reason",
+     tryCatch({ iom_default_config(c(C = "coupled", N = "decoupled", S = "coupled")); FALSE },
+              error = function(e) grepl("Ntg|deliberately", conditionMessage(e))))
 
 pass("invalid redox_mode value is rejected",
      tryCatch({ iom_default_config(c(C = "coupled", N = "sort-of", S = "coupled")); FALSE },
               error = function(e) TRUE))
+
+# NOT a bug: validate_config()'s balance check expects real element symbols,
+# so it rejects "Mtg"/"Sg". Left as an honest failure -- see the docstring.
+pass("decoupled formulas are correctly REJECTED by validate_config (known limitation)",
+     tryCatch({ iom_validate_config(cfg_dS); FALSE },
+              error = function(e) grepl("Sg", conditionMessage(e))))
 cat("\n")
 
 cat("\n=============================================================\n")

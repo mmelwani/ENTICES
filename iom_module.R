@@ -183,43 +183,38 @@ iom_bulk_formula <- function() {
 #'     bound, not merged in.
 #'   - CHn's m0 (2% of C, from coal) and its borrowed shift are unconstrained
 #'     by any IOM-specific measurement.
-#'   - Option 3 (coupled/decoupled redox at low temperature), PROGRESS.md
-#'     Part 3: partially implemented 2026-09-18. `redox_mode` below lets N
-#'     and S switch to decoupled-species formulas (Amm, S(-2)); CO2/CH4/CHn
-#'     CANNOT be decoupled yet because CHn has no decoupled formula defined
-#'     (PROGRESS.md's sketch predates CHn and its H/C=1.8 doesn't map onto
-#'     Mtg's canonical CH4 stoichiometry without a design decision -- see
-#'     DECOUPLED_FORMULAS below).
-#'     ALSO: iom_validate_config() cannot currently validate ANY decoupled
-#'     config at all -- its element-balance check tokenizes -formula strings
-#'     expecting real periodic-table symbols, so "Amm"/"Mtg"/"S(-2)" are
-#'     rejected as unknown elements (confirmed: iom_selftest.R Part C). This
-#'     is left as an honest failure rather than quietly taught to recognize
-#'     decoupled pseudo-species, since doing that without also fixing the
-#'     (still-unbuilt, PHREEQC-dependent) conservation check would make
-#'     decoupled mode LOOK validated when it isn't.
-#'     More importantly: the "element conservation"
-#'     self-test the design calls for (PROGRESS.md Part 3, "write this check
-#'     before the database work") turns out to NOT be a property you can
-#'     check by comparing the two -formula strings in pure R -- Amm's
-#'     implicit NH4 stoichiometry (4 H) legitimately differs from the coupled
-#'     N-channel's explicit release (2 H) BY DESIGN, because PHREEQC draws
-#'     the difference from water automatically; that's the whole reason
-#'     decoupled mode needs its own formula column rather than reusing the
-#'     coupled one. So "do the two modes' total system element balance
-#'     agree" is a claim about ACTUAL PHREEQC OUTPUT (solution+gas+
-#'     precipitate), not about these config strings, and remains UNTESTED --
-#'     blocked on PHREEQC access (see iom_selftest.R's Part C header). Do not
-#'     build a fake version of this check that just compares formula-string
-#'     elemental sums; it would be testing the wrong thing and could pass or
-#'     fail for reasons unrelated to whether decoupled mode actually works.
+#'   - Option 3 (coupled/decoupled redox at low temperature): design settled
+#'     in OPTION3_decision.md, formulas TESTED IN PHREEQC 2026-09-20
+#'     (PHREEQC_TEST_RESULTS_2026-09-20.md). Only IOM_CH4 and IOM_S swap
+#'     formula; IOM_N deliberately stays coupled; IOM_CO2/IOM_CHn decouple
+#'     via Hdg at the solution level. See DECOUPLED_FORMULAS below for the
+#'     measured numbers and the Mtg-vs-Sg asymmetry that makes their two
+#'     formulas follow opposite rules.
+#'     KNOWN LIMITATION, unchanged: iom_validate_config() cannot validate a
+#'     decoupled config -- its element-balance check tokenizes -formula
+#'     strings expecting real periodic-table symbols, so "Mtg"/"Sg" are
+#'     rejected as unknown elements (iom_selftest.R Part C asserts this). It
+#'     is left as an honest failure rather than quietly taught to recognise
+#'     pseudo-species, because the balance it would then report would be
+#'     meaningless: Mtg's hydrogens are outside the H mass balance by
+#'     construction, so "elements released" is not comparable between modes
+#'     as a config-string property. The meaningful check is the PHREEQC one,
+#'     now done -- see the test results doc.
 #' @param redox_mode named character vector, e.g. c(C="coupled", N="coupled",
 #'   S="coupled") (the default -- fully backward compatible, identical output
-#'   to calling with no argument). Each element indepedently "coupled" or
-#'   "decoupled"; C covers IOM_CO2/IOM_CH4/IOM_CHn together (can't be split
-#'   further while CHn has no decoupled formula). "decoupled" for C is not
-#'   yet supported (stops with an error) until CHn's decoupled formula is
-#'   designed.
+#'   to calling with no argument). Each element independently "coupled" or
+#'   "decoupled":
+#'     S="decoupled"  -> IOM_S switches to "Sg 1 H 1".
+#'     C="decoupled"  -> IOM_CH4 switches to "Mtg 1 H 0.435"; IOM_CO2 and
+#'                       IOM_CHn keep their coupled formulas, because their
+#'                       decoupling is achieved by the CALLER entering the H2
+#'                       inventory as Hdg in the PHREEQC solution, which no
+#'                       -formula can express. attr(cfg,
+#'                       "carbon_decoupling_note") records this reminder.
+#'     N="decoupled"  -> refused with an error. Not a gap: NH3/NH4+ is
+#'                       already the stable N species at Enceladus pore
+#'                       conditions, and the only decoupled N species in the
+#'                       database (Ntg = N2) is the wrong end of the ladder.
 #' @return data.frame, one row per sub-pool/channel. Carries formula (the
 #'   ACTIVE one, selected by redox_mode -- this is what every other function
 #'   in this file reads) plus formula_coupled/formula_decoupled for
@@ -244,48 +239,55 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   chn_shift <- co2_shift  # borrowed; no independent CHn constraint
   chn_m0_tot <- 0.02 * iom_bulk_formula()[["C"]]  # Burnham's c(oil) = 2% of C
 
-  # DECOUPLED-mode formulas (PROGRESS.md Part 3's sketch, verbatim -- DRAFT,
-  # now KNOWN WRONG for two of the four, per
-  # HANDOVER_option3_database_findings_2026-09-18.md (read that before
-  # touching this list): checked against the actual project database
-  # (Core11_idealgas_mod_v4.dat, added to the repo 2026-09-18) rather than
-  # assumed from stock phreeqc.dat. Findings:
-  #   IOM_CH4 (Mtg): CONFIRMED correct. Mtg is a real, genuinely-decoupled
-  #     master species in this database ("# Redox-uncoupled gases", CH4 gas).
-  #   IOM_S (S(-2)): WRONG species name. "S(-2)" is just a valence tag inside
-  #     the normal COUPLED sulfur ladder (shares a mass balance with S(+6)
-  #     etc.) -- it does not decouple anything. The real decoupled species is
-  #     "Sg" (= H2S, 2 H per S; the user added this themselves in 2024). Left
-  #     uncorrected here rather than guessed, since the H-balance (coupled
-  #     IOM_S only releases 1 H per S, Sg needs 2) needs the same kind of
-  #     check as Mtg's and is naturally reviewed together with IOM_N/CO2.
-  #   IOM_N (Amm): DOES NOT EXIST in this database at all. The only decoupled
-  #     nitrogen species is "Ntg" (N2 gas) -- the wrong end of the redox
-  #     ladder for what IOM_N releases (reduced, NH2-like N meant to become
-  #     NH4+/NH3, not N2). Needs a real design decision, not a guess.
-  #   IOM_CO2 (C(4)): doesn't decouple anything either -- no decoupled
-  #     oxidized-carbon species exists in this database at all (only Mtg,
-  #     covering the reduced/methane end). Also needs a design decision.
-  # Do NOT "fix" IOM_N/IOM_S/IOM_CO2's decoupled formulas here without that
-  # decision being made first (see the handover doc for the two live
-  # options). The values below are left as the original (now flagged-wrong)
-  # draft so this comment and that file stay the record of what's known,
-  # rather than silently patching in another guess.
-  # ORIGINAL SKETCH (verbatim), for reference: neither the acceptance of
-  # valence-state notation like "C(4)" in a KINETICS -formula, nor the
-  # charge/electron bookkeeping when mixing a decoupled pseudo-element (Mtg,
-  # Amm, S(-2)) with free H, had been tested at the time it was written.
-  # CHn has NO decoupled formula either way: it postdates this sketch, and
-  # its H/C=1.8 doesn't cleanly map
-  # onto Mtg's canonical CH4 (4 H) stoichiometry -- routing CHn's carbon into
-  # Mtg would need either borrowing ~2.2 H/mol from solution or a different
-  # decoupled bucket entirely. That is a design decision for whoever revisits
-  # this, not something to guess here.
+  # DECOUPLED-mode formulas -- TESTED IN PHREEQC 2026-09-20. Full results and
+  # measured numbers in PHREEQC_TEST_RESULTS_2026-09-20.md; design rationale
+  # in OPTION3_decision.md. Only two channels get a decoupled formula:
+  #
+  #   IOM_CH4 -> "Mtg 1 H 0.435"  VERIFIED CORRECT. Reproduces the coupled
+  #     formula's aqueous state to every printed digit: m(H2) 7.175e-04,
+  #     pH 11.5000, pe -11.425, all identical to "C 1 H 4.435". Writing
+  #     "Mtg 1 H 4.435" instead would double-count methane's four hydrogens
+  #     and give 3.8x too much H2.
+  #
+  #   IOM_S -> "Sg 1 H 1"  CORRECTED from OPTION3_decision.md's "Sg 1 H -1",
+  #     which was wrong by 2 mol H per mol S. Measured H contributed per mole:
+  #     coupled "S 1 H 1" = +1.000; "Sg 1 H 1" = +1.000 (match); "Sg 1 H -1"
+  #     = -1.000 (the solid would ABSORB an H instead of releasing one);
+  #     "Sg 1" = 0.000. The bad variant drives pe to +15.4 and destroys the
+  #     H2 reservoir.
+  #
+  # WHY THE TWO DIFFER (this is the non-obvious part, and what the design doc
+  # got wrong): the database defines their master species differently --
+  #     Mtg   Mtg    0   Mtg     16.032   <- master species has NO H
+  #     Sg    H2Sg   1   H2Sg    34.08    <- master species IS H2Sg
+  # so Mtg's four hydrogens sit OUTSIDE the H mass balance (supply only the
+  # surplus H), while H2Sg's two sit INSIDE it and are drawn from solution
+  # (supply the same H the coupled formula does). Same-looking species,
+  # opposite treatment. Do not "make them consistent."
+  #
+  # NOT decoupled, deliberately:
+  #   IOM_N   -- stays coupled. At Enceladus pore conditions NH3/NH4+ is
+  #     already the stable N species, so coupled equilibrium moves released
+  #     N(-2) to N(-3): one electron, the direction kinetics would take it
+  #     anyway. There is no artefact to fix, and the only decoupled N species
+  #     available (Ntg = N2) is the WRONG end of the ladder. See
+  #     OPTION3_decision.md sec 1.
+  #   IOM_CO2 / IOM_CHn -- keep their coupled formulas. Carbon decoupling is
+  #     achieved at the SOLUTION/DATABASE level by entering H2 as Hdg, not by
+  #     a carbon species (there is no decoupled oxidised-carbon species, and
+  #     adding one would silently break carbonate-mineral equilibria).
+  #     Tested and confirmed: with Hdg, carbon reduction drops ~26,000x
+  #     (10.8% -> 0.0004% of C converted to methane) while pe stays sensibly
+  #     set by the mineral assemblage (-8.26) and calcite still precipitates
+  #     normally. Because this is a solution-level switch it is NOT expressed
+  #     in any -formula here -- ENTICES must enter its H2 inventory as Hdg.
+  #     CAVEAT, measured: decoupling H2 is not redox-neutral for the rest of
+  #     the system -- magnetite precipitation ~2.9x and pyrrhotite dissolution
+  #     ~3.6x higher than the coupled case. Report the mineral assemblage
+  #     alongside any coupled/decoupled carbon comparison.
   DECOUPLED_FORMULAS <- list(
-    IOM_CO2 = "C(4) 1 H 1 O 1.3115",
     IOM_CH4 = "Mtg 1 H 0.435",
-    IOM_N   = "Amm 1",
-    IOM_S   = "S(-2) 1 H 1"
+    IOM_S   = "Sg 1 H 1"
   )
 
   subpool_rows <- function(prefix, bins, w, shift, m0_tot, formula_coupled, family) {
@@ -306,7 +308,7 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
     subpool_rows("IOM_CH4", ch4_bins, ch4_w, ch4_shift, ch4_m0_tot, "C 1 H 4.435", "C"),
     subpool_rows("IOM_CHn", chn_bins, chn_w, chn_shift, chn_m0_tot, "C 1 H 1.8", "C"),
     data.frame(name = "IOM_N", m0_per_kg = 0.875, formula_coupled = "N 1 H 2",
-               formula_decoupled = DECOUPLED_FORMULAS[["IOM_N"]], family = "N",
+               formula_decoupled = NA_character_, family = "N",
                Ea_J = 242.8e3, logA = logA, stringsAsFactors = FALSE),
     data.frame(name = "IOM_S", m0_per_kg = 0.462, formula_coupled = "S 1 H 1",
                formula_decoupled = DECOUPLED_FORMULAS[["IOM_S"]], family = "S",
@@ -320,15 +322,32 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
     if (!redox_mode[[el]] %in% allowed)
       stop("iom_default_config: redox_mode['", el, "'] must be 'coupled' or 'decoupled'")
   }
-  if (identical(redox_mode[["C"]], "decoupled"))
-    stop("iom_default_config: decoupled mode for C is not yet supported -- ",
-         "IOM_CHn has no decoupled formula (see DECOUPLED_FORMULAS comment). ",
-         "Design one before requesting redox_mode = c(C = 'decoupled', ...).")
-  cfg$formula <- ifelse(redox_mode[cfg$family] == "decoupled",
-                         cfg$formula_decoupled, cfg$formula_coupled)
-  if (any(is.na(cfg$formula)))
-    stop("iom_default_config: decoupled mode requested for a family with no ",
-         "decoupled formula defined: ", paste(unique(cfg$name[is.na(cfg$formula)]), collapse = ", "))
+  # Nitrogen decoupling is a decision made AGAINST, not a gap: the only
+  # decoupled N species in the database is Ntg (N2), which is the wrong end
+  # of the redox ladder for the reduced N this channel releases. Coupled
+  # equilibrium already puts it where kinetics would. Refuse rather than
+  # silently doing nothing.
+  if (identical(redox_mode[["N"]], "decoupled"))
+    stop("iom_default_config: redox_mode N='decoupled' is deliberately not ",
+         "supported. NH3/NH4+ is already the stable N species at Enceladus ",
+         "pore conditions, so coupled equilibrium gives the right answer; the ",
+         "only decoupled N species available (Ntg = N2) would oxidise the ",
+         "released nitrogen away from it. See OPTION3_decision.md sec 1.")
+  # A row keeps its coupled formula unless a decoupled one is defined for it.
+  # That fallback is intentional, not a gap:
+  #   IOM_CO2 / IOM_CHn -- decoupled via Hdg at the solution level (the
+  #     caller must enter H2 as Hdg); no -formula change is involved.
+  #   IOM_N             -- deliberately stays coupled (rejected above).
+  # Only IOM_CH4 (Mtg) and IOM_S (Sg) actually swap formula.
+  use_decoupled <- redox_mode[cfg$family] == "decoupled" & !is.na(cfg$formula_decoupled)
+  cfg$formula <- ifelse(use_decoupled, cfg$formula_decoupled, cfg$formula_coupled)
+  attr(cfg, "redox_mode") <- redox_mode
+  attr(cfg, "carbon_decoupling_note") <-
+    if (identical(redox_mode[["C"]], "decoupled"))
+      paste("Carbon decoupling is a SOLUTION-level switch: the caller must enter",
+            "the H2 inventory as Hdg. No -formula in this config encodes it.",
+            "IOM_CH4 has switched to Mtg; IOM_CO2/IOM_CHn keep coupled formulas.")
+    else NA_character_
   cfg
 }
 
