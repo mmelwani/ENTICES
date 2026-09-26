@@ -1,0 +1,1337 @@
+TITLE Enceladus hydrothermal simulation
+# Recommended database: coreclath_CH4coupled.dat (CH4 coupled -> aqueous/gas species are CH4/CH4(g); porewater T = 150.0 C)
+# Ocean pressure 66.7 atm >= dissociation pressure 29.5 atm, so CH4 clathrates may be stable.
+# Ocean pressure 66.7 atm >= dissociation pressure 15.4 atm, so CO2 clathrates may be stable.
+# Ocean temperature 1.45 C < threshold temperature 9.85 C, so CO2 clathrates remain stable.
+# Ocean pressure 66.7 atm >= dissociation pressure 1.17 atm, so H2S clathrates may be stable.
+# Ocean temperature 1.45 C < threshold temperature 28.5 C, so H2S clathrates remain stable.
+# Ocean: clathrates considered stable: CH4, CO2, H2S. Clathrates considered unstable: none.
+
+# Porewater pressure 261 atm < dissociation pressure 2.51e+08 atm, so CH4 clathrates are not stable.
+# Porewater pressure 261 atm < dissociation pressure 1.18e+04 atm, so CO2 clathrates are not stable.
+# Porewater pressure 261 atm < dissociation pressure 1.41e+04 atm, so H2S clathrates are not stable.
+# Porewater: clathrates considered stable: none. Clathrates considered unstable: CH4, CO2, H2S.
+
+KNOBS
+   -logfile true
+
+# k=1e-07, thickness=194200 m
+# Organic content: 15 wt.%
+# Mode: ungrouped (1 orbital period per step)
+# exchange_ratio (fluid/porewater per model cycle): N/A
+# Simulation parameters:
+# Layer thickness: 194200 m (100.0% of core)
+# Layer mass: 6.24e+19 kg  (total_rock normalised to 1.0)
+# Reaction time: 4.52e-02 years
+# Total cycles: 12
+# Time step: 3.76e-03 years per step
+# Mean flow rate: 2.76e+09 L/s
+# Circulation time: 2.43e+02 years
+# Complete circulation time: 2.83e+03 years
+# Corrected circulation time (f_fluid capped at f_pore): 2.43e+02 years
+# Corrected complete circulation time: 2.83e+03 years
+# Flowing fluid mass (per orbital cycle): 3.28e+14 kg
+# Porewater mass: 9.82e+18 kg
+# Ocean mass: 2.11e+19 kg
+
+SOLUTION 1 Enceladus porewater
+    temp      150
+    pH        7
+    pe        4
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     0.157402852926709
+    pressure  66.7#261.2
+
+SOLUTION 2 Enceladus ocean
+    temp      1.45
+    pH        7
+    pe        4
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     0.338719998046012
+    pressure  66.7
+
+REACTION_TEMPERATURE 1
+    150
+
+REACTION_TEMPERATURE 2
+    1.45
+
+# Define rate equations for each mineral
+RATES
+Forsterite
+	-start
+	1   REM Ref PK04
+	10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
+	20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))
+	21  SSA = 0.1
+	22  mw = 140.6715
+	40  k = (kacid + kneut) * SSA * mw * M
+	50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))
+	60  moles = rate * TIME
+	70  SAVE moles
+	-end
+	
+	Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
+        -start
+        1   REM Acid mechanism only (PK04)
+        2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
+        3   REM Rate depends on H+ and Fe3+ activities
+        25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
+        26  SSA = 5
+        27  mw = 87.913
+        30  k = kacid * SSA * mw * M
+        40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
+        50  moles = rate * TIME
+        55  IF moles < 0 THEN moles = 0
+        60  SAVE moles
+        -end
+
+	Diopside
+	-start
+	1   REM Ref PK04
+	10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
+	20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
+	21  SSA = 0.1
+	22  mw = 216.55
+	40  k = (kacid + kneut) * SSA * mw * M
+	50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
+	60  moles = rate * TIME
+	70  SAVE moles
+	-end
+
+	K-Feldspar
+	-start
+	1   REM Ref PK04
+	10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
+	20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
+	30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
+	31  SSA = 5
+	32  mw = 278.33
+	40  k = (kacid + kneut + kbase) * SSA * mw * M
+	50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
+	60  moles = rate * TIME
+	70  SAVE moles
+	-end
+
+	Tephroite # TODO: rate constants not yet supplied (Mn-olivine) — k held at 0 (no dissolution) until provided
+	-start
+	1   REM TODO awaiting kacid/kneut from user
+	10  kacid = 0
+	20  kneut = 0
+	21  SSA = 0.1
+	22  mw = 201.96
+	40  k = (kacid + kneut) * SSA * mw * M
+	50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
+	60  moles = rate * TIME
+	70  SAVE moles
+	-end
+
+	Enstatite
+	-start
+	1   REM Ref PK04
+	10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
+	20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
+	21  SSA = 0.1
+	22  mw = 100.3725
+	40  k = (kacid + kneut) * SSA * mw * M
+	50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
+	60  moles = rate * TIME
+	70  SAVE moles
+	-end
+
+    Anorthite # Ca-endmember of plagioclase
+        -start
+        1   REM Ref PK04
+        10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
+        20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
+        21  SSA = 5
+        22  mw = 278.164
+        40  k = (kacid + kneut) * SSA * mw * M
+        50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
+        60  moles = rate * TIME
+        70  SAVE moles
+        -end
+        
+    Albite # Na-endmember of plagioclase
+        -start
+        1   REM 3 mechanisms: acid, neutral, base (PK04)
+        2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
+        3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
+        4   REM near the experimental conditions under which they were obtained, 300 Â°C and pH = 9.
+        10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
+        20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
+        30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
+        31  SSA = 5
+        32  mw = 262.1798
+        40  k = (kacid + kneut + kbase) * SSA * mw * M
+        50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
+        60  moles = rate * TIME
+        70  SAVE moles
+        -end
+
+IOM_CO2
+ -start
+ 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)
+ 10 k = 10^(13) * exp(-214000 / (8.314 * TK))
+ 20 rate = k * M
+ 30 if (M <= 0) then rate = 0
+ 40 moles = rate * TIME
+ 50 SAVE moles
+ -end
+IOM_CH4
+ -start
+ 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)
+ 10 k = 10^(13) * exp(-228000 / (8.314 * TK))
+ 20 rate = k * M
+ 30 if (M <= 0) then rate = 0
+ 40 moles = rate * TIME
+ 50 SAVE moles
+ -end
+IOM_N
+ -start
+ 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)
+ 10 k = 10^(13) * exp(-215000 / (8.314 * TK))
+ 20 rate = k * M
+ 30 if (M <= 0) then rate = 0
+ 40 moles = rate * TIME
+ 50 SAVE moles
+ -end
+IOM_S
+ -start
+ 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)
+ 10 k = 10^(13) * exp(-215000 / (8.314 * TK))
+ 20 rate = k * M
+ 30 if (M <= 0) then rate = 0
+ 40 moles = rate * TIME
+ 50 SAVE moles
+ -end
+
+
+# Define kinetic mineral phases with initial amounts
+KINETICS 1
+   Enstatite
+      -m0 1.9480793
+      -step_divide 1
+   Forsterite
+      -m0 1.37603355
+      -step_divide 1
+   Troilite
+      -m0 2.0405474
+      -step_divide 1
+   Albite
+      -m0 0.2715053
+      -step_divide 1
+   Diopside
+      -m0 0.23487115
+      -step_divide 1
+   Anorthite
+      -m0 0.05324655
+      -step_divide 1
+   K-Feldspar
+      -m0 0.0175355
+      -step_divide 1
+   Tephroite
+      -m0 0.0220473
+      -step_divide 1
+      IOM_CO2
+      -formula C 1 H 1 O 1.3115
+      -m0 6.253500e-01
+      -step_divide 1
+   IOM_CH4
+      -formula C 1 H 4.435
+      -m0 2.862000e-01
+      -step_divide 1
+   IOM_N
+      -formula N 1 H 2
+      -m0 1.312500e-01
+      -step_divide 1
+   IOM_S
+      -formula S 1 H 1
+      -m0 6.930000e-02
+      -step_divide 1
+
+   -steps 118800 in 1 steps
+ 
+   -cvode true
+   -bad_step_max 5000
+
+    
+EQUILIBRIUM_PHASES 1
+# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---
+   Fe                   0  2.0231105          dissolve_only
+   Ni                   0  0.2407251          dissolve_only
+   Lawrencite           0  0.0095625  dissolve_only
+#   Alabandite 0 0
+#   Alanine 0 0
+#   Alum-K 0 0
+#   Alunite 0 0
+   Analcime 0 0
+   Anhydrite 0 0
+   Aragonite 0 0
+#   Arcanite 0 0
+#   Artinite 0 0
+   Bassanite 0 0
+   Beidellite-Ca 0 0
+   Beidellite-Fe 0 0
+#   Beidellite-K 0 0
+   Beidellite-Mg 0 0
+   Beidellite-Na 0 0
+   Boehmite 0 0
+   Brucite 0 0
+   C2H4(g) 0 0
+   C2H6(g) 0 0
+   C3H8(g) 0 0
+   Calcite 0 0
+#   Celadonite 0 0
+   CH4(g) 0 0
+   Chalcedony 0 0
+   Chamosite 0 0
+   Chrysotile 0 0
+   Citric_Acid 0 0
+   Clinochlore-14A 0 0
+   Clinochlore-7A 0 0
+   Clinoptilolite-Ca 0 0
+#   Clinoptilolite-K 0 0
+   Clinoptilolite-Na 0 0
+   Clinozoisite 0 0
+   CO(g) 0 0
+   CO2(g) 0 0
+   Cronstedtite-7A 0 0
+   Daphnite-14A 0 0
+   Daphnite-7A 0 0
+   Dawsonite 0 0
+   Diaspore 0 0
+   Dolomite 0 0
+   Ettringite 0 0
+   Fe(OH)2 0 0
+   Fe(OH)3 0 0
+   Fe2(SO4)3 0 0
+   FeSO4 0 0
+   Gibbsite 0 0
+   Glycine 0 0
+   Goethite 0 0
+   Greenalite 0 0
+   Gypsum 0 0
+   Gyrolite 0 0
+   H2(g) 0 0
+#   H2O(g) 0 0
+   H2S(g) 0 0
+#   Halite 0 0
+#   Hausmannite 0 0
+   Hematite 0 0
+   Huntite 0 0
+   Hydromagnesite 0 0
+#   Hydroxyapatite 0 0
+#   Ice 0 0
+#   Jarosite 0 0
+#   KAl(SO4)2 0 0
+   Kaolinite 0 0
+#   KerogenC128 0 0
+#   KerogenC292 0 0
+#   KerogenC406 0 0
+#   KerogenC415 0 0
+#   KerogenC515 0 0
+   Lizardite 0 0
+   Melanterite 0 0
+#   MgOHCl 0 0
+   MgSO4 0 0
+   Minnesotaite 0 0
+   Mirabilite 0 0
+#   Mn(OH)2(am) 0 0
+#   MnCl2:2H2O 0 0
+#   MnCl2:4H2O 0 0
+#   MnCl2:H2O 0 0
+#   MnSO4 0 0
+#   Monohydrocalcite 0 0
+   Montmor-Ca 0 0
+#   Montmor-K 0 0
+   Montmor-Mg 0 0
+   Montmor-Na 0 0
+   N2(g) 0 0
+#   Na2CO3 0 0
+#   Na2CO3:7H2O 0 0
+#   Nahcolite 0 0
+#   Natron 0 0
+#   Nesquehonite 0 0
+   NH3(g) 0 0
+#   NH4Cl 0 0
+#   NH4HCO3 0 0
+#   Niter 0 0
+#   NO(g) 0 0
+#   NO2(g) 0 0
+   Nontronite-Ca 0 0
+#   Nontronite-K 0 0
+   Nontronite-Mg 0 0
+   Nontronite-Na 0 0
+#   O2(g) 0 0
+   Portlandite 0 0
+#   Pyridine 0 0
+   Pyrite 0 0
+#   Rhodochrosite 0 0
+   Saponite-Fe-Ca 0 0
+   Saponite-Fe-Fe 0 0
+#   Saponite-Fe-K 0 0
+   Saponite-Fe-Mg 0 0
+   Saponite-Fe-Na 0 0
+   Saponite-Mg-Ca 0 0
+   Saponite-Mg-Fe 0 0
+#   Saponite-Mg-K 0 0
+   Saponite-Mg-Mg 0 0
+   Saponite-Mg-Na 0 0
+   Sepiolite 0 0
+#   Siderite 0 0
+   SiO2(am) 0 0
+#   Smectite-high-Fe-Mg 0 0
+#   Smectite-low-Fe-Mg 0 0
+   SO2(g) 0 0
+#   Stilbite 0 0
+#   Strengite 0 0
+#   Sylvite 0 0
+   Thenardite 0 0
+#   Thermonatrite 0 0
+   Tobermorite-11A 0 0
+   Quartz 0 0
+
+# Seafloor equilibrium phases — same candidate list as porewater (EQUILIBRIUM_PHASES 1).
+# Applied to the combined ocean+fluid (SOLUTION 4) in simulation 3 each cycle.
+EQUILIBRIUM_PHASES 2
+#   Alabandite 0 0
+#   Alanine 0 0
+#   Alum-K 0 0
+#   Alunite 0 0
+   Analcime 0 0
+   Anhydrite 0 0
+   Aragonite 0 0
+#   Arcanite 0 0
+#   Artinite 0 0
+   Bassanite 0 0
+   Beidellite-Ca 0 0
+   Beidellite-Fe 0 0
+#   Beidellite-K 0 0
+   Beidellite-Mg 0 0
+   Beidellite-Na 0 0
+   Boehmite 0 0
+   Brucite 0 0
+   C2H4(g) 0 0
+   C2H6(g) 0 0
+   C3H8(g) 0 0
+   Calcite 0 0
+#   Celadonite 0 0
+   CH4(g) 0 0
+   Chalcedony 0 0
+   Chamosite 0 0
+   Chrysotile 0 0
+   Citric_Acid 0 0
+   Clinochlore-14A 0 0
+   Clinochlore-7A 0 0
+   Clinoptilolite-Ca 0 0
+#   Clinoptilolite-K 0 0
+   Clinoptilolite-Na 0 0
+   Clinozoisite 0 0
+   CO(g) 0 0
+   CO2(g) 0 0
+   Cronstedtite-7A 0 0
+   Daphnite-14A 0 0
+   Daphnite-7A 0 0
+   Dawsonite 0 0
+   Diaspore 0 0
+   Dolomite 0 0
+   Ettringite 0 0
+   Fe(OH)2 0 0
+   Fe(OH)3 0 0
+   Fe2(SO4)3 0 0
+   FeSO4 0 0
+   Gibbsite 0 0
+   Glycine 0 0
+   Goethite 0 0
+   Greenalite 0 0
+   Gypsum 0 0
+   Gyrolite 0 0
+   H2(g) 0 0
+#   H2O(g) 0 0
+   H2S(g) 0 0
+#   Halite 0 0
+#   Hausmannite 0 0
+   Hematite 0 0
+   Huntite 0 0
+   Hydromagnesite 0 0
+#   Hydroxyapatite 0 0
+#   Ice 0 0
+#   Jarosite 0 0
+#   KAl(SO4)2 0 0
+   Kaolinite 0 0
+#   KerogenC128 0 0
+#   KerogenC292 0 0
+#   KerogenC406 0 0
+#   KerogenC415 0 0
+#   KerogenC515 0 0
+   Lizardite 0 0
+   Magnetite 0 0
+   Melanterite 0 0
+#   MgOHCl 0 0
+   MgSO4 0 0
+   Minnesotaite 0 0
+   Mirabilite 0 0
+#   Mn(OH)2(am) 0 0
+#   MnCl2:2H2O 0 0
+#   MnCl2:4H2O 0 0
+#   MnCl2:H2O 0 0
+#   MnSO4 0 0
+#   Monohydrocalcite 0 0
+   Montmor-Ca 0 0
+#   Montmor-K 0 0
+   Montmor-Mg 0 0
+   Montmor-Na 0 0
+   N2(g) 0 0
+#   Na2CO3 0 0
+#   Na2CO3:7H2O 0 0
+#   Nahcolite 0 0
+#   Natron 0 0
+#   Nesquehonite 0 0
+   NH3(g) 0 0
+#   NH4Cl 0 0
+#   NH4HCO3 0 0
+#   Niter 0 0
+#   NO(g) 0 0
+#   NO2(g) 0 0
+   Nontronite-Ca 0 0
+#   Nontronite-K 0 0
+   Nontronite-Mg 0 0
+   Nontronite-Na 0 0
+#   O2(g) 0 0
+   Portlandite 0 0
+#   Pyridine 0 0
+   Pyrite 0 0
+#   Rhodochrosite 0 0
+   Saponite-Fe-Ca 0 0
+   Saponite-Fe-Fe 0 0
+#   Saponite-Fe-K 0 0
+   Saponite-Fe-Mg 0 0
+   Saponite-Fe-Na 0 0
+   Saponite-Mg-Ca 0 0
+   Saponite-Mg-Fe 0 0
+#   Saponite-Mg-K 0 0
+   Saponite-Mg-Mg 0 0
+   Saponite-Mg-Na 0 0
+   Sepiolite 0 0
+#   Siderite 0 0
+   SiO2(am) 0 0
+#   Smectite-high-Fe-Mg 0 0
+#   Smectite-low-Fe-Mg 0 0
+   SO2(g) 0 0
+#   Stilbite 0 0
+#   Strengite 0 0
+#   Sylvite 0 0
+   Thenardite 0 0
+#   Thermonatrite 0 0
+   Tobermorite-11A 0 0
+   CH4_hydrate 0 0
+   CO2_hydrate 0 0
+   H2S_hydrate 0 0
+
+SELECTED_OUTPUT
+    -file enceladus_k1.00e-07_d194200_T150_org15_orb12.csv
+    -reset false
+    -reaction true
+    -state True
+    -solution True
+    -step                 true
+    -ph                   true
+    -pe                   true
+    -alkalinity           true
+    -ionic_strength       true
+    -water                true
+    -totals              Al C Ca Fe H #K 
+                         Mg #Mn 
+                         N Na O P S Si #Cl
+    -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2 
+                         CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2 #K+ 
+                         Mg+2 #Mn+2 Mn+3 
+                         NH4+ NH3 NH4CO3- N2 NO2- 
+                         NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3- 
+                         SO2 SO4-2 SiO2 HSiO3-
+    -activities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2 
+                         CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2 #K+ 
+                         Mg+2 #Mn+2 Mn+3 
+                         NH4+ NH3 NH4CO3- N2 NO2- 
+                         NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3- 
+                         SO2 SO4-2 SiO2 HSiO3-
+    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite IOM_CO2 IOM_CH4 IOM_N IOM_S
+    -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
+    -equilibrium_phases  Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
+                         Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
+                         Boehmite Brucite
+                         C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
+                         Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
+                         Clinozoisite CO(g) CO2(g) Cronstedtite-7A
+                         Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
+                         Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
+                         Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
+                         H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
+                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Montmor-Ca Montmor-Mg Montmor-Na
+                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Portlandite Pyrite
+                         Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
+                         Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
+                         Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         Quartz CH4_hydrate CO2_hydrate H2S_hydrate
+   -gases                CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g) 
+                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)  
+
+    
+# USER_PUNCH is defined per-cycle below (with exact cumulative time embedded)
+
+# --- Cycle 1 of 12 (cumulative time: 3.7645e-03 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.003765  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 2 of 12 (cumulative time: 7.5291e-03 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.007529  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 3 of 12 (cumulative time: 1.1294e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.011294  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 4 of 12 (cumulative time: 1.5058e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.015058  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 5 of 12 (cumulative time: 1.8823e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.018823  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 6 of 12 (cumulative time: 2.2587e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.022587  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 7 of 12 (cumulative time: 2.6352e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.026352  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 8 of 12 (cumulative time: 3.0116e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.030116  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 9 of 12 (cumulative time: 3.3881e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.033881  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 10 of 12 (cumulative time: 3.7645e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.037645  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 11 of 12 (cumulative time: 4.1410e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.041410  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+USER_PRINT
+   10 IF KIN("Fayalite") > 0 THEN GOTO 30
+   20 IF KIN("Pyrrhotite") <= 0 THEN GOTO 30
+   25 IF EXISTS(1) THEN STOP
+   27 PUT(1, 1)
+   30 REM
+
+
+# --- Cycle 12 of 12 (cumulative time: 4.5175e-02 years) ---
+USE solution 1
+USE kinetics 1
+USE equilibrium_phases 1
+USE reaction none
+USE reaction_temperature 1
+SAVE solution 1
+SAVE equilibrium_phases 1
+USER_PUNCH
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g IOM_CO2_mol IOM_CH4_mol IOM_N_mol IOM_S_mol
+   10 PUNCH 0.045175  # Cumulative time (years)
+   20 PUNCH KIN("Enstatite") * 100.3725
+   30 PUNCH KIN("Forsterite") * 140.6715
+   40 PUNCH KIN("Troilite") * 87.913
+   50 PUNCH KIN("Albite") * 262.1798
+   60 PUNCH KIN("Diopside") * 216.55
+   70 PUNCH KIN("Anorthite") * 278.164
+   80 PUNCH KIN("K-Feldspar") * 278.33
+   85 PUNCH KIN("Tephroite") * 201.96
+   100 total_initial = 1.948079*100.3725 + 1.376034*140.6715 + 2.040547*87.913 + 0.271505*262.1798 + 0.234871*216.55 + 0.053247*278.164 + 0.017535*278.33 + 0.022047*201.96 + 2.023111*55.845 + 0.240725*58.693 + 0.009562*126.75
+   110 PUNCH total_initial
+   210 PUNCH KIN("IOM_CO2")
+   220 PUNCH KIN("IOM_CH4")
+   230 PUNCH KIN("IOM_N")
+   240 PUNCH KIN("IOM_S")
+END
+
+USE kinetics none
+USE equilibrium_phases 2
+USE reaction none
+USE reaction_temperature 2
+MIX 4
+  1  3.342308e-05
+  2  1.0
+SAVE solution 4
+SAVE equilibrium_phases 2
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+USE reaction_temperature 1
+MIX 1
+  1  9.999666e-01
+  4  1.553143e-05
+SAVE solution 1
+END
+
+USE kinetics none
+USE equilibrium_phases none
+USE reaction none
+MIX 2
+  4  9.999845e-01
+SAVE solution 2
+END
+
