@@ -34,6 +34,12 @@ library(patchwork)  # For plot layouts
 library(glue)       # For templating
 library(R6)
 
+# IOM (organic decomposition) channel definitions live in iom_module.R, kept
+# separate so circulation-physics edits here can't touch organics calibration
+# and vice versa. Run from the repo root so this relative path resolves, same
+# convention as the ENTICES_v3.R / ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
+source("iom_module.R")
+
 #===============================================================================
 # Universal Constants and Fluid Properties
 #===============================================================================
@@ -1131,41 +1137,31 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                       if (self$organic_wt_percent > 0) {
                                         iom_mass_kg_scaled <- (self$organic_wt_percent / 100) * self$phreeqc_params$total_rock
                                         iom_total_moles    <- iom_mass_kg_scaled * 1.0   # 1 mol per kg by construction
-                                        # ---- PATCH C (final): Miller-calibrated decomposition channels ----
-                                        # Calibrated to Miller et al. (2025) GCA 390:38-56, Murchison IOM,
-                                        # Tables 2 (gas yields), 5 (residue composition), 9 (NH3).
+                                        # ---- Channel definitions: iom_module.R, not hardcoded here ----
+                                        # WIRING CHANGE (2026-09-26): this used to be a hand-copied single-Ea
+                                        # table (A=1e13, IOM_CO2/CH4 at 214/228 kJ/mol, IOM_N at 215 kJ/mol) that
+                                        # had drifted three patch-generations behind iom_module.R without either
+                                        # side noticing -- see FROM_LUCAS_20260924_review.md for the full
+                                        # comparison. iom_default_config() is now the single source of truth:
+                                        # distributed-Ea sub-pools for CO2/CH4/CHn (Vitrimat 2018, A=2e15),
+                                        # corrected IOM_N (242.8 kJ/mol), and the redox_mode argument for Option
+                                        # 3 (decoupled Mtg/Sg formulas, tested against real PHREEQC output --
+                                        # see PHREEQC_TEST_RESULTS_2026-09-20.md). Full derivation and history
+                                        # are in iom_default_config()'s own docstring; do not duplicate it here,
+                                        # it will only go stale again.
                                         #
-                                        # KEY POINT: -formula is WHAT THE SOLID LOSES, not the product molecule.
-                                        # Miller's own O balance at 350 C does not close (residue loses 4.50 mol
-                                        # O/kg but the measured CO2 needs 6.08): ~26% of product-CO2 oxygen comes
-                                        # from WATER, because these are hydrous pyrolysis experiments. Giving
-                                        # PHREEQC the solid's stoichiometry lets it draw the balance from water
-                                        # via H2O/H+/e- and speciate at the prevailing pe, so that behaviour is
-                                        # emergent rather than imposed.
+                                        # This is unchanged: -formula is WHAT THE SOLID LOSES, not the product
+                                        # molecule (PROGRESS.md Part 1 explains why at length -- Miller's own O
+                                        # balance doesn't close without water contributing oxygen to the
+                                        # measured CO2). Don't "simplify" formulas to product molecules.
                                         #
-                                        # m0_per_kg = moles of channel per kg IOM.
-                                        # Ea fitted two-point (350 vs 500 C, 48 h, A = 1e13 s^-1).
-                                        # The UNRELEASED REMAINDER is inert char and is deliberately NOT
-                                        # modelled: only ~10% of IOM carbon and ~40% of IOM N is ever released,
-                                        # even at 500 C. Residue per kg IOM:
-                                        #     C 54.534  H 30.797  O 4.471  N 1.267  S 0.692
-                                        #     (H/C 0.565, O/C 0.082; bulk was H/C 0.753, O/C 0.164)
-                                        #
-                                        # CAVEAT: single Ea per channel. Miller's syn-IOM data show abundant CO2
-                                        # already at 250 C, which Ea = 214 kJ/mol cannot produce. There is a
-                                        # low-Ea tail this misses, and for COLD Enceladus runs that tail is the
-                                        # only thing that can release anything at all. Sub-pools to follow.
-                                        # S channel is UNCALIBRATED (Miller does not measure H2S).
+                                        # This code loop is generic over whatever rows iom_default_config()
+                                        # returns (currently 29: 7+13+7 CO2/CH4/CHn sub-pools + IOM_N + IOM_S),
+                                        # not hardcoded to 4 channels -- verified no PUNCH line-number collision
+                                        # with the mineral PUNCH statements elsewhere in this template (those
+                                        # top out at line 110; IOM_ punch lines start at 210).
                                         if (is.null(self$iom_pools)) {
-                                          self$iom_pools <- data.frame(
-                                            name      = c("IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S"),
-                                            m0_per_kg = c(4.169, 1.908, 0.875, 0.462),
-                                            formula   = c("C 1 H 1 O 1.3115", "C 1 H 4.435",
-                                                          "N 1 H 2", "S 1 H 1"),
-                                            Ea_J      = c(214e3, 228e3, 215e3, 215e3),
-                                            logA      = c(13, 13, 13, 13),
-                                            stringsAsFactors = FALSE
-                                          )
+                                          self$iom_pools <- iom_default_config()
                                         }
 
                                         iom_rates_block <- paste0(apply(self$iom_pools, 1, function(p) {
@@ -3199,16 +3195,10 @@ END
                                      iom_punch_lines_restart    <- ""
 
                                      if (self$organic_wt_percent > 0) {
+                                       # See the main-path comment (iom_default_config()) for why this is no
+                                       # longer a hardcoded table -- WIRING CHANGE 2026-09-26.
                                        if (is.null(self$iom_pools)) {
-                                         self$iom_pools <- data.frame(
-                                           name      = c("IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S"),
-                                           m0_per_kg = c(4.169, 1.908, 0.875, 0.462),
-                                           formula   = c("C 1 H 1 O 1.3115", "C 1 H 4.435",
-                                                         "N 1 H 2", "S 1 H 1"),
-                                           Ea_J      = c(214e3, 228e3, 215e3, 215e3),
-                                           logA      = c(13, 13, 13, 13),
-                                           stringsAsFactors = FALSE
-                                         )
+                                         self$iom_pools <- iom_default_config()
                                        }
 
                                        # Guard: IOM_*_mol columns must exist — written by PATCH D1.
@@ -3958,16 +3948,10 @@ END
                                      iom_punch_lines_tidal    <- ""
 
                                      if (self$organic_wt_percent > 0) {
+                                       # See the main-path comment (iom_default_config()) for why this is no
+                                       # longer a hardcoded table -- WIRING CHANGE 2026-09-26.
                                        if (is.null(self$iom_pools)) {
-                                         self$iom_pools <- data.frame(
-                                           name      = c("IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S"),
-                                           m0_per_kg = c(4.169, 1.908, 0.875, 0.462),
-                                           formula   = c("C 1 H 1 O 1.3115", "C 1 H 4.435",
-                                                         "N 1 H 2", "S 1 H 1"),
-                                           Ea_J      = c(214e3, 228e3, 215e3, 215e3),
-                                           logA      = c(13, 13, 13, 13),
-                                           stringsAsFactors = FALSE
-                                         )
+                                         self$iom_pools <- iom_default_config()
                                        }
 
                                        # Guard: IOM_*_mol columns must be present — written by PATCH D1.
