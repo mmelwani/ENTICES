@@ -40,6 +40,35 @@ library(R6)
 # convention as the ENTICES_v3.R / ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
 source("iom_module.R")
 
+# Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
+# Single source for all four generators that build primary-mineral inventories;
+# they previously each carried their own copy of these numbers.
+# Source: RECONSTRUCTION_STATUS.md §1 (final 2026-09-15; Lodders et al. 2025
+# Table 4, Scenario R, schreibersite included), wt% x 10 / molar mass.
+# Deliberately NOT renormalised: magnesiochromite (0.713 wt%, 0.037079 mol/kg)
+# is treated as inert, so it keeps its share of the mass but is not added to
+# PHREEQC. (The previous coefficients dropped it and renormalised, inflating
+# every other phase by +0.73%.)
+# Lawrencite (FeCl2) is intentional (Cl in the rock); its Fe is taken out of
+# the metal, so fe = 2.361715 - 0.011250. Total Fe is then 4.8859 mmol/g, which
+# matches the reconstruction.
+# Schreibersite (Fe3P, 0.047101 mol/kg) is listed here but is wired in
+# separately; see the generators.
+ROCK_MOL_PER_KG <- c(
+  enstatite     = 2.275648,
+  forsterite    = 1.606974,
+  troilite      = 2.382864,
+  albite        = 0.318202,
+  diopside      = 0.274529,
+  anorthite     = 0.062148,
+  kfeldspar     = 0.020515,
+  tephroite     = 0.025995,
+  fe            = 2.350465,
+  ni            = 0.280953,
+  lawrencite    = 0.011250,
+  schreibersite = 0.047101
+)
+
 #===============================================================================
 # Universal Constants and Fluid Properties
 #===============================================================================
@@ -1115,17 +1144,17 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # (handled separately, as instantaneous dissolution products, not yet
                                      # implemented). Magnetite is no longer a primary mineral here — it
                                      # remains only as an ordinary secondary/precipitate phase.
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                      #phosphorus content also determined in Primordial_CI_... but not yet used
                                          # ---- IOM as kinetic phases (Miller et al. 2025 / Burnham-Sweeney 1989) --
                                       # Formula unit from gram composition per kg IOM (728 C, 46 H, 159 O,
@@ -1908,17 +1937,17 @@ SELECTED_OUTPUT
                                      # other generators; all 11 are equilibrium here, no kinetics at all).
                                      # Schreibersite deferred; Magnetite is no longer primary.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
 
                                      total_initial_expr <- sprintf(
                                        "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
@@ -2394,17 +2423,17 @@ SELECTED_OUTPUT
                                      # function has no kinetics at all). Schreibersite deferred; Magnetite is
                                      # no longer primary — ordinary secondary phase only.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
 
                                      total_initial_expr <- sprintf(
                                        "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
@@ -2685,17 +2714,17 @@ END
                                      # primaries + 3 equilibrium primaries (Fe, Ni, Lawrencite). Schreibersite
                                      # deferred. Magnetite is no longer primary — ordinary secondary phase only.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * .rock_kg * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * .rock_kg * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * .rock_kg * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * .rock_kg * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * .rock_kg * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * .rock_kg * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * .rock_kg * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * .rock_kg * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * .rock_kg * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * .rock_kg * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * .rock_kg * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * .rock_kg * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * .rock_kg * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * .rock_kg * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * .rock_kg * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * .rock_kg * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * .rock_kg * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * .rock_kg * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * .rock_kg * mineral_scale_factor
 
                                      orbital_period     <- self$simulator$config$orbital_period
                                      total_time_seconds <- n_orbital_cycles * orbital_period
