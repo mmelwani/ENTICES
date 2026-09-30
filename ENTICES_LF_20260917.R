@@ -3388,7 +3388,7 @@ END
                                          '\t-end', sep = "\n"),
                                        Troilite = paste(
                                          '\t-start',
-                                         '\t1   REM PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy',
+                                         '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
                                          '\t26  SSA = 5',
                                          '\t27  mw = 87.913',
@@ -3936,7 +3936,7 @@ END
                                          '\t-end', sep = "\n"),
                                        Troilite = paste(
                                          '\t-start',
-                                         '\t1   REM PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy',
+                                         '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
                                          '\t26  SSA = 5',
                                          '\t27  mw = 87.913',
