@@ -2767,6 +2767,44 @@ END
                                      lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * .rock_kg * mineral_scale_factor
                                      schreibersite_moles <- ROCK_MOL_PER_KG[["schreibersite"]] * .rock_kg * mineral_scale_factor
 
+                                     # ---- IOM as kinetic phases (see generate_phreeqc_input_tidal_kinetic
+                                     # for full derivation notes; identical wiring, generic over iom_pools) --
+                                     iom_rates_block    <- ""
+                                     iom_kinetics_block <- ""
+                                     if (self$organic_wt_percent > 0) {
+                                       iom_mass_kg_scaled <- (self$organic_wt_percent / 100) * .rock_kg
+                                       iom_total_moles    <- iom_mass_kg_scaled * 1.0   # 1 mol per kg by construction
+                                       if (is.null(self$iom_pools)) {
+                                         self$iom_pools <- iom_default_config()
+                                       }
+
+                                       iom_rates_block <- paste0(apply(self$iom_pools, 1, function(p) {
+                                         sprintf(paste0(
+                                           "%s\n -start\n",
+                                           " 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)\n",
+                                           " 10 k = 10^(%s) * exp(-%s / (8.314 * TK))\n",
+                                           " 20 rate = k * M\n",
+                                           " 30 if (M <= 0) then rate = 0\n",
+                                           " 40 moles = rate * TIME\n",
+                                           " 50 SAVE moles\n -end\n"),
+                                           p[["name"]], p[["logA"]], p[["Ea_J"]])
+                                       }), collapse = "")
+
+                                       iom_kinetics_block <- paste0(apply(self$iom_pools, 1, function(p) {
+                                         m0 <- as.numeric(p[["m0_per_kg"]]) * iom_total_moles
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1\n",
+                                                 p[["name"]], trimws(p[["formula"]]), m0)
+                                       }), collapse = "")
+
+                                       print(sprintf("IOM as kinetics: %d channels, %.2e kg IOM scaled",
+                                                     nrow(self$iom_pools), iom_mass_kg_scaled))
+                                       print(data.frame(channel = self$iom_pools$name,
+                                                        m0 = self$iom_pools$m0_per_kg * iom_total_moles,
+                                                        Ea_kJ = self$iom_pools$Ea_J / 1e3))
+                                     }
+                                     iom_so_line <- if (self$organic_wt_percent > 0 && !is.null(self$iom_pools))
+                                       paste(self$iom_pools$name, collapse = " ") else ""
+
                                      orbital_period     <- self$simulator$config$orbital_period
                                      total_time_seconds <- n_orbital_cycles * orbital_period
                                      total_time_years   <- total_time_seconds / (365.25 * 24 * 3600)
@@ -2779,6 +2817,19 @@ END
                                        diopside_moles, anorthite_moles, kfeldspar_moles, tephroite_moles,
                                        fe_moles, ni_moles, lawrencite_moles, schreibersite_moles
                                      )
+
+                                     # ---- PATCH D1: punch IOM channel state so the restart can recover it ----
+                                     iom_punch_headings <- ""
+                                     iom_punch_lines    <- ""
+                                     if (self$organic_wt_percent > 0 && !is.null(self$iom_pools)) {
+                                       iom_punch_headings <- paste0(" ",
+                                         paste(sprintf("%s_mol", self$iom_pools$name), collapse = " "))
+                                       iom_punch_lines <- paste0(
+                                         vapply(seq_len(nrow(self$iom_pools)), function(j) {
+                                           sprintf("   %d PUNCH KIN(\"%s\")\n",
+                                                   200 + 10 * j, self$iom_pools$name[j])
+                                         }, character(1)), collapse = "")
+                                     }
 
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater kinetic" else
@@ -2945,6 +2996,8 @@ Albite
 \t70  SAVE moles
 \t-end
 
+{iom_rates_block}
+
 KINETICS 1
    Enstatite
       -m0 {enstatite_moles}
@@ -2971,6 +3024,7 @@ KINETICS 1
       -m0 {tephroite_moles}
       -step_divide 1
 {schreibersite_kinetics_entry(schreibersite_moles)}
+   {iom_kinetics_block}
    -steps {sprintf("%.6e", total_time_seconds)} in {n_orbital_cycles} steps
    -cvode true
    -bad_step_max 5000
@@ -3083,7 +3137,7 @@ SELECTED_OUTPUT
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
                          NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3-
                          SO2 SO4-2 SiO2 HSiO3-
-    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Schreibersite
+    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Schreibersite {iom_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
     -equilibrium_phases  Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
@@ -3107,7 +3161,7 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
    20 PUNCH KIN("Enstatite") * 100.3725
    30 PUNCH KIN("Forsterite") * 140.6715
@@ -3120,7 +3174,7 @@ USER_PUNCH
    90 PUNCH KIN("Schreibersite") * 198.509
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
-
+{iom_punch_lines}
 END
 ')
 
@@ -4181,13 +4235,30 @@ END
                                      .iom_names <- if (self$organic_wt_percent > 0 && !is.null(self$iom_pools))
                                        self$iom_pools$name else character(0)
                                      .all_kinetic <- c(kinetic_minerals, .iom_names)
-                                     # Provisional default order (smallest initial abundance first, so it's
-                                     # the most likely to deplete first; largest last, as the most robust
-                                     # REACT/MIX proxy) — unverified against actual depletion behavior for
-                                     # this composition; pass depletion_mineral explicitly to override.
-                                     depletion_order <- c("K-Feldspar", "Tephroite", "Anorthite", "Diopside",
-                                                          "Albite", "Forsterite", "Enstatite", "Troilite",
-                                                          "IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S")
+                                     # Default order: primary minerals fastest-to-slowest by pseudo-first-
+                                     # order rate constant (kacid+kneut[+kbase])*SSA*mw at 150 C, pH 7,
+                                     # SR=0 (see CHANGELOG 2026-10-01 rate ranking), with Troilite forced
+                                     # last regardless of rank — its rate depends on ACT(Fe3+), which swings
+                                     # it from fastest to slowest primary across a plausible activity range,
+                                     # so it's deliberately not trusted as an early depletion/proxy pick.
+                                     # Tephroite deliberately OMITTED for now: its rate law is still a
+                                     # kacid=kneut=0 placeholder (never depletes), pending a real rate —
+                                     # insert it once that's supplied. Omitting it from this list doesn't
+                                     # remove it as a kinetic phase, it just can't be auto-selected as
+                                     # depletion_mineral/proxy_mineral until a real rate makes that meaningful;
+                                     # explicit depletion_mineral="Tephroite" still works regardless.
+                                     # IOM channels follow, fastest-to-slowest by k at 150 C (same ranking).
+                                     # Pass depletion_mineral explicitly to override any of this.
+                                     depletion_order <- c("Albite", "Diopside", "Anorthite", "Forsterite",
+                                                          "Schreibersite", "K-Feldspar", "Enstatite", "Troilite",
+                                                          "IOM_CO2_44", "IOM_CO2_46", "IOM_CO2_48", "IOM_CO2_50",
+                                                          "IOM_CHn_50", "IOM_CO2_52", "IOM_CHn_52", "IOM_CH4_52",
+                                                          "IOM_CO2_54", "IOM_CHn_54", "IOM_CH4_54", "IOM_N", "IOM_S",
+                                                          "IOM_CO2_56", "IOM_CHn_56", "IOM_CH4_56",
+                                                          "IOM_CHn_58", "IOM_CH4_58", "IOM_CHn_60", "IOM_CH4_60",
+                                                          "IOM_CHn_62", "IOM_CH4_62", "IOM_CH4_64", "IOM_CH4_66",
+                                                          "IOM_CH4_68", "IOM_CH4_70", "IOM_CH4_72", "IOM_CH4_74",
+                                                          "IOM_CH4_76")
                                      if (!is.null(depletion_mineral)) {
                                        if (!depletion_mineral %in% .all_kinetic)
                                          stop(sprintf("depletion_mineral '%s' is not a kinetic phase in this restart (check equil_minerals and organic_wt_percent)", depletion_mineral))
