@@ -415,3 +415,37 @@ to match. Updated the two external call sites that reference this function direc
 `check1_regression.R` and `parameter_sweep.R`. Generated `.pqi` filenames are
 unchanged — only the R function names changed. Verified the renamed function still
 generates valid output.
+
+### generate_phreeqc_input_bulk_kinetic: wired in IOM pools (2026-09-30)
+
+`generate_phreeqc_input_bulk_kinetic` had no IOM support at all — no RATES/KINETICS
+entries, no `IOM_*_mol` USER_PUNCH columns — while its own restart counterpart,
+`generate_phreeqc_input_bulk_kinetic_restart`, hard-requires those columns whenever
+`organic_wt_percent > 0` (PATCH D2's guard). Any run through `bulk_kinetic` with
+organics enabled left `bulk_kinetic_restart` with nothing to recover, failing loudly
+with "IOM columns missing from prev_csv" rather than silently dropping organics.
+
+Mirrored `generate_phreeqc_input_tidal_kinetic`'s existing wiring exactly: IOM
+RATES/KINETICS blocks generated generically from `self$iom_pools` (lazily
+initialized via `iom_default_config()` if unset), IOM channel names appended to the
+`SELECTED_OUTPUT -kinetics` line, and PATCH D1-style `IOM_*_mol` USER_PUNCH columns
+so the restart function can read them back.
+
+**Verified:** generated a `.pqi` with `organic_wt_percent = 1` — now contains all 29
+IOM channels' RATES/KINETICS entries and `IOM_*_mol` PUNCH columns (previously
+zero). Fed a synthetic CSV carrying those columns into
+`generate_phreeqc_input_bulk_kinetic_restart`, which previously threw on this exact
+input; it now succeeds.
+
+### generate_phreeqc_input_tidal_kinetic_restart: updated depletion_order (2026-10-01)
+
+Replaced the provisional `depletion_order` fallback (abundance-ordered, unverified,
+and referencing the old 4-channel `IOM_CO2`/`IOM_CH4` names that no longer exist in
+`iom_pools`) with an order based on each phase's actual dissolution/degradation rate
+at 150 C, pH 7, SR=0: primary minerals fastest-to-slowest, Troilite forced last
+(its rate depends on ACT(Fe3+), which swings it from fastest to slowest primary
+across a plausible activity range — not trusted as an early pick), then the 29 IOM
+channels fastest-to-slowest. Tephroite omitted for now (still a kacid=kneut=0
+placeholder rate; to be inserted once a real rate is supplied) — it remains a valid
+kinetic phase, just not auto-selectable as `depletion_mineral`/`proxy_mineral` until
+then; explicit `depletion_mineral = "Tephroite"` still works.

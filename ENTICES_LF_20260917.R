@@ -1316,105 +1316,136 @@ Forsterite
 	70  SAVE moles
 	-end
 	
-	Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
-        -start
-        1   REM Acid mechanism only (PK04)
-        2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
-        3   REM Rate depends on H+ and Fe3+ activities
-        25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-        26  SSA = 5
-        27  mw = 87.913
-        30  k = kacid * SSA * mw * M
-        40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
-        50  moles = rate * TIME
-        55  IF moles < 0 THEN moles = 0
-        60  SAVE moles
-        -end
+Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
+  -start
+  1   REM Acid mechanism only (PK04)
+  2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
+  3   REM Rate depends on H+ and Fe3+ activities
+  25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
+  26  SSA = 5
+  27  mw = 87.913
+  30  k = kacid * SSA * mw * M
+  40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
+  50  moles = rate * TIME
+  55  IF moles < 0 THEN moles = 0
+  60  SAVE moles
+  -end
 
-	Diopside
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
-	20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
-	22  mw = 216.55
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+Diopside
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
+  20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 0.1
+  22  mw = 216.55
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
-	K-Feldspar
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
-	20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
-	30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-	31  SSA = 5
-	32  mw = 278.33
-	40  k = (kacid + kneut + kbase) * SSA * mw * M
-	50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+K-Feldspar
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
+  20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
+  30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
+  31  SSA = 5
+  32  mw = 278.33
+  40  k = (kacid + kneut + kbase) * SSA * mw * M
+  50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
-	Tephroite # TODO: rate constants not yet supplied (Mn-olivine) — k held at 0 (no dissolution) until provided
-	-start
-	1   REM TODO awaiting kacid/kneut from user
-	10  kacid = 0
-	20  kneut = 0
-	21  SSA = 0.1
-	22  mw = 201.96
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+Tephroite
+  -start
+  1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,
+  2   REM citing Casey et al. (1993) GCA 57, 785-793. log kH+ = -5.4 mol
+  3   REM m-2 s-1 (measured, 25C, pH-2 reference), n = 0.47. Cross-checked
+  4   REM 2026-09-15 by direct regression of Casey\'s own raw rate-vs-pH data
+  5   REM (25C, synthetic tephroite): independently derived value agrees to
+  6   REM 0.14 log units. See RECONSTRUCTION_STATUS.md S4/S6 for full derivation.
+  7   REM Pincus\'s tabulated -5.4 is the RATE EVALUATED AT pH 2 (their own SI
+  8   REM convention), not the pre-exponential this PHASES-block form needs.
+  9   REM Pre-exponential = log_kH+ + n*2 (same relationship that reproduces
+  10  REM Core11\'s own Fayalite entry: -4.80 + 1.0*2 = -6.8, Pincus\'s fayalite
+  11  REM value -- checked here, not assumed). For tephroite: -5.4 + 0.47*2 =
+  12  REM -4.46. Hand-checked: 10^(-4.46)*ACT(H+)^0.47 at pH2 = 10^(-5.4), exact.
+  13  REM
+  14  REM Ea: Casey find Ea that decreases with increasing pH, "Ea < 4" at pH 6.2. 
+  15  REM We used the pH, Ea pairs from Casey\'s Fig 4, assuming Ea = 0 at pH 6.2. 
+  16  REM A logarithmic fit to these 5 data points is used to calculate Ea, and we 
+  17  REM require Ea >= 0 (so generally Ea=0 for pH>~6).  
+  22  REM
+  23  REM ANOXIC CONDITIONS ONLY. Casey\'s experiments were run rigorously
+  24  REM O2-free (N2-degassed, Fe-filing/hot-Cu scrubbed, <6e-6 mol/L O2);
+  25  REM Mn2+ -> Mn3+/4+ oxidation "severely retards" dissolution per the
+  26  REM source. Do not reuse this rate law under any oxidizing scenario
+  27  REM without revisiting.
+  28  REM
+  29  REM No neutral/base branch: source data at pH>7 are internally
+  30  REM inconsistent between methods by up to 1.8x (STATUS.md S4/S6) and
+  31  REM not fittable. Neutral rate at pH > 7 assumed to be same as pH=7. 
+  32  REM This is generally consistent with other minerals that lack base
+  33  REM dissolution mechanisms. 
+
+  35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17
+  36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea
+  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
+  45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47
+  46  SSA = 0.1
+  47  mw = 201.96
+  50  k = (kacid + kneut) * SSA * mw * M
+  60  rate = k * (1 - SR("Tephroite"))
+  70  moles = rate * TIME
+  80  SAVE moles
+  -end
 
 {SCHREIBERSITE_RATE}
 
-	Enstatite
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
-	20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
-	22  mw = 100.3725
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+Enstatite
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
+  20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 0.1
+  22  mw = 100.3725
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
-    Anorthite # Ca-endmember of plagioclase
-        -start
-        1   REM Ref PK04
-        10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
-        20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-        21  SSA = 5
-        22  mw = 278.164
-        40  k = (kacid + kneut) * SSA * mw * M
-        50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
-        60  moles = rate * TIME
-        70  SAVE moles
-        -end
+Anorthite # Ca-endmember of plagioclase
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
+  20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 5
+  22  mw = 278.164
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
         
-    Albite # Na-endmember of plagioclase
-        -start
-        1   REM 3 mechanisms: acid, neutral, base (PK04)
-        2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
-        3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
-        4   REM near the experimental conditions under which they were obtained, 300 Â°C and pH = 9.
-        10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
-        20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
-        30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-        31  SSA = 5
-        32  mw = 262.1798
-        40  k = (kacid + kneut + kbase) * SSA * mw * M
-        50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
-        60  moles = rate * TIME
-        70  SAVE moles
-        -end
+Albite # Na-endmember of plagioclase
+  -start
+  1   REM 3 mechanisms: acid, neutral, base (PK04)
+  2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
+  3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
+  4   REM near the experimental conditions under which they were obtained, 300 Â°C and pH = 9.
+  10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
+  20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
+  30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
+  31  SSA = 5
+  32  mw = 262.1798
+  40  k = (kacid + kneut + kbase) * SSA * mw * M
+  50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
 {iom_rates_block}
 
