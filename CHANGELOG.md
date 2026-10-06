@@ -449,3 +449,56 @@ channels fastest-to-slowest. Tephroite omitted for now (still a kacid=kneut=0
 placeholder rate; to be inserted once a real rate is supplied) — it remains a valid
 kinetic phase, just not auto-selectable as `depletion_mineral`/`proxy_mineral` until
 then; explicit `depletion_mineral = "Tephroite"` still works.
+
+### Tephroite: real rate law added, superseding the kacid=kneut=0 placeholder (2026-10-06)
+
+Replaced Tephroite's placeholder rate (`kacid=kneut=0`, i.e. never dissolves) with
+a real pH- and temperature-dependent rate law: Pincus et al. (2026) ACS Earth
+Space Chem 10, 1174-1184, Table S1, citing Casey et al. (1993) GCA 57, 785-793
+(synthetic tephroite, anoxic conditions). Acid mechanism (`H^0.47`) with a
+pH-dependent activation energy (`Ea = -60.11*ln(-log10(ACT(H+))) + 106.17`,
+clamped at 0 — Ea decreases with increasing pH per Casey's Fig 4 data, assumed
+0 at pH~6.2). No base branch: Casey's pH>7 data are internally inconsistent
+between methods by up to 1.8x and not fittable, so the neutral-mechanism rate
+is held flat at its pH=7 value for all pH>7, consistent with how the other
+primaries without a base mechanism behave. Anoxic-only: Mn2+ oxidation
+"severely retards" dissolution per the source, so this rate law should not be
+reused under oxidizing conditions without revisiting.
+
+**Scope:** landed in `generate_phreeqc_input_tidal_kinetic`'s RATES block only
+(the function this was tested against). `generate_phreeqc_input_bulk_kinetic`
+and both restart functions' `.rate_laws` lists still carry the old
+`kacid=kneut=0` placeholder — unlike Schreibersite's rate (below), Tephroite's
+RATES block is independently copy-pasted per function rather than sourced from
+one shared constant, so each needs updating separately. Also ported 1:1 into
+`mineral_dissolution_constants.r`'s `k_primary_mineral()` (verified against the
+source's own hand-check: `kacid` at pH 2, 25 C reproduces `10^(-5.4)` exactly).
+
+**Verified:** generated a `.pqi` from `generate_phreeqc_input_tidal_kinetic` and
+confirmed the RATES block renders correctly (no stray braces/unescaped quotes
+breaking the template); cross-checked `mineral_dissolution_constants.r`'s port
+against the same hand-check. Running the generated `.pqi` through PHREEQC at
+160 C surfaced a severe, unrelated convergence problem in the K-Feldspar/Albite
+base-weathering mechanism (pH runs away to ~11.5 within the first step,
+triggering millions of Newton-Raphson iterations) — confirmed via the real
+PHREEQC run that Tephroite itself contributes negligibly (Delta Moles ~5e-14)
+and is not the cause; that issue is tracked separately, unresolved.
+
+### Schreibersite: implemented as a kinetic phase, superseding the equilibrium-products plan (2026-09-30)
+
+Schreibersite (Fe3P) is now a kinetic primary with a placeholder bulk
+first-order rate (`k = 1.370e-7 s^-1`, `-formula Fe 3 P 1`) — a flat rate with
+no temperature, pH, or surface-area dependence, sourced from a single 1-day lab
+H2-evolution measurement at pH 7, 20 C in Ar-purged DI water
+(RECONSTRUCTION_STATUS §4/§8 item 1b). This **supersedes** the plan described
+earlier in this changelog ("Schreibersite... deliberately not implemented
+yet... meant to be incorporated as instantaneous dissolution products rather
+than a phase") — that approach was dropped in favor of giving it a real (if
+provisional) kinetic rate alongside the other primaries. Unlike Tephroite,
+Schreibersite's rate law and KINETICS entry are defined once as shared
+constants (`SCHREIBERSITE_RATE`/`SCHREIBERSITE_RATE_BODY`/
+`schreibersite_kinetics_entry()`) and referenced identically by all four
+kinetic-capable generator functions (`generate_phreeqc_input_tidal_kinetic`,
+`generate_phreeqc_input_bulk_kinetic`, and both restart functions) — no
+per-function propagation gap. Treat any schreibersite-dependent output as
+provisional until a real rate law replaces this placeholder.
