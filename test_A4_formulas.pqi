@@ -1,0 +1,105 @@
+DATABASE C:/Users/melwa/GitHub/ENTICES/Core11_idealgas_mod_v4.dat
+TITLE Test A4 -- coupled vs decoupled at REDUCING conditions (the real case)
+#
+# Test A3 compared at pe 4, where coupled S goes to sulfate rather than
+# sulfide -- not like-for-like against Sg (which is sulfide by construction).
+# This repeats the comparison at Enceladus-like reducing conditions so both
+# sides form the same chemical species, and adds the free-hydrogen diagnostic
+# that actually decides the CH4 case.
+#
+# KEY ASYMMETRY BEING TESTED (from the database master-species lines):
+#   Mtg  Mtg   0  Mtg    16.032   <- master species has NO H in its formula
+#   Sg   H2Sg  1  H2Sg   34.08    <- master species DOES contain H2
+# So Mtg's four hydrogens are OUTSIDE the H mass balance, while H2Sg's two
+# hydrogens are INSIDE it. If so, the two channels need OPPOSITE treatment:
+#   IOM_CH4  formula supplies only SURPLUS H (0.435)
+#   IOM_S    formula supplies the SAME H as coupled (1)
+
+SELECTED_OUTPUT 1
+    -reset false
+    -simulation true
+    -high_precision true
+USER_PUNCH 1
+    -headings totH totO totS totSg totC totMtg m_H2S m_HS m_H2Sg m_HSg m_CH4 m_Mtg m_H2 pH pe
+    -start
+    10 PUNCH TOTMOLE("H"), TOTMOLE("O")
+    20 PUNCH TOTMOLE("S"), TOTMOLE("Sg"), TOTMOLE("C"), TOTMOLE("Mtg")
+    30 PUNCH MOL("H2S"), MOL("HS-"), MOL("H2Sg"), MOL("HSg-")
+    40 PUNCH MOL("CH4"), MOL("Mtg"), MOL("H2")
+    50 PUNCH -LA("H+"), -LA("e-")
+    -end
+
+# Reducing, Enceladus-like. H(0) present so pe is genuinely low after reaction.
+SOLUTION 1 reducing baseline
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    H(0)      1e-3
+    water     1
+END
+
+# sim 2 = baseline, zero-extent reaction (reference row)
+USE solution 1
+REACTION 1
+    NaCl 0.0
+    0 moles
+END
+
+# ---- SULFUR: coupled reference vs three decoupled candidates -------------
+# sim 3 = coupled  S 1 H 1
+USE solution 1
+REACTION 1
+    S 1.0
+    H 1.0
+    1e-3 moles
+END
+
+# sim 4 = decoupled  Sg 1 H -1   (OPTION3_decision.md's proposal)
+USE solution 1
+REACTION 1
+    Sg  1.0
+    H  -1.0
+    1e-3 moles
+END
+
+# sim 5 = decoupled  Sg 1 H 1
+USE solution 1
+REACTION 1
+    Sg 1.0
+    H  1.0
+    1e-3 moles
+END
+
+# sim 6 = decoupled  Sg 1
+USE solution 1
+REACTION 1
+    Sg 1.0
+    1e-3 moles
+END
+
+# ---- CARBON: coupled reference vs two decoupled candidates ---------------
+# sim 7 = coupled  C 1 H 4.435
+USE solution 1
+REACTION 1
+    C 1.0
+    H 4.435
+    1e-3 moles
+END
+
+# sim 8 = decoupled  Mtg 1 H 0.435   (OPTION3_decision.md's proposal)
+USE solution 1
+REACTION 1
+    Mtg 1.0
+    H   0.435
+    1e-3 moles
+END
+
+# sim 9 = decoupled  Mtg 1 H 4.435
+USE solution 1
+REACTION 1
+    Mtg 1.0
+    H   4.435
+    1e-3 moles
+END

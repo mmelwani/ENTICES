@@ -1,0 +1,165 @@
+TITLE Test A -- does 'Sg 1' implicitly demand H2Sg's two hydrogens?
+#
+# PURPOSE
+#   Decide whether the correct decoupled formula for IOM_S is
+#       Sg 1 H -1     (solid gives 1 H, water supplies the other)
+#       Sg 1 H 1      (solid gives 1 H, PHREEQC wants it stated positively)
+#       Sg 1          (PHREEQC supplies both H itself)
+#   This cannot be settled by reading the manual. It is decided by looking at
+#   total H and total S after a known amount of reaction.
+#
+# HOW TO READ THE RESULT
+#   Each of the three simulations adds 1.0e-3 mol of Sg via a different
+#   formula variant. Compare the PUNCHed tot("S") / tot("Sg") and tot("H")
+#   against hand arithmetic:
+#
+#     Baseline solution has some H from water (55.5 mol/kgw as H2O is NOT
+#     counted in tot("H") -- PHREEQC reports tot("H") as EXCESS H relative to
+#     water, so the baseline value is what matters, not 111).
+#
+#     Expected, if 'Sg 1' adds ONLY the S and PHREEQC draws 2 H from water:
+#        variant 1 (Sg 1 H -1) -> H decreases by 1e-3 relative to variant 3
+#        variant 3 (Sg 1)      -> H unchanged from baseline
+#     Expected, if 'Sg 1' requires the formula to supply H:
+#        variant 3 (Sg 1) will fail, warn, or leave H2Sg unformed
+#
+#   The DIAGNOSTIC that actually decides it: molality of H2Sg and HSg- in each
+#   case. If H2Sg forms at ~1e-3 in all three, PHREEQC is supplying H itself
+#   and 'Sg 1' alone is correct. If it only forms where H is supplied, the
+#   formula must carry it.
+#
+# REQUIREMENTS
+#   Run with Core11_idealgas_mod_v4.dat (the Sg species lives there, not in
+#   stock phreeqc.dat).
+#   Replace the DATABASE path below with the local path.
+
+DATABASE /path/to/Core11_idealgas_mod_v4.dat
+
+SELECTED_OUTPUT 1
+    -reset false
+    -high_precision true
+USER_PUNCH 1
+    -headings variant tot_Sg tot_S tot_H tot_O pH pe m_H2Sg m_HSg m_HS m_SO4
+    -start
+    10 PUNCH PARM(1)
+    20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O")
+    30 PUNCH -LA("H+"), -LA("e-")
+    40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2")
+    -end
+
+# ---------------------------------------------------------------------------
+# BASELINE: dilute near-neutral solution, nothing added.
+# Gives the reference tot_H / tot_O to difference against.
+# ---------------------------------------------------------------------------
+SOLUTION 1 baseline
+    temp      25
+    pH        7
+    pe        4
+    units     mol/kgw
+    Na        1e-3
+    Cl        1e-3
+    water     1
+RATES
+  Sg_test
+    -start
+    10 moles = PARM(2) * TIME / 1
+    20 SAVE moles
+    -end
+KINETICS 1
+  Sg_test
+    -formula H2O 0            # no-op: baseline, adds nothing
+    -m0 1
+    -parms 0 0
+    -steps 1
+USER_PUNCH 1; -start; 10 PUNCH 0; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+# ---------------------------------------------------------------------------
+# VARIANT 1:  Sg 1 H -1     <- the form proposed in OPTION3_decision.md
+# ---------------------------------------------------------------------------
+USE solution 1
+RATES
+  Sg_v1
+    -start
+    10 moles = 1e-3 * TIME / 86400
+    20 IF moles > 1e-3 THEN moles = 1e-3
+    30 SAVE moles
+    -end
+KINETICS 1
+  Sg_v1
+    -formula Sg 1 H -1
+    -m0 1
+    -steps 86400
+    -cvode true
+USER_PUNCH 1; -start; 10 PUNCH 1; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+# ---------------------------------------------------------------------------
+# VARIANT 2:  Sg 1 H 1
+# ---------------------------------------------------------------------------
+USE solution 1
+RATES
+  Sg_v2
+    -start
+    10 moles = 1e-3 * TIME / 86400
+    20 IF moles > 1e-3 THEN moles = 1e-3
+    30 SAVE moles
+    -end
+KINETICS 1
+  Sg_v2
+    -formula Sg 1 H 1
+    -m0 1
+    -steps 86400
+    -cvode true
+USER_PUNCH 1; -start; 10 PUNCH 2; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+# ---------------------------------------------------------------------------
+# VARIANT 3:  Sg 1   (no H stated at all)
+# ---------------------------------------------------------------------------
+USE solution 1
+RATES
+  Sg_v3
+    -start
+    10 moles = 1e-3 * TIME / 86400
+    20 IF moles > 1e-3 THEN moles = 1e-3
+    30 SAVE moles
+    -end
+KINETICS 1
+  Sg_v3
+    -formula Sg 1
+    -m0 1
+    -steps 86400
+    -cvode true
+USER_PUNCH 1; -start; 10 PUNCH 3; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+# ---------------------------------------------------------------------------
+# CROSS-CHECK: the same three via REACTION instead of KINETICS.
+# If KINETICS and REACTION disagree, that itself is the finding.
+# ---------------------------------------------------------------------------
+USE solution 1
+REACTION 1
+    Sg      1.0
+    H      -1.0
+    1e-3 moles
+USER_PUNCH 1; -start; 10 PUNCH 11; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+USE solution 1
+REACTION 1
+    Sg      1.0
+    1e-3 moles
+USER_PUNCH 1; -start; 10 PUNCH 13; 20 PUNCH TOTMOLE("Sg"), TOTMOLE("S"), TOTMOLE("H"), TOTMOLE("O"); 30 PUNCH -LA("H+"), -LA("e-"); 40 PUNCH MOL("H2Sg"), MOL("HSg-"), MOL("HS-"), MOL("SO4-2"); -end
+END
+
+# ---------------------------------------------------------------------------
+# NOTE ON INTERPRETING FAILURE
+#   If a variant errors out, that IS a result -- record the exact message.
+#   In particular, a "charge balance" or "element not found" error on variant 3
+#   would show that the formula must carry H explicitly.
+#   If all three run and give IDENTICAL tot_S and H2Sg, then PHREEQC is
+#   normalising internally and the H term only shifts the proton budget --
+#   in which case pick the variant whose tot_H matches the coupled formula
+#   (S 1 H 1), which is the element-conservation requirement.
+# ---------------------------------------------------------------------------
