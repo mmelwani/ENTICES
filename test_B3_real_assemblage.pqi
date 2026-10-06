@@ -1,0 +1,294 @@
+DATABASE C:/Users/melwa/GitHub/ENTICES/coreclath_CH4coupled.dat
+TITLE Test B3 -- Hdg carbon decoupling, REAL secondary mineral assemblage + real database
+#
+# SUPERSEDES test_B2_Hdg_carbon.pqi's "realistic" cases (sims 3/4 there used a
+# 2-mineral toy assemblage -- Magnetite + Pyrrhotite only -- and
+# Core11_idealgas_mod_v4.dat, which has no clathrates). This file uses:
+#   - coreclath_CH4coupled.dat: the actual database in
+#     ENTICES_LF_20260917.R's example run (has Hdg/Sg/Mtg/Ntg, confirmed
+#     2026-09-24, AND three clathrate phases Mohit's copy lacks).
+#   - The REAL 78-entry ocean secondary-mineral list (EQUILIBRIUM_PHASES 2),
+#     extracted directly from phreeqc_inputs/from_lucas_20260924/
+#     enceladus_k1.00e-07_d194200_T150_org15_orb12.pqi.out, not reconstructed
+#     from memory. Ocean list chosen (not the 81-entry porewater list)
+#     because it matches this test's cold/reducing conditions and because
+#     clathrates only appear in the ocean list -- Lucas's own header comments
+#     say clathrates are stable in the ocean at this pressure/temperature but
+#     NOT in the 150C porewater.
+#
+# NEW THING THIS VERSION CAN TEST THAT THE TOY ASSEMBLAGE COULDN'T:
+#   CH4_hydrate in this database is written as "CH4:6H2O = CH4 + 6 H2O" --
+#   coupled CH4, not decoupled Mtg. So if methane ends up as Mtg (decoupled
+#   mode), it should NOT be captured by clathrate formation at all. Sim 4
+#   checks whether that's actually what happens, since it matters for
+#   whether Option 3 quietly breaks clathrate modelling for exactly the
+#   carbon this project cares about.
+#
+# Same core design as test_B2: sims 1-2 isolate the H2 mechanism with no
+# minerals; sims 3-4 add the mineral list plus a small Fe/S inventory in
+# solution; sim 5 is the calcite/carbonate-still-works check (unchanged from
+# test_B2, since sims 1-2/5 already gave clean, unambiguous answers there).
+
+SELECTED_OUTPUT 1
+    -reset false
+    -simulation true
+    -pH true
+    -pe true
+    -totals C Hdg Fe S Ca
+    -molalities CH4 Mtg CO2 HCO3- CO3-2 H2 Hdg CH4_hydrate CO2_hydrate H2S_hydrate
+    -si Calcite Magnetite Pyrite CH4_hydrate CO2_hydrate
+
+# ===========================================================================
+# SIM 1 -- COUPLED H2, no minerals. Batch-reaction step (Halite at 0 moles,
+#   a deliberate no-op) forces PHREEQC to actually equilibrate redox --
+#   test_B (original) skipped this and its control never converted any
+#   carbon at all, which is why it needed replacing in test_B2.
+# ===========================================================================
+SOLUTION 1 coupled-H2 reducing
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3
+    H(0)      1e-3
+    water     1
+    pressure  66.7
+EQUILIBRIUM_PHASES 1
+    Halite    0 0
+END
+
+# ===========================================================================
+# SIM 2 -- DECOUPLED Hdg, otherwise identical to sim 1.
+# ===========================================================================
+SOLUTION 2 decoupled-Hdg
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3
+    Hdg       1e-3
+    water     1
+    pressure  66.7
+EQUILIBRIUM_PHASES 2
+    Halite    0 0
+END
+
+# ===========================================================================
+# SIM 3 -- COUPLED H2, REAL 78-phase ocean secondary assemblage, small Fe/S
+#   inventory in solution so the mineral list has something to respond to.
+# ===========================================================================
+SOLUTION 3 coupled-H2 with real assemblage
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3
+    Fe        1e-5
+    S(-2)     1e-4
+    H(0)      1e-3
+    water     1
+    pressure  66.7
+EQUILIBRIUM_PHASES 3
+    Analcime 0 0
+    Anhydrite 0 0
+    Aragonite 0 0
+    Bassanite 0 0
+    Beidellite-Ca 0 0
+    Beidellite-Fe 0 0
+    Beidellite-Mg 0 0
+    Beidellite-Na 0 0
+    Boehmite 0 0
+    Brucite 0 0
+    C2H4(g) 0 0
+    C2H6(g) 0 0
+    C3H8(g) 0 0
+    Calcite 0 0
+    CH4(g) 0 0
+    Chalcedony 0 0
+    Chamosite 0 0
+    Chrysotile 0 0
+    Citric_Acid 0 0
+    Clinochlore-14A 0 0
+    Clinochlore-7A 0 0
+    Clinoptilolite-Ca 0 0
+    Clinoptilolite-Na 0 0
+    Clinozoisite 0 0
+    CO(g) 0 0
+    CO2(g) 0 0
+    Cronstedtite-7A 0 0
+    Daphnite-14A 0 0
+    Daphnite-7A 0 0
+    Dawsonite 0 0
+    Diaspore 0 0
+    Dolomite 0 0
+    Ettringite 0 0
+    Fe(OH)2 0 0
+    Fe(OH)3 0 0
+    Fe2(SO4)3 0 0
+    FeSO4 0 0
+    Gibbsite 0 0
+    Glycine 0 0
+    Goethite 0 0
+    Greenalite 0 0
+    Gypsum 0 0
+    Gyrolite 0 0
+    H2(g) 0 0
+    H2S(g) 0 0
+    Hematite 0 0
+    Huntite 0 0
+    Hydromagnesite 0 0
+    Kaolinite 0 0
+    Lizardite 0 0
+    Magnetite 0 0
+    Melanterite 0 0
+    MgSO4 0 0
+    Minnesotaite 0 0
+    Mirabilite 0 0
+    Montmor-Ca 0 0
+    Montmor-Mg 0 0
+    Montmor-Na 0 0
+    N2(g) 0 0
+    NH3(g) 0 0
+    Nontronite-Ca 0 0
+    Nontronite-Mg 0 0
+    Nontronite-Na 0 0
+    Portlandite 0 0
+    Pyrite 0 0
+    Saponite-Fe-Ca 0 0
+    Saponite-Fe-Fe 0 0
+    Saponite-Fe-Mg 0 0
+    Saponite-Fe-Na 0 0
+    Saponite-Mg-Ca 0 0
+    Saponite-Mg-Fe 0 0
+    Saponite-Mg-Mg 0 0
+    Saponite-Mg-Na 0 0
+    Sepiolite 0 0
+    SiO2(am) 0 0
+    SO2(g) 0 0
+    Thenardite 0 0
+    Tobermorite-11A 0 0
+    CH4_hydrate 0 0
+    CO2_hydrate 0 0
+    H2S_hydrate 0 0
+END
+
+# ===========================================================================
+# SIM 4 -- DECOUPLED Hdg, SAME real assemblage. THE KEY CASE.
+# ===========================================================================
+SOLUTION 4 decoupled-Hdg with real assemblage
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    C         1e-3
+    Fe        1e-5
+    S(-2)     1e-4
+    Hdg       1e-3
+    water     1
+    pressure  66.7
+EQUILIBRIUM_PHASES 4
+    Analcime 0 0
+    Anhydrite 0 0
+    Aragonite 0 0
+    Bassanite 0 0
+    Beidellite-Ca 0 0
+    Beidellite-Fe 0 0
+    Beidellite-Mg 0 0
+    Beidellite-Na 0 0
+    Boehmite 0 0
+    Brucite 0 0
+    C2H4(g) 0 0
+    C2H6(g) 0 0
+    C3H8(g) 0 0
+    Calcite 0 0
+    CH4(g) 0 0
+    Chalcedony 0 0
+    Chamosite 0 0
+    Chrysotile 0 0
+    Citric_Acid 0 0
+    Clinochlore-14A 0 0
+    Clinochlore-7A 0 0
+    Clinoptilolite-Ca 0 0
+    Clinoptilolite-Na 0 0
+    Clinozoisite 0 0
+    CO(g) 0 0
+    CO2(g) 0 0
+    Cronstedtite-7A 0 0
+    Daphnite-14A 0 0
+    Daphnite-7A 0 0
+    Dawsonite 0 0
+    Diaspore 0 0
+    Dolomite 0 0
+    Ettringite 0 0
+    Fe(OH)2 0 0
+    Fe(OH)3 0 0
+    Fe2(SO4)3 0 0
+    FeSO4 0 0
+    Gibbsite 0 0
+    Glycine 0 0
+    Goethite 0 0
+    Greenalite 0 0
+    Gypsum 0 0
+    Gyrolite 0 0
+    H2(g) 0 0
+    H2S(g) 0 0
+    Hematite 0 0
+    Huntite 0 0
+    Hydromagnesite 0 0
+    Kaolinite 0 0
+    Lizardite 0 0
+    Magnetite 0 0
+    Melanterite 0 0
+    MgSO4 0 0
+    Minnesotaite 0 0
+    Mirabilite 0 0
+    Montmor-Ca 0 0
+    Montmor-Mg 0 0
+    Montmor-Na 0 0
+    N2(g) 0 0
+    NH3(g) 0 0
+    Nontronite-Ca 0 0
+    Nontronite-Mg 0 0
+    Nontronite-Na 0 0
+    Portlandite 0 0
+    Pyrite 0 0
+    Saponite-Fe-Ca 0 0
+    Saponite-Fe-Fe 0 0
+    Saponite-Fe-Mg 0 0
+    Saponite-Fe-Na 0 0
+    Saponite-Mg-Ca 0 0
+    Saponite-Mg-Fe 0 0
+    Saponite-Mg-Mg 0 0
+    Saponite-Mg-Na 0 0
+    Sepiolite 0 0
+    SiO2(am) 0 0
+    SO2(g) 0 0
+    Thenardite 0 0
+    Tobermorite-11A 0 0
+    CH4_hydrate 0 0
+    CO2_hydrate 0 0
+    H2S_hydrate 0 0
+END
+
+# ===========================================================================
+# SIM 5 -- Carbonate check, unchanged from test_B2 (already answered cleanly:
+#   with Hdg in play, carbon still participates in calcite saturation).
+# ===========================================================================
+SOLUTION 5 decoupled-Hdg with Ca
+    temp      1.45
+    pH        11.5
+    units     mol/kgw
+    Na        0.1
+    Cl        0.1 charge
+    Ca        1e-3
+    C         1e-3
+    Hdg       1e-3
+    water     1
+    pressure  66.7
+EQUILIBRIUM_PHASES 5
+    Calcite     0 0
+END
