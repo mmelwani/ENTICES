@@ -87,23 +87,40 @@ essentially identical to the toy test's magnitude, which is itself a useful
 cross-check: the earlier conclusion wasn't an artefact of an oversimplified
 mineral list.
 
-**What's actually doing the buffering changed, and that's informative.**
+**Which mineral saturates changed, and that's informative.**
 Magnetite never saturates in this run (`SI_Magnetite` stays around −6.6 to
-−9.7 throughout) — with only 1e-5 mol Fe in solution and no Fe3+/Fe2+ mix
-established, there isn't enough iron in this dilute system to reach
-magnetite saturation. **Pyrite does saturate** (`SI_Pyrite = 0.000` at the
-end of both sim 3 and sim 4), consuming the S(-2) and buffering the system
-instead. So the specific mineral responsible for the pe shift depends on
-what's actually in solution and doesn't have to be Magnetite — the toy
-test's choice of Magnetite+Pyrrhotite got the right answer for the wrong
-specific mechanism. Worth knowing before generalizing "Magnetite buffers pe"
-as a rule.
+−9.7 throughout) — with only 1e-5 mol Fe in solution, there isn't enough
+iron in this dilute system to reach magnetite saturation. **Pyrite is the
+only phase that saturates** (`SI_Pyrite = 0.000` at the end of both sim 3
+and sim 4). So the toy test's assumption that Magnetite is the relevant
+phase doesn't carry over to the real assemblage; which mineral responds
+depends on what's actually in solution. Worth knowing before generalizing
+"Magnetite buffers pe" as a rule.
+
+*Corrected 2026-09-30 on review:* an earlier version of this paragraph said
+Pyrite "buffers the system" and that the toy test "got the right answer for
+the wrong mechanism." That overstates it. Pyrite precipitates **exactly
+1.000e-05 mol in both sim 3 and sim 4** — i.e. all of the Fe, in both modes.
+The test is Fe-limited: pyrite formation is capped by the iron supply and is
+identical whether H2 is coupled or decoupled. So:
+- The pe difference between sim 3 and sim 4 is **not** produced by any
+  difference in mineral behaviour — the mineral transfers are identical. It
+  comes from removing H2 as an electron donor, which is the hypothesis being
+  tested.
+- **This test cannot measure the "decoupling H2 perturbs the Fe/S mineral
+  budget ~3×" effect** that `PROGRESS.md` quotes from the toy test. With every
+  bit of Fe going to pyrite in both cases, there is no room for a difference
+  to appear. That perturbation magnitude is neither confirmed nor refuted
+  here; testing it needs a run where Fe is not the limiting reagent (or, better,
+  with the real kinetic primary minerals supplying Fe over time).
 
 ## 3. Sim 5 (calcite) — unchanged, still confirms
 
 Recomputed with the corrected pressure (66.7 atm rather than uncontrolled):
 Calcite goes from SI = 1.33 (initial, supersaturated) to SI = 0.00 (final),
-precipitating 8.16e-04 mol and drawing total C from 1e-3 to 1.9e-4 mol/kgw.
+precipitating 8.055e-04 mol and drawing total C from 1e-3 to 1.94e-4 mol/kgw.
+(*Corrected 2026-09-30:* an earlier version quoted 8.16e-04, which is the
+test_B2 value at uncontrolled pressure; the 66.7 atm value is 8.055e-04.)
 Carbon still fully participates in carbonate equilibria with `Hdg` in play —
 same conclusion as the original test, now confirmed at the real pressure.
 
