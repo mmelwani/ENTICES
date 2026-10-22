@@ -568,28 +568,6 @@ Zn+2 = Zn+2
 #	deltafH		-36.66		kcal/mol
 	-Vm		-1.96 -10.4 14.3 -2.35 1.46 5 -1.43 24 1.67e-2 1.11 # APP14
 
-#-------------------
-# 5 Redox-uncoupled gases from phreeqc.dat
-#-------------------
-
-Hdg = Hdg # H2
-	-dw	 5.13e-9
-	-Vm 6.52  0.78  0.12 # supcrt
-Oxg = Oxg # O2
-	-dw	 2.35e-9
-	-Vm  5.7889  6.3536  3.2528  -3.0417  -0.3943 # supcrt
-Mtg = Mtg # CH4 #MMD uncommented 2024/07/07 to allow.
-	-dw   1.85e-9
-	-Vm   9.01  -1.11  0  -1.85  -1.50 # ref. 1 + Hnedkovsky et al., 1996, JCT 28, 125
-Ntg = Ntg # N2
-	-dw	 1.96e-9
-	-Vm 7 # Pray et al., 1952, IEC 44. 1146
-H2Sg = H2Sg # H2S
-	-dw	 2.1e-9
-#	-Vm  7.81  2.96  -0.46 # supcrt; replaced by MMD for the one in PHREEQC below.
-	-Vm  1.39  28.3  0  -7.22  -0.59 # ref. 1 + Hnedkovsky et al., 1996, JCT 28, 125
-
-
 
 
 #-------------------
@@ -7358,7 +7336,7 @@ Hdg(g)
 Ntg(g)
 	Ntg = Ntg
 	-analytic -58.453 1.81800e-3  3199  17.909 -27460
-	T_c  126.2 ; -P_c   33.50 ; -Omega 0.039
+	-T_c  126.2 ; -P_c   33.50 ; -Omega 0.039
 #Mtg(g)
 #	Mtg = Mtg
 #	-log_k -2.8

@@ -478,11 +478,7 @@ source's own hand-check: `kacid` at pH 2, 25 C reproduces `10^(-5.4)` exactly).
 confirmed the RATES block renders correctly (no stray braces/unescaped quotes
 breaking the template); cross-checked `mineral_dissolution_constants.r`'s port
 against the same hand-check. Running the generated `.pqi` through PHREEQC at
-160 C surfaced a severe, unrelated convergence problem in the K-Feldspar/Albite
-base-weathering mechanism (pH runs away to ~11.5 within the first step,
-triggering millions of Newton-Raphson iterations) — confirmed via the real
-PHREEQC run that Tephroite itself contributes negligibly (Delta Moles ~5e-14)
-and is not the cause; that issue is tracked separately, unresolved.
+160 C surfaced a severe convergence problem, unresolved at this time.
 
 ### Schreibersite: implemented as a kinetic phase, superseding the equilibrium-products plan (2026-09-30)
 
@@ -502,3 +498,110 @@ kinetic-capable generator functions (`generate_phreeqc_input_tidal_kinetic`,
 `generate_phreeqc_input_bulk_kinetic`, and both restart functions) — no
 per-function propagation gap. Treat any schreibersite-dependent output as
 provisional until a real rate law replaces this placeholder.
+
+### Magnetite: added to EQUILIBRIUM_PHASES wherever it was missing (2026-10-07)
+
+Audited Magnetite (the demoted-ex-primary) across all 6 generator functions and
+found two gaps: it was entirely absent from `generate_phreeqc_input_bulk_kinetic_restart`,
+and missing from EQUILIBRIUM_PHASES 1 (porewater) in all three tidal functions
+(`tidal_kinetic`, `tidal_equil`, `tidal_kinetic_restart`), which previously only
+had it on the ocean side. All 6 functions now include it consistently in every
+applicable EQUILIBRIUM_PHASES block; verified no duplicate entries resulted.
+
+### Tephroite: no-precipitation guard added — resolves the convergence problem previously blamed on K-Feldspar/Albite (2026-10-19)
+
+The Tephroite rate law's final line was `rate = k * (1 - SR("Tephroite"))`, with
+no guard against `SR > 1`. Once the solution becomes supersaturated with
+Tephroite (observed directly in earlier diagnostics: SI crept from -0.09 up
+through 0.00 over the course of a run), `(1 - SR)` goes negative, so PHREEQC's
+RATES Basic script asks it to `SAVE` a negative `moles` value — i.e. run the
+dissolution-calibrated rate expression in reverse as an ad hoc precipitation
+rate, which it was never fit for. Added the same guard already used by every
+other mineral's rate law: `IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k *
+(1 - SR("Tephroite"))`.
+
+**This fixes the earlier convergence problem.** With this guard in place, the same class of run converges — pointing to the missing Tephroite guard (not K-Feldspar/Albite's `kbase` terms, previously speculated about) as the actual cause. The extended investigation that followed (small water-rock-ratio restart chains failing even after Albite was moved to an equilibrium phase, traced through several restart generations) was consequently chasing a downstream symptom of this same missing guard, not an independent K-Feldspar/Albite-specific problem.
+
+### generate_phreeqc_input_bulk_kinetic: rec_eqb_minerals auto-promotion (2026-10-19)
+
+Added `rec_eqb_minerals = TRUE` and `rec_eqb_margin = 2`. At the given
+`porewater_temp`, computes each of the 8 switchable primaries' kinetic
+half-life at a conservatively alkaline reference pH of 11 (via
+`k_primary_mineral()` in `mineral_dissolution_constants.r`, now `source()`'d
+in so this reuses the exact same rate laws as the RATES blocks rather than a
+re-derived copy). Any primary whose half-life, times `rec_eqb_margin`, is
+still shorter than one orbital period is moved from `KINETICS` to
+`EQUILIBRIUM_PHASES` (`dissolve_only`) instead — treating it as kinetic in that
+regime is both numerically fragile (CVODE resolving a near-instantaneous
+reaction inside one macro step) and physically no different from equilibrium.
+Schreibersite is excluded from the check (no Fe3P phase/log K in either
+database, so it can never be an equilibrium primary). The generated `.pqi`
+header records which minerals were promoted and why. `rec_eqb_minerals =
+FALSE` reproduces the previous unconditional-kinetic behavior exactly.
+
+**Verified:** at 160 C, `rec_eqb_margin=2` promotes Albite and K-Feldspar only
+(their half-lives are orders of magnitude under the threshold even doubled);
+`rec_eqb_margin=1` additionally promotes Forsterite and Anorthite (borderline
+cases just inside 1x but not 2x the orbital period); `rec_eqb_minerals=FALSE`
+reproduces the original all-kinetic output exactly. No duplicate USER_PUNCH
+line numbers in any case.
+
+### generate_phreeqc_input_bulk_equil: added mode/water_rock_ratio and water_temp (2026-10-19)
+
+This function previously had no equilibrium equivalent to
+`generate_phreeqc_input_bulk_kinetic`'s `mode = c("porewater",
+"hydrosphere")` split, and no temperature control at all (always hardcoded to
+`274.6 - 273.15` ocean-floor temperature). Added both, mirroring
+`bulk_kinetic`'s existing pattern: `mode`/`water_rock_ratio` for the
+reservoir choice, and `water_temp = "ocean"` (accepting `"ocean"`,
+`"profile"`, or a numeric degrees-C value) for temperature, with the same
+`T<value>` filename tag `bulk_kinetic` already uses.
+
+**Verified:** omitting `mode` reproduces the exact prior output
+(`water = 44.1234526469118`, filename unchanged in structure other than the
+new `Tocean` tag); `mode = "porewater"` with `water_rock_ratio` produces the
+expected porewater-only solution; `water_temp` accepts `"ocean"`/`"profile"`/
+numeric correctly and rejects invalid strings with the same error style as
+`bulk_kinetic`'s `porewater_temp`.
+
+### Tephroite rate law and ZERO_MOLES_FLOOR propagated into both restart functions (2026-10-19)
+
+Two fixes to `generate_phreeqc_input_bulk_kinetic_restart` and
+`generate_phreeqc_input_tidal_kinetic_restart`'s `.rate_laws` lists:
+
+- **Tephroite's real rate law** (Pincus et al. 2026, see the 2026-10-06 entry
+  above) replaces the `kacid=kneut=0` placeholder that entry explicitly left
+  in both restart functions. All four kinetic-capable generators now carry
+  the same, current Tephroite rate law.
+- **`ZERO_MOLES_FLOOR <- 1e-15`** added to both functions' `get_k_moles()`.
+  A kinetic mineral dissolved down to floating-point dust (e.g. `1.06e-21`
+  mol) is chemically depleted, but writing that literal value into a
+  `dissolve_only` EQUILIBRIUM_PHASES entry still makes PHREEQC try to satisfy
+  that phase's saturation condition with essentially no mass to work with —
+  observed directly under a low-`water_rock_ratio` restart chain (Albite at
+  `SI = -4.95`, undersaturated, but `m0 = 1.06e-21`): PHREEQC couldn't
+  reconcile "dissolve toward SR=1" with "only this much mass exists," and
+  failed to converge on the very first re-equilibration, independent of time
+  step size. Clamping to exactly 0 removes the phase from the system
+  entirely and converged cleanly in the same scenario. Added to
+  `bulk_kinetic_restart` where the failure was observed; added defensively
+  (not yet observed as a live problem there) to `tidal_kinetic_restart`,
+  which uses the identical `dissolve_only` pattern. Any genuine remaining
+  mineral mass in this system is many orders of magnitude above this
+  threshold, so it only ever catches floating-point dust.
+
+**Verified:** generated a restart `.pqi` from `bulk_kinetic_restart` with
+Tephroite's real rate law rendering correctly; reproduced the exact
+`k_Albite = 1.0607e-21` dust value that caused the original failure and
+confirmed it now writes as `0.000000e+00` in `EQUILIBRIUM_PHASES`.
+
+### mineral_dissolution_constants.r: last_dissolution_rate()/latest_mineral_moles() accept a minerals override (2026-10-19)
+
+Both functions now take an optional `minerals` argument — pass a custom
+vector of mineral names to restrict to those, or omit it (`NULL` default) to
+get the original behavior (the full current primary list: Forsterite,
+Enstatite, Anorthite, Albite, Troilite, Diopside, K-Feldspar, Tephroite,
+IOM_CO2, IOM_CH4, IOM_N, IOM_S). Verified against a synthetic CSV: the
+default call still returns `NA` for minerals missing from the data (as
+before), and `minerals = c("Forsterite", "Albite")` correctly restricts both
+functions' output to just that pair.

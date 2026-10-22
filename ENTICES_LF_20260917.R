@@ -3457,15 +3457,31 @@ END
                                        Schreibersite = "Schr_remain_g"
                                      )
 
+                                     # Floor for near-zero moles: a kinetic mineral that's dissolved down to
+                                     # floating-point dust (e.g. 1e-21 mol) is chemically depleted, but writing
+                                     # that literal value into a dissolve_only EQUILIBRIUM_PHASES entry still
+                                     # makes PHREEQC try to satisfy its saturation condition with that
+                                     # infinitesimal mass -- which can fail to converge if the solution is far
+                                     # from saturation for that phase (seen under a low water_rock_ratio restart,
+                                     # SI(Albite) = -4.95 but m0 = 1.06e-21: PHREEQC couldn't reconcile "dissolve
+                                     # toward SR=1" with "only this much mass exists"; clamping to exactly 0
+                                     # removes the phase from the system entirely and converged cleanly). Any
+                                     # real mineral mass in this system is many orders of magnitude above this
+                                     # threshold, so it only ever catches floating-point dust, not genuine
+                                     # small-but-real remaining amounts.
+                                     ZERO_MOLES_FLOOR <- 1e-15
                                      get_k_moles <- function(mineral) {
                                        col <- paste0("k_", mineral)
                                        val <- if (col %in% names(last_row)) suppressWarnings(as.numeric(last_row[[col]])) else NA_real_
-                                       if (!is.na(val) && val >= 0) return(val)
+                                       if (!is.na(val) && val >= 0) return(if (val < ZERO_MOLES_FLOOR) 0 else val)
                                        # Fallback: mineral was equilibrium in prev run — read *_remain_g column
                                        g_col <- remain_g_cols[mineral]
                                        if (!is.na(g_col) && g_col %in% names(last_row)) {
                                          g_val <- suppressWarnings(as.numeric(last_row[[g_col]]))
-                                         if (!is.na(g_val) && g_val >= 0) return(g_val / molar_masses[mineral])
+                                         if (!is.na(g_val) && g_val >= 0) {
+                                           moles <- g_val / molar_masses[mineral]
+                                           return(if (moles < ZERO_MOLES_FLOOR) 0 else moles)
+                                         }
                                        }
                                        0
                                      }
@@ -3630,15 +3646,19 @@ END
                                          '\t-end', sep = "\n"),
                                        Tephroite = paste(
                                          '\t-start',
-                                         '\t1   REM TODO awaiting kacid/kneut from user (Mn-olivine, no rate constants supplied yet)',
-                                         '\t10  kacid = 0',
-                                         '\t20  kneut = 0',
-                                         '\t21  SSA = 0.1',
-                                         '\t22  mw = 201.96',
-                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
-                                         '\t50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
-                                         '\t60  moles = rate * TIME',
-                                         '\t70  SAVE moles',
+                                         '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
+                                         '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
+                                         '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
+                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
+                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t46  SSA = 0.1',
+                                         '\t47  mw = 201.96',
+                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
+                                         '\t70  moles = rate * TIME',
+                                         '\t80  SAVE moles',
                                          '\t-end', sep = "\n"),
                                        Enstatite = paste(
                                          '\t-start',
@@ -4036,10 +4056,19 @@ END
                                                       Schreibersite = SCHREIBERSITE_MW)
 
                                      # Helper: read kinetic moles from REACT row
+                                     # ZERO_MOLES_FLOOR: precautionary, mirroring the fix in
+                                     # bulk_kinetic_restart -- a dissolve_only EQUILIBRIUM_PHASES entry at a
+                                     # literal floating-point-dust amount (e.g. 1e-21 mol) can make PHREEQC try
+                                     # to satisfy that phase's saturation condition with essentially no mass
+                                     # to work with, which failed to converge under a low water_rock_ratio
+                                     # restart (bulk_kinetic_restart, SI far from 0 but m0 ~1e-21). Not yet
+                                     # observed here, but the same dissolve_only pattern applies, so clamping
+                                     # defensively; any real remaining mass is far above this threshold.
+                                     ZERO_MOLES_FLOOR <- 1e-15
                                      get_k_moles <- function(mineral) {
                                        col <- paste0("k_", mineral)
                                        val <- if (col %in% names(row_react)) suppressWarnings(as.numeric(row_react[[col]])) else NA_real_
-                                       if (!is.na(val) && val >= 0) return(val)
+                                       if (!is.na(val) && val >= 0) return(if (val < ZERO_MOLES_FLOOR) 0 else val)
                                        # Fallback: use _remain_g column
                                        g_cols <- c(Enstatite="Enst_remain_g", Forsterite="Forst_remain_g",
                                                    Troilite="Troil_remain_g", Albite="Alb_remain_g",
@@ -4048,7 +4077,10 @@ END
                                        g_col <- g_cols[mineral]
                                        if (!is.na(g_col) && g_col %in% names(row_react)) {
                                          g_val <- suppressWarnings(as.numeric(row_react[[g_col]]))
-                                         if (!is.na(g_val) && g_val >= 0) return(g_val / molar_masses[mineral])
+                                         if (!is.na(g_val) && g_val >= 0) {
+                                           moles <- g_val / molar_masses[mineral]
+                                           return(if (moles < ZERO_MOLES_FLOOR) 0 else moles)
+                                         }
                                        }
                                        0
                                      }
@@ -4178,15 +4210,19 @@ END
                                          '\t-end', sep = "\n"),
                                        Tephroite = paste(
                                          '\t-start',
-                                         '\t1   REM TODO awaiting kacid/kneut from user (Mn-olivine, no rate constants supplied yet)',
-                                         '\t10  kacid = 0',
-                                         '\t20  kneut = 0',
-                                         '\t21  SSA = 0.1',
-                                         '\t22  mw = 201.96',
-                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
-                                         '\t50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
-                                         '\t60  moles = rate * TIME',
-                                         '\t70  SAVE moles',
+                                         '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
+                                         '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
+                                         '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
+                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
+                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t46  SSA = 0.1',
+                                         '\t47  mw = 201.96',
+                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
+                                         '\t70  moles = rate * TIME',
+                                         '\t80  SAVE moles',
                                          '\t-end', sep = "\n"),
                                        Enstatite = paste(
                                          '\t-start',

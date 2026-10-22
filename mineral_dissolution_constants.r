@@ -137,12 +137,12 @@ check_step_size_minerals <- function(mineral_list, step_orbits, H=1e-7, TK = 274
 # return dissolution rates per second.  rate_mol_s is mol/s; rate_frac_s is 1/s
 # (mol/s divided by remaining moles).  Missing dk/k columns and depleted minerals
 # (k = 0) return NULL.
-last_dissolution_rate <- function(csv_path) {
-    primary_minerals <- c("Forsterite", "Fayalite", "Enstatite", "Ferrosilite",
-                          "Pyrrhotite", "Anorthite", "Albite", "Magnetite",
+last_dissolution_rate <- function(csv_path, minerals = NULL) {
+    primary_minerals <- if (!is.null(minerals)) minerals else
+                          c("Forsterite", "Enstatite","Anorthite", "Albite",
                           "Troilite", "Diopside", "K-Feldspar", "Tephroite",
                           "IOM_CO2", "IOM_CH4","IOM_N", "IOM_S")
-                          #"IOM_labile", "IOM_mid", "IOM_refract")
+                          #"Ferrosilite","Fayalite","Pyrrhotite","Magnetite","IOM_labile", "IOM_mid", "IOM_refract")
 
     dat <- read.delim(csv_path, sep = "\t", header = TRUE,
                       strip.white = TRUE, check.names = FALSE)
@@ -205,11 +205,12 @@ last_dissolution_rate <- function(csv_path) {
 # last REACT row that last_dissolution_rate() grabs dk_<mineral> from — i.e. the
 # moles remaining AFTER that row's dk change (k_curr, not k_prior). Missing k_*
 # columns return NA.
-latest_mineral_moles <- function(csv_path) {
-    primary_minerals <- c("Forsterite", "Fayalite", "Enstatite", "Ferrosilite",
-                          "Pyrrhotite", "Anorthite", "Albite", "Magnetite",
+latest_mineral_moles <- function(csv_path, minerals = NULL) {
+    primary_minerals <- if (!is.null(minerals)) minerals else
+                          c("Forsterite", "Enstatite","Anorthite", "Albite",
                           "Troilite", "Diopside", "K-Feldspar", "Tephroite",
                           "IOM_CO2", "IOM_CH4","IOM_N", "IOM_S")
+                          #"Ferrosilite","Fayalite","Pyrrhotite","Magnetite","IOM_labile", "IOM_mid", "IOM_refract")
 
     dat <- read.delim(csv_path, sep = "\t", header = TRUE,
                       strip.white = TRUE, check.names = FALSE)
@@ -256,7 +257,7 @@ minerals  <- c("Forsterite", "Fayalite", "Enstatite", "Ferrosilite",
 
 pH_range  <- seq(0, 14, length.out = 300)
 H_vals    <- 10^(-pH_range)
-TK_val    <- 274.6    # Enceladus ocean floor (~1.45 C)
+TK_val    <- 160+273.15  # 274.6    # Enceladus ocean floor (~1.45 C)
 fe3_val   <- 1e-30    # fixed Fe3+ activity for Pyrrhotite
 
 rate_data <- do.call(rbind, lapply(minerals, function(m) {
