@@ -1,0 +1,108 @@
+### 2026-09-15 (continued): Tephroite kinetics — real rate law replaces
+### the fayalite proxy
+
+**[X→V] The fayalite proxy for Tephroite (§7) is corrected.** Direction
+was flagged as wrong two sessions ago (Pincus et al. 2026); this session
+sources and cross-checks a real, independent replacement rather than
+leaving a qualitative correction in place.
+
+**[V] Primary source: Pincus et al. (2026) ACS Earth Space Chem. 10,
+1174-1184, Table S1** (SI now in Project Knowledge), citing Casey et al.
+(1993) GCA 57, 785-793 as the underlying data:
+log kH+ (measured, 25 C) = -5.4 mol silicate m-2 s-1
+log A (Arrhenius pre-exponential) = 7.6 s-1
+Mean Mn-O bond distance = 2.21 A
+SI methods state PK04-style entries in this table are referenced to
+pH 2 (log kH+ = log AH+ - (Ea/RT)log(e) + n*log{H+}). Cross-check on
+Fayalite in the SAME table (log kH+ = -6.8, sourced to PK04): evaluating
+Core11's own Fayalite acid branch at pH 2 (not pH 4) gives
+10^(-4.80)*[10^-2]^1.0 = 10^-6.8 -- EXACT match. This resolves a
+provisional [U] flagged two sessions ago (a naive pH-4 evaluation gave
+10^-8.8 and looked like a >1000x discrepancy vs. Pincus; that was a
+reference-pH mismatch, not a real inconsistency). Confirms Table S1's
+values are usable directly against Core11's own pH convention once pH
+2 is used consistently.
+
+**[V] Independently re-derived and cross-checked against Casey (1993)'s
+own raw data**, now available as
+`Casey1993_Appendix_tephroite_dissolution_rates.csv` (user-supplied,
+clean -- NOT the OCR-corrupted PDF appendix table used in earlier
+sessions, which should not be used for numeric work). Regression of
+log(rate) vs pH at 25 C, synthetic tephroite only, bin-averaged
+replicates, pH 1.78-5.2:
+slope (reaction order, n) = -0.47 [matches Casey's own stated
+0.47 +/- 0.06 at 25C exactly]
+intercept (pH=0, mol/cm2/s) = -8.60 -> mol/m2/s: -4.60
+evaluated at pH 2 (mol/m2/s) = -9.54 (cm2) = -5.54 (m2)
+-5.54 vs. Pincus's -5.4: agreement to 0.14 log units, from two
+independent derivations off the same underlying dataset (Pincus's
+literature-synthesis value; this session's direct regression of the raw
+CSV). This is a real cross-check, not a restatement -- **RESOLVED**.
+
+**[U] Temperature dependence NOT independently confirmed.** Casey report
+the acid-branch order n increasing with temperature: 0.47+/-0.06 (25C),
+~0.60 (35C), 0.64+/-0.06 (45C) -- from their own careful
+replicate-experiment-only regression (5 matched pH sets: 2.5, 3.5, 4.2,
+5.15, 6.2). A quick re-fit this session using simple pH-bin averages
+across ALL rows at each temperature (not the matched replicate-set
+method) gave slopes clustering near -0.42 to -0.47 at all three
+temperatures, i.e. did NOT reproduce the stated T-trend. Casey's own
+paper explicitly warns the slope is "sensitive to the number and pH of
+the samples included" -- their careful method should be trusted over
+this session's rough one. DO NOT treat this session's flat-slope re-fit
+as evidence the T-dependence is smaller than Casey reports; it is more
+likely an artifact of a less careful fitting method with fewer, more
+scattered bins. If a full Ea(pH) treatment is wanted later, redo Casey's
+exact replicate-set method on the CSV rather than trusting either quick
+fit here.
+
+**[V] High-pH unreliability is confirmed IN THE RAW DATA, not just
+asserted.** At pH 8.0-8.1, the two experiments in the CSV show pH-stat
+vs. batch-method disagreement of up to 1.8x on the same run (3.4 vs 5.5
+x10^-13; 6.24 vs 10 x10^-13 mol/cm2/s) -- a concrete instance of Casey's
+stated "uncertainties as high as 80% at near-neutral/basic conditions."
+Do not fit or trust a kneut/kbase branch from pH>7 data in this dataset.
+
+**[V] Run-to-run scatter at fixed nominal conditions is real and
+extent-correlated**, not just noise: three replicates at pH 2.5-2.51,
+45C give 10.9, 7.4, 12.8 (x10^-10 mol/cm2/s) at 26%, 17%, 27% mass
+consumed respectively -- rate tracks reaction progress, consistent with
+Casey's leached-layer mechanism discussion. A single point estimate
+(e.g., Pincus's one reported value) is a snapshot of a system with up to
+~1.7x run-to-run variation at "identical" conditions; state this as an
+uncertainty on the rate constant itself, not just on the regression.
+
+**[D] Recommended RATES entry**, acid branch only (no reliable neutral
+branch exists in this dataset -- see high-pH note above):
+kacid = 10^(-5.4) * exp(-Ea/8.314*(1/TK-1/298.15)) * ACT("H+")^0.47
+log kacid = -5.4 (mol m-2 s-1, pH 2 reference, 25C), n = 0.47, sourced
+to Pincus Table S1 / Casey (1993), cross-checked as above. **Ea is
+UNRESOLVED** (see T-dependence note) -- do not assign a numeric Ea from
+either this session's rough refit or by borrowing Fayalite's Ea (94.4
+kJ/mol) as a placeholder; if a temperature-independent single-Ea
+approximation is used for now, state explicitly that it is a
+simplification Casey's own paper argues against, and cite their
+concrete example instead: a 10 K rise in temperature multiplies the
+rate by ~2.2x at pH 2, ~1.5x at pH 3-4, and only ~1.1x at pH>5 (Casey
+1993, from their Eexp values, NOT re-derived here).
+
+**[V] Critical scope caveat, applies to the entire dataset:** all Casey
+(1993) experiments were run rigorously ANOXIC by design -- N2-degassed,
+O2 scrubbed to <6e-6 mol/L via Fe filings/hot Cu, CO2 stripped with
+NaOH. The paper states Mn2+ oxidation to Mn3+/Mn4+ "severely retards"
+dissolution. This rate law is therefore valid ONLY under reducing
+conditions consistent with this project's Scenario R reduced-precursor
+assumption (§1) -- it does NOT transfer to any oxidizing scenario
+without correction, and should not be reused elsewhere in this project
+(e.g. any future oxidized/weathered comparison case) without that
+caveat restated.
+
+**[V] Ancillary, not currently used:** BET surface area of the
+experimental powder (25-75 um sieved, both synthetic and natural) =
+0.11 m2/g. Available for future unit-conversion sanity checks if a
+bulk-consumption-rate cross-check is ever needed independent of the
+mol/m2/s values above.
+
+Update §7's Tephroite row: kin_proxy changes from "fayalite rates" to
+"own rate law, acid branch only (see §4/§6): log kacid=-5.4, n=0.47,
+pH-2-referenced, Ea unresolved, anoxic conditions only."

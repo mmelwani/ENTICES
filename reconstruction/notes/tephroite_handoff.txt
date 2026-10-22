@@ -1,0 +1,95 @@
+# Handoff: implement Tephroite's own RATES entry, replacing the Fayalite proxy
+
+## Read first
+`RECONSTRUCTION_STATUS.md`, especially §1 (final composition — Tephroite
+is 0.52 wt%), §4 and §6 (this session's full derivation and cross-checks
+— read in full, not just the numbers, since the T-dependence caveat and
+the anoxic-only scope caveat both matter for how this is used), and §7
+(phase roles table, Tephroite row to be updated).
+
+## Scope note
+Mass-balance reconstruction only. No PHREEQC execution requested or
+expected here — this is a database/RATES-block authoring task.
+
+## Ground rules (unchanged)
+- Do not invent an Ea for Tephroite's acid branch. §4/§6 explicitly
+  found this unresolved and rejected two shortcuts (borrowing Fayalite's
+  Ea; trusting this session's own rough T-dependent-slope refit over
+  Casey's own more careful one). If a temperature-independent
+  approximation is used for now, it must be flagged as a stated
+  simplification in the RATES block's comments, with Casey's own
+  quantitative caveat (10 K rise -> ~2.2x at pH 2, ~1.1x at pH>5)
+  included as a comment so a future reader knows the size of what's
+  being simplified away.
+- Do not add a neutral (kneut) or base (kbase) branch. The source data's
+  own high-pH measurements are internally inconsistent by up to 1.8x
+  between methods (§4/§6) — there is nothing reliable to fit there.
+- This rate law is anoxic-conditions-only (§4/§6). If the RATES block or
+  any surrounding PHREEQC setup could plausibly run under oxidizing
+  conditions, that mismatch must be flagged, not silently ignored.
+
+## Task: add a Tephroite RATES/PHASES entry to the working database
+
+1. Add a `Tephroite` PHASES block if one does not exist, formula
+   `Mn2SiO4`. Molar mass and Vm: confirm whether `phase_lib` (R side) and
+   the PHREEQC database already have consistent values — Tephroite's Vm
+   (47.52 cm3/mol, Webmineral, per STATUS.md §4) predates this session
+   and is unaffected by this kinetics work; do not touch it.
+
+2. Add a `RATES` block:
+Tephroite
+-start
+1 REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184,
+2 REM Table S1, citing Casey et al. (1993) GCA 57, 785-793.
+3 REM log kH+ = -5.4 mol m-2 s-1 (measured, 25C, pH-2 reference),
+4 REM n = 0.47. Cross-checked 2026-09-15 by direct regression of
+5 REM Casey's own raw rate-vs-pH data (25C, synthetic tephroite):
+6 REM independently derived value agrees to 0.14 log units.
+7 REM
+8 REM Ea: UNRESOLVED, see STATUS.md S4/S6. Casey's own data show
+9 REM the acid-branch reaction order n itself increases with T
+10 REM (0.47 at 25C to 0.64 at 45C) -- inconsistent with the
+11 REM fixed-n Arrhenius form used here. [PLACEHOLDER Ea below,
+12 REM see note] is a stated simplification, NOT a sourced value.
+13 REM Casey's own quantification of what this simplifies away:
+14 REM a 10K rise multiplies the rate by ~2.2x at pH 2, ~1.5x at
+15 REM pH 3-4, ~1.1x at pH>5.
+16 REM
+17 REM ANOXIC CONDITIONS ONLY. Casey's experiments were run
+18 REM rigorously O2-free (N2-degassed, Fe-filing/hot-Cu scrubbed,
+19 REM <6e-6 mol/L O2); Mn2+ -> Mn3+/4+ oxidation "severely
+20 REM retards" dissolution per the source. Do not reuse this rate
+21 REM law under any oxidizing scenario without revisiting.
+22 REM
+23 REM No neutral/base branch: source data at pH>7 are internally
+24 REM inconsistent between methods by up to 1.8x (STATUS.md S4/S6)
+25 REM and not fittable.
+30 kacid = 10^(-5.4) * exp(-[Ea_PLACEHOLDER]e3/8.314*(1/TK-1/298.15)) * ACT("H+")^0.47
+40 k = kacid
+50 rate = k * (1 - SR("Tephroite"))
+60 moles = rate * TIME
+70 SAVE moles
+-end
+   Leave `[Ea_PLACEHOLDER]` literally unfilled (or a clearly-flagged
+   dummy like `0` with a REM line stating it's a null placeholder) rather
+   than inserting a guessed number — per the ground rules above, this is
+   a decision point for the user, not something to resolve by picking a
+   value. If you must run something end-to-end for testing purposes, use
+   Fayalite's Ea (94.4 kJ/mol) ONLY as an explicitly-labeled placeholder
+   for a test run, and say so clearly in your output — never leave it
+   in the committed file unlabeled.
+
+3. Cross-check: evaluate the new `kacid` expression by hand at pH 2,
+   25C (TK=298.15) and confirm it returns 10^-5.4. This is a trivial
+   sanity check (the exp term should equal 1 at T=298.15) but confirms
+   no sign or unit error was introduced transcribing the formula.
+
+## Deliverable
+1. The new RATES/PHASES block (or diff, if a stub already existed).
+2. The hand-check from step 3, shown.
+3. Updated `RECONSTRUCTION_STATUS.md` §7: Tephroite's kin_proxy column
+   updated as specified in the drafted status text above (I've written
+   this section already — paste/adapt it rather than re-deriving).
+4. Explicit confirmation in your summary that Ea was NOT filled in with
+   a guessed value, or if a labeled placeholder was used for testing,
+   exactly where and how it's flagged.
