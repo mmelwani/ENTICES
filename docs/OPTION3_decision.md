@@ -208,7 +208,7 @@ against the manual text in the project, not from memory.
 
 Both questions were run in PHREEQC 3.8.6 against `Core11_idealgas_mod_v4.dat`.
 Full numbers in `PHREEQC_TEST_RESULTS_2026-09-20.md`; inputs
-`test_A4_formulas.pqi`, `test_B2_Hdg_carbon.pqi`.
+`tests/test_A4_formulas.pqi`, `tests/test_B2_Hdg_carbon.pqi`.
 
 **(a) Does `Sg 1` demand its own H? — ANSWERED, and it corrected this document.**
 `Sg 1 H 1` is right; the `Sg 1 H -1` proposed above was wrong by 2 mol H per

@@ -1,8 +1,8 @@
 ## Compares organics-on vs organics-off final state for the matched ENTICES
 ## case (enceladus_k1.00e-12_d600_t7.50e+04_circ1). Run from this directory,
-## or `Rscript phreeqc_inputs/redox_budget/compare.R` from the repo root.
+## or `Rscript examples/redox_budget/compare.R` from the repo root.
 this_dir <- tryCatch(dirname(sys.frame(1)$ofile), error = function(e) ".")
-if (!file.exists(file.path(this_dir, "org_on.csv"))) this_dir <- "phreeqc_inputs/redox_budget"
+if (!file.exists(file.path(this_dir, "org_on.csv"))) this_dir <- "examples/redox_budget"
 setwd(this_dir)
 
 rd <- function(f) {

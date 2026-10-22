@@ -95,7 +95,7 @@ that is out of scope here, but the two should not be conflated into one
 
 ## Reproduce
 
-Scripts in `phreeqc_inputs/redox_budget/`: `org_on.pqi` (unmodified copy of
+Scripts in `examples/redox_budget/`: `org_on.pqi` (unmodified copy of
 the repo's organics-on input), `org_off.pqi` (REACTION block removed,
 diffed to confirm nothing else changed), `compare.R` (final-row comparison
 across redox indicators, kinetic minerals, and all secondary phases with a

@@ -8,8 +8,8 @@ mineral list am I actually testing against, and are there other differences
 between Mohit's database and Lucas's beyond the known fluorapatite/clathrate
 split?
 
-Files: `test_B3_real_assemblage.pqi`, output in
-`phreeqc_test_output/test_B3_real_assemblage.out`.
+Files: `tests/test_B3_real_assemblage.pqi`, output in
+`tests/output/test_B3_real_assemblage.out`.
 
 ---
 
@@ -53,7 +53,7 @@ here so it doesn't get rediscovered later as a surprise.
 ## 1. What "the actual secondary mineral list" is
 
 There are two, not one — extracted directly from Lucas's real output
-(`phreeqc_inputs/from_lucas_20260924/enceladus_..._orb12.pqi.out`), not
+(`examples/from_lucas_20260924/enceladus_..._orb12.pqi.out`), not
 reconstructed from the template source:
 
 - **Porewater** (`EQUILIBRIUM_PHASES 1`, 150 °C): 81 phases, includes `Fe`,

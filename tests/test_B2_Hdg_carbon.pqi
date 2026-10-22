@@ -1,4 +1,4 @@
-DATABASE C:/Users/melwa/GitHub/ENTICES/Core11_idealgas_mod_v4.dat
+DATABASE databases/Core11_idealgas_mod_v4.dat
 TITLE Test B2 -- corrected Hdg carbon-decoupling test
 #
 # WHY THIS SUPERSEDES test_B_Hdg_carbon.pqi

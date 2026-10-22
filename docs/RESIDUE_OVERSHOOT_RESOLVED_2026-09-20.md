@@ -3,7 +3,7 @@
 Date: 2026-09-20
 Closes: `PROGRESS.md` Part 5 item 6 ("chase the residual +7.8% residue
 overshoot, or accept it"); revises the diagnosis in Part 4's validation state.
-Method: R only, no new data. Reproduce with `residue_ratio.R` (below).
+Method: R only, no new data. Reproduce with `scripts/residue_ratio.R` (below).
 
 ---
 
@@ -62,7 +62,7 @@ Two things this does **not** license:
 ## Where the starting composition comes from, and the choice it implies
 
 `iom_bulk_formula()` returns `C 60.611, H 45.639, O 9.939, N 2.142, S 1.154`.
-Traced to `Primordial_CI_chondrite_mineralogy.Rmd` (~line 1316), which states:
+Traced to the v0 `Primordial_CI_chondrite_mineralogy.Rmd` (~line 1316; removed from the tree in the 2026-10 cleanup, still in git history), which states:
 
     # Target formula: C60.611H45.639O9.941N3.284S1.154
 
@@ -108,7 +108,7 @@ it is the user's call whether it matters. Flagged, not touched.
 
 ## Reproduce
 
-`residue_ratio.R` — sources `iom_module.R`, integrates the channels
+`scripts/residue_ratio.R` — sources `iom_module.R`, integrates the channels
 analytically (closed form, not stepped: for an isothermal hold `k` is constant
 so `m(t) = m0*exp(-k*t)` is exact), rebuilds the residue as inert + unreacted
 channel mass, and differences against Miller Table 5 row `350-3-M`
