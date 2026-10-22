@@ -39,6 +39,70 @@ library(R6)
 # and vice versa. Run from the repo root so this relative path resolves, same
 # convention as the ENTICES_v3.R / ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
 source("iom_module.R")
+# k_primary_mineral() -- reused by generate_phreeqc_input_bulk_kinetic's
+# rec_eqb_minerals half-life check, so the auto-equilibrium decision uses the
+# exact same rate laws as the RATES blocks below (verified consistent, see
+# CHANGELOG 2026-10 Tephroite/Albite/K-Feldspar half-life entries).
+source("mineral_dissolution_constants.r")
+
+# Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
+# Single source for all four generators that build primary-mineral inventories;
+# they previously each carried their own copy of these numbers.
+# Source: RECONSTRUCTION_STATUS.md §1 (final 2026-09-15; Lodders et al. 2025
+# Table 4, Scenario R, schreibersite included), wt% x 10 / molar mass.
+# Deliberately NOT renormalised: magnesiochromite (0.713 wt%, 0.037079 mol/kg)
+# is treated as inert, so it keeps its share of the mass but is not added to
+# PHREEQC. (The previous coefficients dropped it and renormalised, inflating
+# every other phase by +0.73%.)
+# Lawrencite (FeCl2) is intentional (Cl in the rock); its Fe is taken out of
+# the metal, so fe = 2.361715 - 0.011250. Total Fe is then 4.8859 mmol/g, which
+# matches the reconstruction.
+# Schreibersite (Fe3P, 0.047101 mol/kg) is listed here but is wired in
+# separately; see the generators.
+ROCK_MOL_PER_KG <- c(
+  enstatite     = 2.275648,
+  forsterite    = 1.606974,
+  troilite      = 2.382864,
+  albite        = 0.318202,
+  diopside      = 0.274529,
+  anorthite     = 0.062148,
+  kfeldspar     = 0.020515,
+  tephroite     = 0.025995,
+  fe            = 2.350465,
+  ni            = 0.280953,
+  lawrencite    = 0.011250,
+  schreibersite = 0.047101
+)
+
+# Schreibersite (Fe3P) -- kinetic primary, defined once here and spliced into the
+# kinetic generators and both restart paths.
+# Reaction (RECONSTRUCTION_STATUS.md §4, finalised 2026-09-14):
+#     Fe3P + 2.75 O2 + 4 H+ = 3 Fe+2 + HPO4-2 + 1.5 H2O
+# Neither database has an Fe3P phase, so the KINETICS entry adds the elements via
+# -formula Fe 3 P 1. PHREEQC then speciates them as Fe+2 and HPO4-2, and the
+# 11 e- per Fe3P go to COUPLED H2 (5.5 H2 per Fe3P). This is the same mass
+# transfer as the reaction above, and it keeps schreibersite's H2 on the same
+# books as metal-corrosion H2, as §4 [D] requires (coupled O2/H+, NOT Oxg/Hdg).
+# Rate: PLACEHOLDER. Bulk first-order, 1.184 %/day (range 0.59-1.78 %/day) =
+# 1.370e-7 s^-1, from §4/§8 item 1b. That value comes from one 1-day H2
+# measurement at pH 7, 20 C in Ar-purged DI water. It has no T, pH, W:R or
+# surface-area dependence, and there is no SR() term because there is no phase
+# to compute one from. Treat any schreibersite-dependent output as provisional.
+SCHREIBERSITE_MW <- 198.509
+SCHREIBERSITE_RATE_BODY <- paste(
+  "\t-start",
+  "\t1   REM PLACEHOLDER bulk first-order rate, 1.184 %/day (0.59-1.78), RECONSTRUCTION_STATUS 8(1b)",
+  "\t2   REM one 1-day lab measurement, pH 7, 20 C, Ar-purged DI water, no T/pH/SSA dependence",
+  "\t10  k = 1.370e-7",
+  "\t20  rate = k * M",
+  "\t30  IF (M <= 0) THEN rate = 0",
+  "\t40  moles = rate * TIME",
+  "\t50  SAVE moles",
+  "\t-end", sep = "\n")
+SCHREIBERSITE_RATE <- paste0("Schreibersite\n", SCHREIBERSITE_RATE_BODY)
+schreibersite_kinetics_entry <- function(m0) {
+  sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.6e\n      -step_divide 1", m0)
+}
 
 #===============================================================================
 # Universal Constants and Fluid Properties
@@ -1109,24 +1173,22 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
                                      
                                      # Calculate total mineral amounts (moles) based on permeable layer fraction.
-                                     # Coefficients (mol per unit normalised total_rock) from the enstatite-
-                                     # chondrite-like composition table (2026-09-17): 8 kinetic primaries +
-                                     # 3 equilibrium primaries (Fe, Ni, Lawrencite). Schreibersite deferred
-                                     # (handled separately, as instantaneous dissolution products, not yet
-                                     # implemented). Magnetite is no longer a primary mineral here — it
-                                     # remains only as an ordinary secondary/precipitate phase.
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     #phosphorus content also determined in Primordial_CI_... but not yet used
+                                     # Coefficients: ROCK_MOL_PER_KG (top of file). 9 kinetic primaries
+                                     # (incl. Schreibersite, placeholder rate) + 3 equilibrium primaries
+                                     # (Fe, Ni, Lawrencite). Magnetite is no longer a primary mineral here —
+                                     # it remains only as an ordinary secondary/precipitate phase.
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     schreibersite_moles <- ROCK_MOL_PER_KG[["schreibersite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                          # ---- IOM as kinetic phases (Miller et al. 2025 / Burnham-Sweeney 1989) --
                                       # Formula unit from gram composition per kg IOM (728 C, 46 H, 159 O,
                                       # 30 N, 37 S; sums to 1000 g/mol, so mol formula units = kg IOM).
@@ -1259,103 +1321,136 @@ Forsterite
 	70  SAVE moles
 	-end
 	
-	Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
-        -start
-        1   REM Acid mechanism only (PK04)
-        2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
-        3   REM Rate depends on H+ and Fe3+ activities
-        25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-        26  SSA = 5
-        27  mw = 87.913
-        30  k = kacid * SSA * mw * M
-        40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
-        50  moles = rate * TIME
-        55  IF moles < 0 THEN moles = 0
-        60  SAVE moles
-        -end
+Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
+  -start
+  1   REM Acid mechanism only (PK04)
+  2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
+  3   REM Rate depends on H+ and Fe3+ activities
+  25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
+  26  SSA = 5
+  27  mw = 87.913
+  30  k = kacid * SSA * mw * M
+  40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
+  50  moles = rate * TIME
+  55  IF moles < 0 THEN moles = 0
+  60  SAVE moles
+  -end
 
-	Diopside
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
-	20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
-	22  mw = 216.55
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+Diopside
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
+  20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 0.1
+  22  mw = 216.55
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
-	K-Feldspar
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
-	20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
-	30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-	31  SSA = 5
-	32  mw = 278.33
-	40  k = (kacid + kneut + kbase) * SSA * mw * M
-	50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+K-Feldspar
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
+  20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
+  30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
+  31  SSA = 5
+  32  mw = 278.33
+  40  k = (kacid + kneut + kbase) * SSA * mw * M
+  50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
-	Tephroite # TODO: rate constants not yet supplied (Mn-olivine) — k held at 0 (no dissolution) until provided
-	-start
-	1   REM TODO awaiting kacid/kneut from user
-	10  kacid = 0
-	20  kneut = 0
-	21  SSA = 0.1
-	22  mw = 201.96
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+Tephroite
+  -start
+  1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,
+  2   REM citing Casey et al. (1993) GCA 57, 785-793. log kH+ = -5.4 mol
+  3   REM m-2 s-1 (measured, 25C, pH-2 reference), n = 0.47. Cross-checked
+  4   REM 2026-09-15 by direct regression of Casey\'s own raw rate-vs-pH data
+  5   REM (25C, synthetic tephroite): independently derived value agrees to
+  6   REM 0.14 log units. See RECONSTRUCTION_STATUS.md S4/S6 for full derivation.
+  7   REM Pincus\'s tabulated -5.4 is the RATE EVALUATED AT pH 2 (their own SI
+  8   REM convention), not the pre-exponential this PHASES-block form needs.
+  9   REM Pre-exponential = log_kH+ + n*2 (same relationship that reproduces
+  10  REM Core11\'s own Fayalite entry: -4.80 + 1.0*2 = -6.8, Pincus\'s fayalite
+  11  REM value -- checked here, not assumed). For tephroite: -5.4 + 0.47*2 =
+  12  REM -4.46. Hand-checked: 10^(-4.46)*ACT(H+)^0.47 at pH2 = 10^(-5.4), exact.
+  13  REM
+  14  REM Ea: Casey find Ea that decreases with increasing pH, "Ea < 4" at pH 6.2. 
+  15  REM We used the pH, Ea pairs from Casey\'s Fig 4, assuming Ea = 0 at pH 6.2. 
+  16  REM A logarithmic fit to these 5 data points is used to calculate Ea, and we 
+  17  REM require Ea >= 0 (so generally Ea=0 for pH>~6).  
+  22  REM
+  23  REM ANOXIC CONDITIONS ONLY. Casey\'s experiments were run rigorously
+  24  REM O2-free (N2-degassed, Fe-filing/hot-Cu scrubbed, <6e-6 mol/L O2);
+  25  REM Mn2+ -> Mn3+/4+ oxidation "severely retards" dissolution per the
+  26  REM source. Do not reuse this rate law under any oxidizing scenario
+  27  REM without revisiting.
+  28  REM
+  29  REM No neutral/base branch: source data at pH>7 are internally
+  30  REM inconsistent between methods by up to 1.8x (STATUS.md S4/S6) and
+  31  REM not fittable. Neutral rate at pH > 7 assumed to be same as pH=7. 
+  32  REM This is generally consistent with other minerals that lack base
+  33  REM dissolution mechanisms. 
 
-	Enstatite
-	-start
-	1   REM Ref PK04
-	10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
-	20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
-	22  mw = 100.3725
-	40  k = (kacid + kneut) * SSA * mw * M
-	50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
-	60  moles = rate * TIME
-	70  SAVE moles
-	-end
+  35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17
+  36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea
+  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
+  45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47
+  46  SSA = 0.1
+  47  mw = 201.96
+  50  k = (kacid + kneut) * SSA * mw * M
+  60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
+  70  moles = rate * TIME
+  80  SAVE moles
+  -end
 
-    Anorthite # Ca-endmember of plagioclase
-        -start
-        1   REM Ref PK04
-        10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
-        20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-        21  SSA = 5
-        22  mw = 278.164
-        40  k = (kacid + kneut) * SSA * mw * M
-        50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
-        60  moles = rate * TIME
-        70  SAVE moles
-        -end
+{SCHREIBERSITE_RATE}
+
+Enstatite
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
+  20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 0.1
+  22  mw = 100.3725
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
+
+Anorthite # Ca-endmember of plagioclase
+  -start
+  1   REM Ref PK04
+  10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
+  20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
+  21  SSA = 5
+  22  mw = 278.164
+  40  k = (kacid + kneut) * SSA * mw * M
+  50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
         
-    Albite # Na-endmember of plagioclase
-        -start
-        1   REM 3 mechanisms: acid, neutral, base (PK04)
-        2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
-        3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
-        4   REM near the experimental conditions under which they were obtained, 300 Â°C and pH = 9.
-        10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
-        20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
-        30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-        31  SSA = 5
-        32  mw = 262.1798
-        40  k = (kacid + kneut + kbase) * SSA * mw * M
-        50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
-        60  moles = rate * TIME
-        70  SAVE moles
-        -end
+Albite # Na-endmember of plagioclase
+  -start
+  1   REM 3 mechanisms: acid, neutral, base (PK04)
+  2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
+  3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
+  4   REM near the experimental conditions under which they were obtained, 300 Â°C and pH = 9.
+  10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
+  20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
+  30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
+  31  SSA = 5
+  32  mw = 262.1798
+  40  k = (kacid + kneut + kbase) * SSA * mw * M
+  50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
+  60  moles = rate * TIME
+  70  SAVE moles
+  -end
 
 {iom_rates_block}
 
@@ -1385,6 +1480,7 @@ KINETICS 1
    Tephroite
       -m0 {tephroite_moles}
       -step_divide 1
+{schreibersite_kinetics_entry(schreibersite_moles)}
    {iom_kinetics_block}
    -steps {time_step_seconds} in {substeps} steps
  
@@ -1468,6 +1564,7 @@ EQUILIBRIUM_PHASES 1
 #   KerogenC415 0 0
 #   KerogenC515 0 0
    Lizardite 0 0
+   Magnetite 0 0
    Melanterite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
@@ -1690,7 +1787,7 @@ SELECTED_OUTPUT
                          NH4+ NH3 NH4CO3- N2 NO2- 
                          NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3- 
                          SO2 SO4-2 SiO2 HSiO3-
-    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite {iom_so_line}
+    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Schreibersite {iom_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
     -equilibrium_phases  Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
@@ -1723,10 +1820,10 @@ SELECTED_OUTPUT
                                      # Ni, Lawrencite; fixed at their t=0 moles, since -equilibrium_phases
                                      # is deliberately not queried here — this is an initial-mass constant).
                                      total_initial_expr <- sprintf(
-                                       "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
+                                       "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75 + %.6f*198.509",
                                        enstatite_moles, forsterite_moles, troilite_moles, albite_moles,
                                        diopside_moles, anorthite_moles, kfeldspar_moles, tephroite_moles,
-                                       fe_moles, ni_moles, lawrencite_moles
+                                       fe_moles, ni_moles, lawrencite_moles, schreibersite_moles
                                      )
 
                                      # ---- PATCH D1: punch IOM channel state so the restart can recover it ----
@@ -1767,7 +1864,7 @@ SELECTED_OUTPUT
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
-                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g",
+                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          "   20 PUNCH KIN(\"Enstatite\") * 100.3725\n",
@@ -1778,6 +1875,7 @@ SELECTED_OUTPUT
                                          "   70 PUNCH KIN(\"Anorthite\") * 278.164\n",
                                          "   80 PUNCH KIN(\"K-Feldspar\") * 278.33\n",
                                          "   85 PUNCH KIN(\"Tephroite\") * 201.96\n",
+                                         "   90 PUNCH KIN(\"Schreibersite\") * 198.509\n",
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
                                          iom_punch_lines,
@@ -1904,21 +2002,27 @@ SELECTED_OUTPUT
                                        ocean_pressure_atm <- 70
                                      }
 
-                                     # Mineral moles (same enstatite-chondrite-like composition table as the
-                                     # other generators; all 11 are equilibrium here, no kinetics at all).
-                                     # Schreibersite deferred; Magnetite is no longer primary.
+                                     # Mineral moles (ROCK_MOL_PER_KG, shared with the other generators; all 11
+                                     # are equilibrium here, no kinetics at all). Magnetite is no longer primary.
+                                     # SCHREIBERSITE IS NOT INCLUDED in this equilibrium-only generator. The
+                                     # kinetic generators add it via KINETICS -formula, but an equilibrium
+                                     # phase needs a log K, and neither database has an Fe3P phase. So this
+                                     # generator's rock lacks 0.047 mmol P/g and ~0.26 mmol H2/g of reducing
+                                     # capacity relative to the kinetic ones. Options (PI decision): add the
+                                     # Fe3P elements as an instantaneous REACTION (full dissolution), or add a
+                                     # Schreibersite phase with a sourced log K.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
 
                                      total_initial_expr <- sprintf(
                                        "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
@@ -2061,6 +2165,7 @@ EQUILIBRIUM_PHASES 1
 #   KerogenC415 0 0
 #   KerogenC515 0 0
    Lizardite 0 0
+   Magnetite 0 0
    Melanterite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
@@ -2366,45 +2471,84 @@ SELECTED_OUTPUT
                                    # equilibrated against the full permeable rock layer in one PHREEQC step.
                                    # No permeability or fluid-flow parameters are used.
                                    generate_phreeqc_input_bulk_equil = function(output_dir = "phreeqc_inputs",
-                                                                                        suffix = "") {
+                                                                                 mode             = c("hydrosphere", "porewater"),
+                                                                                 water_rock_ratio = NULL,
+                                                                                 water_temp       = "ocean",
+                                                                                 suffix = "") {
+                                     mode <- match.arg(mode)
+                                     if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
+                                       stop("water_rock_ratio must be a positive number when mode = 'porewater'")
+
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
-                                     filename <- file.path(output_dir, sprintf(
-                                       "enceladus_d%g_hydrosphere_equil%s.pqi",
-                                       self$simulator$params$layer_thickness, suffix
-                                     ))
+                                     temp_tag <- if (is.numeric(water_temp)) sprintf("T%g", water_temp) else sprintf("T%s", water_temp)
 
-                                     # Combined hydrosphere mass, normalised to layer mass
-                                     porewater_mass_norm <- self$phreeqc_params$porewater_mass / self$phreeqc_params$layer_mass
-                                     ocean_mass_norm     <- self$phreeqc_params$water_mass   # already = ocean_mass / layer_mass
-                                     combined_mass_norm  <- porewater_mass_norm + ocean_mass_norm
+                                     filename <- if (mode == "porewater") {
+                                       file.path(output_dir, sprintf(
+                                         "enceladus_wr%.4g_%s_porewater_equil%s.pqi",
+                                         water_rock_ratio, temp_tag, suffix
+                                       ))
+                                     } else {
+                                       file.path(output_dir, sprintf(
+                                         "enceladus_d%g_%s_hydrosphere_equil%s.pqi",
+                                         self$simulator$params$layer_thickness, temp_tag, suffix
+                                       ))
+                                     }
 
-                                     # Temperature and pressure (ocean floor; no pore-gradient averaging needed)
+                                     # Combined hydrosphere mass, normalised to layer mass (hydrosphere mode only)
+                                     if (mode == "hydrosphere") {
+                                       porewater_mass_norm <- self$phreeqc_params$porewater_mass / self$phreeqc_params$layer_mass
+                                       ocean_mass_norm     <- self$phreeqc_params$water_mass   # already = ocean_mass / layer_mass
+                                       combined_mass_norm  <- porewater_mass_norm + ocean_mass_norm
+                                     }
+                                     .rock_kg    <- if (mode == "hydrosphere") self$phreeqc_params$total_rock else 1.0
+                                     .water_mass <- if (mode == "porewater") water_rock_ratio else combined_mass_norm
+
+                                     # Temperature and pressure (ocean floor, or profile-averaged over the
+                                     # layer if water_temp = "profile")
                                      ocean_temp_C <- 274.6 - 273.15
                                      if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
+                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
+                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
                                        ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
                                      } else {
                                        if (!is.null(self$profile_file))
                                          warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
+                                       pore_temp_C        <- 25
+                                       pore_pressure_atm  <- 70
                                        ocean_pressure_atm <- 70
                                      }
 
-                                     # Primary mineral moles (same enstatite-chondrite-like composition table
-                                     # as the other 4 generators; all 11 are equilibrium here since this
-                                     # function has no kinetics at all). Schreibersite deferred; Magnetite is
-                                     # no longer primary — ordinary secondary phase only.
+                                     # Resolve water_temp to a concrete value — this is the reaction
+                                     # temperature for the single combined solution used here.
+                                     water_temp_C <- if (is.numeric(water_temp)) {
+                                       water_temp
+                                     } else if (water_temp == "profile") {
+                                       pore_temp_C
+                                     } else if (water_temp == "ocean") {
+                                       ocean_temp_C
+                                     } else {
+                                       stop('water_temp must be a number (°C), "profile", or "ocean"')
+                                     }
+
+                                     # Primary mineral moles (ROCK_MOL_PER_KG, shared with the other generators;
+                                     # all 11 are equilibrium here since this function has no kinetics at all).
+                                     # Magnetite is no longer primary — ordinary secondary phase only.
+                                     # SCHREIBERSITE IS NOT INCLUDED here: no Fe3P phase/log K in either
+                                     # database, so it can't be an equilibrium primary. See the matching
+                                     # note in generate_phreeqc_input_tidal_equil.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * self$phreeqc_params$total_rock * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * self$phreeqc_params$total_rock * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * .rock_kg * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * .rock_kg * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * .rock_kg * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * .rock_kg * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * .rock_kg * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * .rock_kg * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * .rock_kg * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * .rock_kg * mineral_scale_factor
 
                                      total_initial_expr <- sprintf(
                                        "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
@@ -2413,30 +2557,50 @@ SELECTED_OUTPUT
                                        fe_moles, ni_moles, lawrencite_moles
                                      )
 
+                                     # ---- mode-specific labels and header ----
+                                     .pqi_title  <- if (mode == "porewater") "Enceladus porewater equilibrium" else
+                                                      "Enceladus bulk hydrosphere equilibrium"
+                                     .soln_label <- if (mode == "porewater") "Enceladus porewater" else
+                                                      "Enceladus hydrosphere (ocean + porewater combined)"
+                                     .header_lines <- if (mode == "porewater") {
+                                       paste0(
+                                         "# Mode: single-step equilibrium — porewater only vs permeable rock layer (no ocean)\n",
+                                         "# water_rock_ratio: ", water_rock_ratio, "\n",
+                                         "# Rock normalised to 1.0 kg; water = ", water_rock_ratio, " kg (porewater only)\n",
+                                         "# Temperature: ", round(water_temp_C, 2), " C"
+                                       )
+                                     } else {
+                                       paste0(
+                                         "# thickness=", self$simulator$params$layer_thickness, " m\n",
+                                         "# Mode: single-step equilibrium — full hydrosphere (ocean + porewater) vs permeable rock layer\n",
+                                         "# Layer mass: ", sprintf("%.2e", self$phreeqc_params$layer_mass),
+                                         " kg  (total_rock normalised to 1.0)\n",
+                                         "# Porewater mass: ", sprintf("%.2e", self$phreeqc_params$porewater_mass), " kg\n",
+                                         "# Ocean mass: ", sprintf("%.2e", self$phreeqc_params$ocean_mass), " kg\n",
+                                         "# Combined hydrosphere (normalised): ",
+                                         sprintf("%.6f", combined_mass_norm), "\n",
+                                         "# Temperature: ", round(water_temp_C, 2), " C"
+                                       )
+                                     }
+
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
                                      content <- glue::glue('
-TITLE Enceladus bulk hydrosphere equilibrium
+TITLE {.pqi_title}
 
 KNOBS
    -logfile true
 
-# thickness={self$simulator$params$layer_thickness} m
-# Mode: single-step equilibrium — full hydrosphere (ocean + porewater) vs permeable rock layer
-# Layer mass: {sprintf("%.2e", self$phreeqc_params$layer_mass)} kg  (total_rock normalised to 1.0)
-# Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
-# Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
-# Combined hydrosphere (normalised): {sprintf("%.6f", combined_mass_norm)}
-# Temperature: {round(ocean_temp_C, 2)} C (ocean floor)
+{.header_lines}
 
-SOLUTION 1 Enceladus hydrosphere (ocean + porewater combined)
-    temp      {round(ocean_temp_C, 2)}
+SOLUTION 1 {.soln_label}
+    temp      {round(water_temp_C, 2)}
     pH        7
     pe        4
     redox     pe
     units     mol/kgw
     density   1
-    water     {combined_mass_norm}
+    water     {.water_mass}
     pressure  {round(ocean_pressure_atm, 1)}
 
 EQUILIBRIUM_PHASES 1
@@ -2601,7 +2765,9 @@ END
                                      water_rock_ratio    = NULL,
                                      porewater_temp      = "ocean",
                                      suffix              = "",
-                                     CH4_redox_override  = NULL
+                                     CH4_redox_override  = NULL,
+                                     rec_eqb_minerals    = TRUE,
+                                     rec_eqb_margin      = 2
                                    ) {
                                      mode <- match.arg(mode)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
@@ -2680,35 +2846,277 @@ END
                                      .rock_kg    <- if (mode == "hydrosphere") self$phreeqc_params$total_rock else 1.0
                                      .water_mass <- if (mode == "porewater") water_rock_ratio else combined_mass_norm
 
-                                     # Primary mineral moles. Coefficients (mol per unit .rock_kg) from the
-                                     # enstatite-chondrite-like composition table (2026-09-17): 8 kinetic
-                                     # primaries + 3 equilibrium primaries (Fe, Ni, Lawrencite). Schreibersite
-                                     # deferred. Magnetite is no longer primary — ordinary secondary phase only.
+                                     # Primary mineral moles. Coefficients (mol per unit .rock_kg): ROCK_MOL_PER_KG
+                                     # (top of file). 9 kinetic primaries (incl. Schreibersite, placeholder
+                                     # rate) + 3 equilibrium primaries (Fe, Ni, Lawrencite). Magnetite is no
+                                     # longer primary — ordinary secondary phase only.
                                      mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
-                                     enstatite_moles  <- 2.291858 * .rock_kg * mineral_scale_factor
-                                     forsterite_moles <- 1.618863 * .rock_kg * mineral_scale_factor
-                                     troilite_moles   <- 2.400644 * .rock_kg * mineral_scale_factor
-                                     albite_moles     <- 0.319418 * .rock_kg * mineral_scale_factor
-                                     diopside_moles   <- 0.276319 * .rock_kg * mineral_scale_factor
-                                     anorthite_moles  <- 0.062643 * .rock_kg * mineral_scale_factor
-                                     kfeldspar_moles  <- 0.020630 * .rock_kg * mineral_scale_factor
-                                     tephroite_moles  <- 0.025938 * .rock_kg * mineral_scale_factor
-                                     fe_moles         <- 2.380130 * .rock_kg * mineral_scale_factor
-                                     ni_moles         <- 0.283206 * .rock_kg * mineral_scale_factor
-                                     lawrencite_moles <- 0.011250 * .rock_kg * mineral_scale_factor
+                                     enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
+                                     forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
+                                     troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
+                                     albite_moles     <- ROCK_MOL_PER_KG[["albite"]] * .rock_kg * mineral_scale_factor
+                                     diopside_moles   <- ROCK_MOL_PER_KG[["diopside"]] * .rock_kg * mineral_scale_factor
+                                     anorthite_moles  <- ROCK_MOL_PER_KG[["anorthite"]] * .rock_kg * mineral_scale_factor
+                                     kfeldspar_moles  <- ROCK_MOL_PER_KG[["kfeldspar"]] * .rock_kg * mineral_scale_factor
+                                     tephroite_moles  <- ROCK_MOL_PER_KG[["tephroite"]] * .rock_kg * mineral_scale_factor
+                                     fe_moles         <- ROCK_MOL_PER_KG[["fe"]] * .rock_kg * mineral_scale_factor
+                                     ni_moles         <- ROCK_MOL_PER_KG[["ni"]] * .rock_kg * mineral_scale_factor
+                                     lawrencite_moles <- ROCK_MOL_PER_KG[["lawrencite"]] * .rock_kg * mineral_scale_factor
+                                     schreibersite_moles <- ROCK_MOL_PER_KG[["schreibersite"]] * .rock_kg * mineral_scale_factor
 
-                                     orbital_period     <- self$simulator$config$orbital_period
+                                     # ---- rec_eqb_minerals: auto-promote fast-dissolving primaries to equilibrium ----
+                                     # At a conservatively alkaline reference pH of 11, some primaries' kinetic
+                                     # half-life, times a safety margin (rec_eqb_margin), is shorter than one
+                                     # orbital period -- treating them as kinetic is both numerically fragile
+                                     # (CVODE can need to resolve a near-instant reaction within one macro step)
+                                     # and physically no different from equilibrium. rec_eqb_margin=2 (default)
+                                     # means only promote if even DOUBLE the half-life still fits inside one
+                                     # orbit -- a margin against the pH 11 reference being an underestimate of
+                                     # the real in-run pH excursion. Uses k_primary_mineral()
+                                     # (mineral_dissolution_constants.r), the same rate laws as the RATES
+                                     # blocks below. Schreibersite is excluded: it cannot be an equilibrium
+                                     # primary (no Fe3P phase/log K in the database).
+                                     all_primary <- c("Enstatite", "Forsterite", "Troilite", "Albite",
+                                                      "Diopside", "Anorthite", "K-Feldspar", "Tephroite")
+                                     orbital_period <- self$simulator$config$orbital_period
+                                     if (rec_eqb_minerals) {
+                                       half_life_s <- sapply(all_primary, function(m) {
+                                         k <- k_primary_mineral(m, H = 1e-11, TK = porewater_temp_C + 273.15)
+                                         if (k <= 0) Inf else log(2) / k
+                                       })
+                                       equil_primary <- names(half_life_s)[rec_eqb_margin * half_life_s < orbital_period]
+                                       print(sprintf("rec_eqb_minerals: half-life @ pH 11, T=%.1fC, x%g margin vs 1 orbit (%.0f s)",
+                                                     porewater_temp_C, rec_eqb_margin, orbital_period))
+                                       print(data.frame(mineral = all_primary, half_life_yr = half_life_s / (365.25*24*3600),
+                                                        promoted_to_equilibrium = all_primary %in% equil_primary))
+                                     } else {
+                                       equil_primary <- character(0)
+                                     }
+                                     kinetic_minerals <- setdiff(all_primary, equil_primary)
+                                     rec_eqb_note <- if (!rec_eqb_minerals) {
+                                       "# rec_eqb_minerals=FALSE: all primaries kinetic regardless of half-life"
+                                     } else if (length(equil_primary) > 0) {
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): promoted to equilibrium (half-life at pH 11, T=%.1fC, x%g < 1 orbital period [%.0f s]): %s",
+                                               rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period, paste(equil_primary, collapse = ", "))
+                                     } else {
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): no primaries promoted (all half-lives at pH 11, T=%.1fC, x%g exceed 1 orbital period [%.0f s])",
+                                               rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period)
+                                     }
+
+                                     molar_masses <- c(Enstatite = 100.3725, Forsterite = 140.6715, Troilite = 87.913,
+                                                       Albite = 262.1798, Diopside = 216.55, Anorthite = 278.164,
+                                                       `K-Feldspar` = 278.33, Tephroite = 201.96)
+                                     primary_moles <- c(Enstatite = enstatite_moles, Forsterite = forsterite_moles,
+                                                        Troilite = troilite_moles, Albite = albite_moles,
+                                                        Diopside = diopside_moles, Anorthite = anorthite_moles,
+                                                        `K-Feldspar` = kfeldspar_moles, Tephroite = tephroite_moles)
+
+                                     # ---- RATES block (only for kinetic_minerals; Schreibersite/IOM separate) ----
+                                     .rate_laws <- list(
+                                       Forsterite = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
+                                         '\t21  SSA = 0.1',
+                                         '\t22  mw = 140.6715',
+                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Troilite = paste(
+                                         '\t-start',
+                                         '\t1   REM Acid mechanism only (PK04, hexagonal pyrrhotite formulation)',
+                                         '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
+                                         '\t26  SSA = 5',
+                                         '\t27  mw = 87.913',
+                                         '\t30  k = kacid * SSA * mw * M',
+                                         '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
+                                         '\t50  moles = rate * TIME',
+                                         '\t55  IF moles < 0 THEN moles = 0',
+                                         '\t60  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Diopside = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
+                                         '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
+                                         '\t21  SSA = 0.1',
+                                         '\t22  mw = 216.55',
+                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       `K-Feldspar` = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
+                                         '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
+                                         '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
+                                         '\t31  SSA = 5',
+                                         '\t32  mw = 278.33',
+                                         '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
+                                         '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Tephroite = paste(
+                                         '\t-start',
+                                         '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
+                                         '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
+                                         '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
+                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
+                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t46  SSA = 0.1',
+                                         '\t47  mw = 201.96',
+                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
+                                         '\t70  moles = rate * TIME',
+                                         '\t80  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Enstatite = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
+                                         '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
+                                         '\t21  SSA = 0.1',
+                                         '\t22  mw = 100.3725',
+                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Anorthite = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
+                                         '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
+                                         '\t21  SSA = 5',
+                                         '\t22  mw = 278.164',
+                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n"),
+                                       Albite = paste(
+                                         '\t-start',
+                                         '\t1   REM Ref PK04',
+                                         '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
+                                         '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
+                                         '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
+                                         '\t31  SSA = 5',
+                                         '\t32  mw = 262.1798',
+                                         '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
+                                         '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
+                                         '\t60  moles = rate * TIME',
+                                         '\t70  SAVE moles',
+                                         '\t-end', sep = "\n")
+                                     )
+
+                                     .primary_rate_defs <- if (length(kinetic_minerals) > 0)
+                                       paste(sapply(kinetic_minerals, function(m) paste0(m, "\n", .rate_laws[[m]])), collapse = "\n\n")
+                                     else ""
+
+                                     # ---- KINETICS entries (only for kinetic_minerals) ----
+                                     .primary_kin_entries <- if (length(kinetic_minerals) > 0)
+                                       paste(sapply(kinetic_minerals, function(m)
+                                         sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, primary_moles[[m]])),
+                                         collapse = "\n")
+                                     else ""
+
+                                     # ---- EQUILIBRIUM_PHASES primary lines: Fe/Ni/Lawrencite (always) + equil_primary (promoted) ----
+                                     equil_prim_lines <- paste(
+                                       c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---",
+                                         sprintf("   Fe                   0  %.6e          dissolve_only", fe_moles),
+                                         sprintf("   Ni                   0  %.6e          dissolve_only", ni_moles),
+                                         sprintf("   Lawrencite           0  %.6e          dissolve_only", lawrencite_moles),
+                                         if (length(equil_primary) > 0)
+                                           sapply(equil_primary, function(m)
+                                             sprintf("   %-20s 0  %.6e  dissolve_only", m, primary_moles[[m]]))
+                                         else character(0)),
+                                       collapse = "\n"
+                                     )
+
+                                     # ---- SELECTED_OUTPUT dynamic lines ----
+                                     kin_so_line <- paste(c(kinetic_minerals, "Schreibersite"), collapse = " ")
+                                     equil_so_line <- paste(c("Fe", "Ni", "Lawrencite", equil_primary), collapse = " ")
+
+                                     # ---- USER_PUNCH: EQUI() for promoted minerals, KIN() otherwise ----
+                                     punch_lines <- paste(
+                                       sapply(seq_along(all_primary), function(i) {
+                                         m  <- all_primary[i]
+                                         fn <- if (m %in% equil_primary) sprintf('EQUI("%s")', m) else sprintf('KIN("%s")', m)
+                                         sprintf("   %d PUNCH %s * %.4f", 10 + i * 10, fn, molar_masses[[m]])
+                                       }),
+                                       collapse = "\n"
+                                     )
+
+                                     # ---- IOM as kinetic phases (see generate_phreeqc_input_tidal_kinetic
+                                     # for full derivation notes; identical wiring, generic over iom_pools) --
+                                     iom_rates_block    <- ""
+                                     iom_kinetics_block <- ""
+                                     if (self$organic_wt_percent > 0) {
+                                       iom_mass_kg_scaled <- (self$organic_wt_percent / 100) * .rock_kg
+                                       iom_total_moles    <- iom_mass_kg_scaled * 1.0   # 1 mol per kg by construction
+                                       if (is.null(self$iom_pools)) {
+                                         self$iom_pools <- iom_default_config()
+                                       }
+
+                                       iom_rates_block <- paste0(apply(self$iom_pools, 1, function(p) {
+                                         sprintf(paste0(
+                                           "%s\n -start\n",
+                                           " 1  REM Arrhenius 1st-order kerogen degradation (single-Ea pool)\n",
+                                           " 10 k = 10^(%s) * exp(-%s / (8.314 * TK))\n",
+                                           " 20 rate = k * M\n",
+                                           " 30 if (M <= 0) then rate = 0\n",
+                                           " 40 moles = rate * TIME\n",
+                                           " 50 SAVE moles\n -end\n"),
+                                           p[["name"]], p[["logA"]], p[["Ea_J"]])
+                                       }), collapse = "")
+
+                                       iom_kinetics_block <- paste0(apply(self$iom_pools, 1, function(p) {
+                                         m0 <- as.numeric(p[["m0_per_kg"]]) * iom_total_moles
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1\n",
+                                                 p[["name"]], trimws(p[["formula"]]), m0)
+                                       }), collapse = "")
+
+                                       print(sprintf("IOM as kinetics: %d channels, %.2e kg IOM scaled",
+                                                     nrow(self$iom_pools), iom_mass_kg_scaled))
+                                       print(data.frame(channel = self$iom_pools$name,
+                                                        m0 = self$iom_pools$m0_per_kg * iom_total_moles,
+                                                        Ea_kJ = self$iom_pools$Ea_J / 1e3))
+                                     }
+                                     iom_so_line <- if (self$organic_wt_percent > 0 && !is.null(self$iom_pools))
+                                       paste(self$iom_pools$name, collapse = " ") else ""
+
                                      total_time_seconds <- n_orbital_cycles * orbital_period
                                      total_time_years   <- total_time_seconds / (365.25 * 24 * 3600)
 
                                      # Total_Initial_g = full initial primary rock mass: 8 kinetic minerals
                                      # (tracked via KIN() each cycle) plus the 3 equilibrium primaries.
                                      total_initial_expr <- sprintf(
-                                       "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75",
+                                       "%.6f*100.3725 + %.6f*140.6715 + %.6f*87.913 + %.6f*262.1798 + %.6f*216.55 + %.6f*278.164 + %.6f*278.33 + %.6f*201.96 + %.6f*55.845 + %.6f*58.693 + %.6f*126.75 + %.6f*198.509",
                                        enstatite_moles, forsterite_moles, troilite_moles, albite_moles,
                                        diopside_moles, anorthite_moles, kfeldspar_moles, tephroite_moles,
-                                       fe_moles, ni_moles, lawrencite_moles
+                                       fe_moles, ni_moles, lawrencite_moles, schreibersite_moles
                                      )
+
+                                     # ---- PATCH D1: punch IOM channel state so the restart can recover it ----
+                                     iom_punch_headings <- ""
+                                     iom_punch_lines    <- ""
+                                     if (self$organic_wt_percent > 0 && !is.null(self$iom_pools)) {
+                                       iom_punch_headings <- paste0(" ",
+                                         paste(sprintf("%s_mol", self$iom_pools$name), collapse = " "))
+                                       iom_punch_lines <- paste0(
+                                         vapply(seq_len(nrow(self$iom_pools)), function(j) {
+                                           sprintf("   %d PUNCH KIN(\"%s\")\n",
+                                                   200 + 10 * j, self$iom_pools$name[j])
+                                         }, character(1)), collapse = "")
+                                     }
 
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater kinetic" else
@@ -2753,6 +3161,7 @@ KNOBS
    -logfile true
 
 {.header_lines}
+{rec_eqb_note}
 
 SOLUTION 1 {.soln_label}
     temp      {round(porewater_temp_C, 2)}
@@ -2767,146 +3176,22 @@ SOLUTION 1 {.soln_label}
 INCREMENTAL_REACTIONS true
 
 RATES
-Forsterite
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
-\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))
-\t21  SSA = 0.1
-\t22  mw = 140.6715
-\t40  k = (kacid + kneut) * SSA * mw * M
-\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
+{.primary_rate_defs}
 
-Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy (same FeS chemistry)
-\t-start
-\t1   REM Acid mechanism only (PK04, hexagonal pyrrhotite formulation)
-\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-\t26  SSA = 5
-\t27  mw = 87.913
-\t30  k = kacid * SSA * mw * M
-\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
-\t50  moles = rate * TIME
-\t55  IF moles < 0 THEN moles = 0
-\t60  SAVE moles
-\t-end
+{SCHREIBERSITE_RATE}
 
-Diopside
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
-\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-\t21  SSA = 0.1
-\t22  mw = 216.55
-\t40  k = (kacid + kneut) * SSA * mw * M
-\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
-
-K-Feldspar
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
-\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
-\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-\t31  SSA = 5
-\t32  mw = 278.33
-\t40  k = (kacid + kneut + kbase) * SSA * mw * M
-\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
-
-Tephroite # TODO: rate constants not yet supplied (Mn-olivine) — k held at 0 (no dissolution) until provided
-\t-start
-\t1   REM TODO awaiting kacid/kneut from user
-\t10  kacid = 0
-\t20  kneut = 0
-\t21  SSA = 0.1
-\t22  mw = 201.96
-\t40  k = (kacid + kneut) * SSA * mw * M
-\t50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
-
-Enstatite
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
-\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-\t21  SSA = 0.1
-\t22  mw = 100.3725
-\t40  k = (kacid + kneut) * SSA * mw * M
-\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
-
-Anorthite
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
-\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-\t21  SSA = 5
-\t22  mw = 278.164
-\t40  k = (kacid + kneut) * SSA * mw * M
-\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
-
-Albite
-\t-start
-\t1   REM Ref PK04
-\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
-\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
-\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-\t31  SSA = 5
-\t32  mw = 262.1798
-\t40  k = (kacid + kneut + kbase) * SSA * mw * M
-\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
-\t60  moles = rate * TIME
-\t70  SAVE moles
-\t-end
+{iom_rates_block}
 
 KINETICS 1
-   Enstatite
-      -m0 {enstatite_moles}
-      -step_divide 1
-   Forsterite
-      -m0 {forsterite_moles}
-      -step_divide 1
-   Troilite
-      -m0 {troilite_moles}
-      -step_divide 1
-   Albite
-      -m0 {albite_moles}
-      -step_divide 1
-   Diopside
-      -m0 {diopside_moles}
-      -step_divide 1
-   Anorthite
-      -m0 {anorthite_moles}
-      -step_divide 1
-   K-Feldspar
-      -m0 {kfeldspar_moles}
-      -step_divide 1
-   Tephroite
-      -m0 {tephroite_moles}
-      -step_divide 1
+{.primary_kin_entries}
+{schreibersite_kinetics_entry(schreibersite_moles)}
+   {iom_kinetics_block}
    -steps {sprintf("%.6e", total_time_seconds)} in {n_orbital_cycles} steps
    -cvode true
    -bad_step_max 5000
 
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---
-   Fe                   0  {fe_moles}          dissolve_only
-   Ni                   0  {ni_moles}          dissolve_only
-   Lawrencite           0  {lawrencite_moles}  dissolve_only
+{equil_prim_lines}
 # --- Secondary minerals (precipitate if supersaturated) ---
    Analcime 0 0
    Anhydrite 0 0
@@ -3010,9 +3295,9 @@ SELECTED_OUTPUT
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
                          NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3-
                          SO2 SO4-2 SiO2 HSiO3-
-    -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
+    -kinetics            {kin_so_line} {iom_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
-    -equilibrium_phases  Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
+    -equilibrium_phases  {equil_so_line} Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
                          C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
@@ -3034,19 +3319,13 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
-   20 PUNCH KIN("Enstatite") * 100.3725
-   30 PUNCH KIN("Forsterite") * 140.6715
-   40 PUNCH KIN("Troilite") * 87.913
-   50 PUNCH KIN("Albite") * 262.1798
-   60 PUNCH KIN("Diopside") * 216.55
-   70 PUNCH KIN("Anorthite") * 278.164
-   80 PUNCH KIN("K-Feldspar") * 278.33
-   85 PUNCH KIN("Tephroite") * 201.96
+{punch_lines}
+   95 PUNCH KIN("Schreibersite") * 198.509
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
-
+{iom_punch_lines}
 END
 ')
 
@@ -3157,32 +3436,52 @@ END
                                      # recovered via get_equil_moles() (their native PHREEQC
                                      # -equilibrium_phases output column), never kinetic-switchable.
                                      all_primary      <- c("Enstatite", "Forsterite", "Troilite", "Albite",
-                                                           "Diopside", "Anorthite", "K-Feldspar", "Tephroite")
+                                                           "Diopside", "Anorthite", "K-Feldspar", "Tephroite", "Schreibersite")
+                                     if ("Schreibersite" %in% equil_minerals)
+                                       stop("Schreibersite cannot be an equilibrium primary: neither database has an Fe3P phase (no log K). It is kinetic only.")
                                      equil_primary    <- intersect(equil_minerals, all_primary)
                                      kinetic_minerals <- setdiff(all_primary, equil_primary)
                                      always_equil_primary <- c("Fe", "Ni", "Lawrencite")
 
                                      molar_masses <- c(Enstatite = 100.3725, Forsterite = 140.6715, Troilite = 87.913,
                                                        Albite = 262.1798, Diopside = 216.55, Anorthite = 278.164,
-                                                       `K-Feldspar` = 278.33, Tephroite = 201.96)
+                                                       `K-Feldspar` = 278.33, Tephroite = 201.96,
+                                                      Schreibersite = SCHREIBERSITE_MW)
 
                                      # USER_PUNCH column names for each primary mineral (grams)
                                      remain_g_cols <- c(
                                        Enstatite  = "Enst_remain_g",  Forsterite   = "Forst_remain_g",
                                        Troilite   = "Troil_remain_g", Albite       = "Alb_remain_g",
                                        Diopside   = "Diop_remain_g",  Anorthite    = "Anorth_remain_g",
-                                       `K-Feldspar` = "Kfs_remain_g", Tephroite    = "Teph_remain_g"
+                                       `K-Feldspar` = "Kfs_remain_g", Tephroite    = "Teph_remain_g",
+                                       Schreibersite = "Schr_remain_g"
                                      )
 
+                                     # Floor for near-zero moles: a kinetic mineral that's dissolved down to
+                                     # floating-point dust (e.g. 1e-21 mol) is chemically depleted, but writing
+                                     # that literal value into a dissolve_only EQUILIBRIUM_PHASES entry still
+                                     # makes PHREEQC try to satisfy its saturation condition with that
+                                     # infinitesimal mass -- which can fail to converge if the solution is far
+                                     # from saturation for that phase (seen under a low water_rock_ratio restart,
+                                     # SI(Albite) = -4.95 but m0 = 1.06e-21: PHREEQC couldn't reconcile "dissolve
+                                     # toward SR=1" with "only this much mass exists"; clamping to exactly 0
+                                     # removes the phase from the system entirely and converged cleanly). Any
+                                     # real mineral mass in this system is many orders of magnitude above this
+                                     # threshold, so it only ever catches floating-point dust, not genuine
+                                     # small-but-real remaining amounts.
+                                     ZERO_MOLES_FLOOR <- 1e-15
                                      get_k_moles <- function(mineral) {
                                        col <- paste0("k_", mineral)
                                        val <- if (col %in% names(last_row)) suppressWarnings(as.numeric(last_row[[col]])) else NA_real_
-                                       if (!is.na(val) && val >= 0) return(val)
+                                       if (!is.na(val) && val >= 0) return(if (val < ZERO_MOLES_FLOOR) 0 else val)
                                        # Fallback: mineral was equilibrium in prev run — read *_remain_g column
                                        g_col <- remain_g_cols[mineral]
                                        if (!is.na(g_col) && g_col %in% names(last_row)) {
                                          g_val <- suppressWarnings(as.numeric(last_row[[g_col]]))
-                                         if (!is.na(g_val) && g_val >= 0) return(g_val / molar_masses[mineral])
+                                         if (!is.na(g_val) && g_val >= 0) {
+                                           moles <- g_val / molar_masses[mineral]
+                                           return(if (moles < ZERO_MOLES_FLOOR) 0 else moles)
+                                         }
                                        }
                                        0
                                      }
@@ -3265,7 +3564,7 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
                                        "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
@@ -3295,6 +3594,7 @@ END
 
                                      # ---- RATES block ----
                                      .rate_laws <- list(
+                                       Schreibersite = SCHREIBERSITE_RATE_BODY,
                                        Forsterite = paste(
                                          '\t-start',
                                          '\t1   REM Ref PK04',
@@ -3309,7 +3609,7 @@ END
                                          '\t-end', sep = "\n"),
                                        Troilite = paste(
                                          '\t-start',
-                                         '\t1   REM PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy',
+                                         '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
                                          '\t26  SSA = 5',
                                          '\t27  mw = 87.913',
@@ -3346,15 +3646,19 @@ END
                                          '\t-end', sep = "\n"),
                                        Tephroite = paste(
                                          '\t-start',
-                                         '\t1   REM TODO awaiting kacid/kneut from user (Mn-olivine, no rate constants supplied yet)',
-                                         '\t10  kacid = 0',
-                                         '\t20  kneut = 0',
-                                         '\t21  SSA = 0.1',
-                                         '\t22  mw = 201.96',
-                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
-                                         '\t50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
-                                         '\t60  moles = rate * TIME',
-                                         '\t70  SAVE moles',
+                                         '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
+                                         '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
+                                         '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
+                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
+                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t46  SSA = 0.1',
+                                         '\t47  mw = 201.96',
+                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
+                                         '\t70  moles = rate * TIME',
+                                         '\t80  SAVE moles',
                                          '\t-end', sep = "\n"),
                                        Enstatite = paste(
                                          '\t-start',
@@ -3408,7 +3712,7 @@ END
                                      # ---- KINETICS block ----
                                      .primary_kin_entries <- if (length(kinetic_minerals) > 0)
                                        paste(sapply(kinetic_minerals, function(m)
-                                         sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                         if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
                                          collapse = "\n")
                                      else ""
                                      .all_kin_entries <- paste(
@@ -3561,16 +3865,16 @@ SELECTED_OUTPUT
                          SO2 SO4-2 SiO2 HSiO3-
 {kin_so_line}
 {equil_so_line}
-    -saturation_indices  {paste(all_primary, collapse = " ")}
+    -saturation_indices  {paste(setdiff(all_primary, "Schreibersite"), collapse = " ")}
     -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{iom_punch_headings_restart}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
-   100 total_initial = {total_initial_expr}
-   110 PUNCH total_initial
+   {10 + (length(all_primary) + 1) * 10} total_initial = {total_initial_expr}
+   {10 + (length(all_primary) + 2) * 10} PUNCH total_initial
 {iom_punch_lines_restart}
 END
 ')
@@ -3739,29 +4043,44 @@ END
                                      # Fe/Ni/Lawrencite are handled separately (always_equil_primary, below) —
                                      # always equilibrium, never kinetic-switchable, porewater (EP1) only.
                                      all_primary      <- c("Enstatite", "Forsterite", "Troilite", "Albite",
-                                                           "Diopside", "Anorthite", "K-Feldspar", "Tephroite")
+                                                           "Diopside", "Anorthite", "K-Feldspar", "Tephroite", "Schreibersite")
+                                     if ("Schreibersite" %in% equil_minerals)
+                                       stop("Schreibersite cannot be an equilibrium primary: neither database has an Fe3P phase (no log K). It is kinetic only.")
                                      equil_primary    <- intersect(equil_minerals, all_primary)
                                      kinetic_minerals <- setdiff(all_primary, equil_primary)
                                      always_equil_primary <- c("Fe", "Ni", "Lawrencite")
 
                                      molar_masses <- c(Enstatite = 100.3725, Forsterite = 140.6715, Troilite = 87.913,
                                                        Albite = 262.1798, Diopside = 216.55, Anorthite = 278.164,
-                                                       `K-Feldspar` = 278.33, Tephroite = 201.96)
+                                                       `K-Feldspar` = 278.33, Tephroite = 201.96,
+                                                      Schreibersite = SCHREIBERSITE_MW)
 
                                      # Helper: read kinetic moles from REACT row
+                                     # ZERO_MOLES_FLOOR: precautionary, mirroring the fix in
+                                     # bulk_kinetic_restart -- a dissolve_only EQUILIBRIUM_PHASES entry at a
+                                     # literal floating-point-dust amount (e.g. 1e-21 mol) can make PHREEQC try
+                                     # to satisfy that phase's saturation condition with essentially no mass
+                                     # to work with, which failed to converge under a low water_rock_ratio
+                                     # restart (bulk_kinetic_restart, SI far from 0 but m0 ~1e-21). Not yet
+                                     # observed here, but the same dissolve_only pattern applies, so clamping
+                                     # defensively; any real remaining mass is far above this threshold.
+                                     ZERO_MOLES_FLOOR <- 1e-15
                                      get_k_moles <- function(mineral) {
                                        col <- paste0("k_", mineral)
                                        val <- if (col %in% names(row_react)) suppressWarnings(as.numeric(row_react[[col]])) else NA_real_
-                                       if (!is.na(val) && val >= 0) return(val)
+                                       if (!is.na(val) && val >= 0) return(if (val < ZERO_MOLES_FLOOR) 0 else val)
                                        # Fallback: use _remain_g column
                                        g_cols <- c(Enstatite="Enst_remain_g", Forsterite="Forst_remain_g",
                                                    Troilite="Troil_remain_g", Albite="Alb_remain_g",
                                                    Diopside="Diop_remain_g", Anorthite="Anorth_remain_g",
-                                                   `K-Feldspar`="Kfs_remain_g", Tephroite="Teph_remain_g")
+                                                   `K-Feldspar`="Kfs_remain_g", Tephroite="Teph_remain_g", Schreibersite="Schr_remain_g")
                                        g_col <- g_cols[mineral]
                                        if (!is.na(g_col) && g_col %in% names(row_react)) {
                                          g_val <- suppressWarnings(as.numeric(row_react[[g_col]]))
-                                         if (!is.na(g_val) && g_val >= 0) return(g_val / molar_masses[mineral])
+                                         if (!is.na(g_val) && g_val >= 0) {
+                                           moles <- g_val / molar_masses[mineral]
+                                           return(if (moles < ZERO_MOLES_FLOOR) 0 else moles)
+                                         }
                                        }
                                        0
                                      }
@@ -3820,7 +4139,7 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
                                        "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
@@ -3839,6 +4158,7 @@ END
 
                                      # ---- RATES block ----
                                      .rate_laws <- list(
+                                       Schreibersite = SCHREIBERSITE_RATE_BODY,
                                        Forsterite = paste(
                                          '\t-start',
                                          '\t1   REM Ref PK04',
@@ -3853,7 +4173,7 @@ END
                                          '\t-end', sep = "\n"),
                                        Troilite = paste(
                                          '\t-start',
-                                         '\t1   REM PK04 has no separate troilite entry; hexagonal pyrrhotite parameters used as proxy',
+                                         '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
                                          '\t26  SSA = 5',
                                          '\t27  mw = 87.913',
@@ -3890,15 +4210,19 @@ END
                                          '\t-end', sep = "\n"),
                                        Tephroite = paste(
                                          '\t-start',
-                                         '\t1   REM TODO awaiting kacid/kneut from user (Mn-olivine, no rate constants supplied yet)',
-                                         '\t10  kacid = 0',
-                                         '\t20  kneut = 0',
-                                         '\t21  SSA = 0.1',
-                                         '\t22  mw = 201.96',
-                                         '\t40  k = (kacid + kneut) * SSA * mw * M',
-                                         '\t50  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
-                                         '\t60  moles = rate * TIME',
-                                         '\t70  SAVE moles',
+                                         '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
+                                         '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
+                                         '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
+                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
+                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
+                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t46  SSA = 0.1',
+                                         '\t47  mw = 201.96',
+                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
+                                         '\t70  moles = rate * TIME',
+                                         '\t80  SAVE moles',
                                          '\t-end', sep = "\n"),
                                        Enstatite = paste(
                                          '\t-start',
@@ -4019,7 +4343,7 @@ END
                                      kinetics_block <- if (length(kinetic_minerals) > 0 || nzchar(iom_kinetics_block)) {
                                        min_entries <- if (length(kinetic_minerals) > 0)
                                          paste(sapply(kinetic_minerals, function(m)
-                                           sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                           if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
                                            collapse = "\n")
                                        else ""
                                        all_entries <- paste(Filter(nzchar, c(min_entries, iom_kinetics_block)),
@@ -4053,16 +4377,14 @@ END
                                      ep1_block <- paste0("EQUILIBRIUM_PHASES 1\n",
                                        paste(Filter(nzchar, c(ep1_prim_lines, ep1_sec_lines)), collapse = "\n"))
 
-                                     # ---- EQUILIBRIUM_PHASES 2 (ocean: EP2 state, equil primaries + Magnetite + secondaries) ----
+                                     # ---- EQUILIBRIUM_PHASES 2 (ocean: EP2 state, equil primaries + secondaries) ----
                                      ep2_prim_lines <- if (length(equil_primary) > 0)
                                        paste(c("# --- Primary minerals (equilibrium, ocean) ---",
                                                sapply(equil_primary, function(m)
                                                  sprintf("   %-20s 0 %.6e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
                                              collapse = "\n")
                                      else ""
-                                     ep2_minerals <- c(append(secondary_minerals, "Magnetite",
-                                                              after = which(secondary_minerals == "Lizardite")),
-                                                        extra_ocean_minerals)
+                                     ep2_minerals <- c(secondary_minerals, extra_ocean_minerals)
                                      ep2_sec_lines <- paste(
                                        c("# --- Secondary minerals (ocean, from previous run) ---",
                                          sapply(ep2_minerals, function(m)
@@ -4098,13 +4420,30 @@ END
                                      .iom_names <- if (self$organic_wt_percent > 0 && !is.null(self$iom_pools))
                                        self$iom_pools$name else character(0)
                                      .all_kinetic <- c(kinetic_minerals, .iom_names)
-                                     # Provisional default order (smallest initial abundance first, so it's
-                                     # the most likely to deplete first; largest last, as the most robust
-                                     # REACT/MIX proxy) — unverified against actual depletion behavior for
-                                     # this composition; pass depletion_mineral explicitly to override.
-                                     depletion_order <- c("K-Feldspar", "Tephroite", "Anorthite", "Diopside",
-                                                          "Albite", "Forsterite", "Enstatite", "Troilite",
-                                                          "IOM_CO2", "IOM_CH4", "IOM_N", "IOM_S")
+                                     # Default order: primary minerals fastest-to-slowest by pseudo-first-
+                                     # order rate constant (kacid+kneut[+kbase])*SSA*mw at 150 C, pH 7,
+                                     # SR=0 (see CHANGELOG 2026-10-01 rate ranking), with Troilite forced
+                                     # last regardless of rank — its rate depends on ACT(Fe3+), which swings
+                                     # it from fastest to slowest primary across a plausible activity range,
+                                     # so it's deliberately not trusted as an early depletion/proxy pick.
+                                     # Tephroite deliberately OMITTED for now: its rate law is still a
+                                     # kacid=kneut=0 placeholder (never depletes), pending a real rate —
+                                     # insert it once that's supplied. Omitting it from this list doesn't
+                                     # remove it as a kinetic phase, it just can't be auto-selected as
+                                     # depletion_mineral/proxy_mineral until a real rate makes that meaningful;
+                                     # explicit depletion_mineral="Tephroite" still works regardless.
+                                     # IOM channels follow, fastest-to-slowest by k at 150 C (same ranking).
+                                     # Pass depletion_mineral explicitly to override any of this.
+                                     depletion_order <- c("Albite", "Diopside", "Anorthite", "Forsterite",
+                                                          "Schreibersite", "K-Feldspar", "Enstatite", "Troilite",
+                                                          "IOM_CO2_44", "IOM_CO2_46", "IOM_CO2_48", "IOM_CO2_50",
+                                                          "IOM_CHn_50", "IOM_CO2_52", "IOM_CHn_52", "IOM_CH4_52",
+                                                          "IOM_CO2_54", "IOM_CHn_54", "IOM_CH4_54", "IOM_N", "IOM_S",
+                                                          "IOM_CO2_56", "IOM_CHn_56", "IOM_CH4_56",
+                                                          "IOM_CHn_58", "IOM_CH4_58", "IOM_CHn_60", "IOM_CH4_60",
+                                                          "IOM_CHn_62", "IOM_CH4_62", "IOM_CH4_64", "IOM_CH4_66",
+                                                          "IOM_CH4_68", "IOM_CH4_70", "IOM_CH4_72", "IOM_CH4_74",
+                                                          "IOM_CH4_76")
                                      if (!is.null(depletion_mineral)) {
                                        if (!depletion_mineral %in% .all_kinetic)
                                          stop(sprintf("depletion_mineral '%s' is not a kinetic phase in this restart (check equil_minerals and organic_wt_percent)", depletion_mineral))
@@ -4210,7 +4549,7 @@ SELECTED_OUTPUT
                          SO2 SO4-2 SiO2 HSiO3-
 {kin_so_line}
 {equil_so_line}
-    -saturation_indices  {paste(all_primary, collapse = " ")}
+    -saturation_indices  {paste(setdiff(all_primary, "Schreibersite"), collapse = " ")}
     -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
@@ -4231,7 +4570,7 @@ SELECTED_OUTPUT
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
-                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g",
+                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings_tidal, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          paste(sapply(seq_along(all_primary), function(j) {
