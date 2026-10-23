@@ -7207,18 +7207,6 @@ C2H4(g)
 #	Ref		Sho93
 
 C2H6(g)
-	C2H6 = C2H6
-	log_k		-2.93276
-	-delta_H	-4.509		kcal/mol
-	-analytic	-23.1154 0.0354 3289.1 0 0 -1.5637e-5
-#	Range		0-350
-#	-T_c		305 # K
-#	-P_c		48.16
-#	-Omega		0.100 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
-#	Extrapol	supcrt92
-#	Ref		HOK+98	
-
-C2H6(g)
 	C2H6 + 3.5 O2 = 2 HCO3- + 2 H+ + H2O #8/31/2021
 	log_k		251.5706
 	-delta_H	-367.7618		kcal/mol
@@ -7241,19 +7229,6 @@ C3H8(g)
 #	-Omega		0.152 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
 #	Extrapol	supcrt92
 #	Ref		HOK+98
-
-CH4(g)
-	CH4 + 2 O2 = HCO3- + H+ + H2O #8/31/2021
-	log_k		141.29093
-	-delta_H	-876.6936	kJ/mol
-#	deltafH		-17.88		kcal/mol
-	-analytic	-2761 -0.3907 2.081e5 984.9 -1.037e7 #JD 2021
-#	Range		0-350
-#	-T_c		190.6 # K
-#	-P_c		45.40
-#	-Omega		0.008 # phreeqc.dat
-#	Extrapol	supcrt92
-#	Ref		WEP+82, Kel60
 
 CH4(g) # Updated 8/11/2021, JD 2021
 	CH4 = CH4 
