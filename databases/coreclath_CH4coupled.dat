@@ -7419,20 +7419,20 @@ SO2(g)
 Oxg(g)
 	Oxg = Oxg
 	-analytic -7.5001 7.8981e-3 0.0 0.0 2.0027e5
-	-T_c  154.6 ; -P_c   49.80 ; -Omega 0.021 #MMD uncommented temperature + pressure 
+#	-T_c  154.6 ; -P_c   49.80 ; -Omega 0.021 #MMD uncommented temperature + pressure   # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Hdg(g)
 	Hdg = Hdg
 	-analytic   -9.3114    4.6473e-3   -49.335    1.4341    1.2815e5
-	-T_c  33.2 ; -P_c   12.80 ; -Omega -0.225 #MMD uncommented temperature + pressure 
+#	-T_c  33.2 ; -P_c   12.80 ; -Omega -0.225 #MMD uncommented temperature + pressure   # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Ntg(g)
 	Ntg = Ntg
 	-analytic -58.453 1.81800e-3  3199  17.909 -27460
-	T_c  126.2 ; -P_c   33.50 ; -Omega 0.039
+#	-T_c  126.2 ; -P_c   33.50 ; -Omega 0.039  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Mtg(g)
 	Mtg = Mtg
 	-log_k -2.8
 	-analytic   10.44  -7.65e-3  -6669  0  1.014e6 # CH4 solubilities 25 - 1008C
-	-T_c  190.6 ; -P_c   45.40 ; -Omega 0.008
+#	-T_c  190.6 ; -P_c   45.40 ; -Omega 0.008  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 H2Sg(g)
 	H2Sg  =  H+ + HSg-
 #	-analytic -97.354 -3.1576e-2 1.8285e3 37.44 28.56
@@ -7440,7 +7440,7 @@ H2Sg(g)
 	log_k	   -7.93 # MMD added from PHREEQC database 2024/07/07.
 	-delta_h   9.1
 	-analytic -45.07  -0.02418  0  17.9205 # H2S solubilities, 0 - 300�C, 1 - 987 atm, Jiang et al., 2020, CG 555, 119816
-	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1
+#	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 
 RATES
 
