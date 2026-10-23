@@ -436,12 +436,15 @@ HCO3- = HCO3-
 #	deltafH		-164.898	kcal/mol
 	-Vm		7.5621 1.1505 1.2346 -2.8266 1.27330 0 0 0 0 0 # SH88
 	
-CO2 = CO2 #JD 2021
-	-llnl_gamma 	4
-	log_k 		0
-	-delta_h 	0	KJ/mol
+# CO2 = CO2 commented out 2026-10-23 (dead code): CO2 is not a master species here; aqueous CO2
+# is defined by HCO3- + H+ = CO2 + H2O below, and a test at pH 6 with 10 mmol C(4) gave identical
+# speciation and CO2(g) SI with and without this entry (Core11 never had it).
+#CO2 = CO2 #JD 2021
+#	-llnl_gamma 	4
+#	log_k 		0
+#	-delta_h 	0	KJ/mol
 # deltafh		-98.9	kcal/mol
-	-Vm		15.2964	-10.0382 -55.4493 7.4092 36.8069 3.5851 0 0 0 0 #PS01
+#	-Vm		15.2964	-10.0382 -55.4493 7.4092 36.8069 3.5851 0 0 0 0 #PS01
 
 # O2 = O2 #JD 2021
 	# -llnl_gamma	3
