@@ -508,6 +508,13 @@ and missing from EQUILIBRIUM_PHASES 1 (porewater) in all three tidal functions
 had it on the ocean side. All 6 functions now include it consistently in every
 applicable EQUILIBRIUM_PHASES block; verified no duplicate entries resulted.
 
+> **Correction (2026-10-23):** "verified no duplicate entries" holds for the
+> EQUILIBRIUM_PHASES blocks, but not for SELECTED_OUTPUT: in
+> `generate_phreeqc_input_tidal_kinetic_restart`, Magnetite is in
+> `secondary_minerals` and is also `append`ed after Lizardite in `.all_eq_so`,
+> so it is listed twice in `-equilibrium_phases`. Fixed in the 2026-10-23
+> fixes branch.
+
 ### Tephroite: no-precipitation guard added — resolves the convergence problem previously blamed on K-Feldspar/Albite (2026-10-19)
 
 The Tephroite rate law's final line was `rate = k * (1 - SR("Tephroite"))`, with
@@ -545,6 +552,13 @@ FALSE` reproduces the previous unconditional-kinetic behavior exactly.
 cases just inside 1x but not 2x the orbital period); `rec_eqb_minerals=FALSE`
 reproduces the original all-kinetic output exactly. No duplicate USER_PUNCH
 line numbers in any case.
+
+> **Correction (2026-10-23):** pH 11 is conservative (it under-promotes) only
+> for acid-branch minerals, whose rate is slowest there. For albite and
+> K-feldspar, whose base branch dominates, pH 11 gives the *fastest* rate, so
+> it over-promotes: at pH 9 albite is ~14x and K-feldspar ~44x slower than
+> assumed, which the x2 margin does not cover. See the 2026-10-23 entry that
+> changes the reference pH.
 
 ### generate_phreeqc_input_bulk_equil: added mode/water_rock_ratio and water_temp (2026-10-19)
 
@@ -623,3 +637,14 @@ decoupled `Mtg_hydrate` scheme), `Core11_idealgas_mod_v4.dat` and both
 coreclath databases now carry identical phase and species lists, and that
 their `RATES` blocks were already functionally identical (prior diffs were
 comment text and `°` character encoding only).
+
+> **Correction (2026-10-23, later):**
+> - "identical phase and species lists" was not true of
+>   `coreclath_CH4uncoupled.dat`: it lacked the five decoupled-species identity
+>   reactions (`Hdg = Hdg`, `Oxg = Oxg`, `Mtg = Mtg`, `Ntg = Ntg`,
+>   `H2Sg = H2Sg`), removed in 2e13e34, so it failed to load (11 errors).
+>   Restored in the fixes branch; `tests/` now has a load test for every
+>   database.
+> - There are 10 F-bearing aqueous complexes (the list above names 10), not 9.
+> - The coupled file also carried a `CO2 = CO2` identity not in Core11 (dead
+>   code; now commented out).
