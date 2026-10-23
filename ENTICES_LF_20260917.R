@@ -1395,13 +1395,15 @@ Tephroite
   32  REM This is generally consistent with other minerals that lack base
   33  REM dissolution mechanisms. 
 
-  35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17
-  36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea
-  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
-  45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47
+  34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.
+  35  aH = ACT("H+")
+  36  IF aH < 1e-7 THEN aH = 1e-7
+  37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17
+  38  IF Ea < 0 THEN Ea = 0
+  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
   46  SSA = 0.1
   47  mw = 201.96
-  50  k = (kacid + kneut) * SSA * mw * M
+  50  k = kacid * SSA * mw * M
   60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
   70  moles = rate * TIME
   80  SAVE moles
@@ -2967,13 +2969,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
@@ -3649,13 +3653,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
@@ -4213,13 +4219,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
