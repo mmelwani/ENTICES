@@ -5,6 +5,7 @@ Run everything from the repo root.
 | File | How to run | Write-up |
 |---|---|---|
 | `iom_selftest.R` | `Rscript tests/iom_selftest.R` | IOM module calibration checks. |
+| `db_load_check.R` | `Rscript tests/db_load_check.R` | Every `databases/*.dat` loads in PHREEQC with 0 errors. |
 | `rock_table_check.R` | `Rscript tests/rock_table_check.R` | `ROCK_MOL_PER_KG` vs `reconstruction/rock_mol_per_kg.csv`. |
 | `test_A4_formulas.pqi` | `phreeqc tests/test_A4_formulas.pqi out.txt databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B2_Hdg_carbon.pqi` | same pattern, coupled coreclath | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |

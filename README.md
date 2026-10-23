@@ -16,6 +16,7 @@ exchanging fluid with the ocean each orbit. You run those inputs with PHREEQC.
 | `ENTICES_runs.Rmd` | Lucas's run notebook: example calls of the generators and restarts. |
 | `iom_module.R` | Insoluble organic matter (IOM) decomposition module: calibrated sub-pools, sourced by the main file. |
 | `mineral_dissolution_constants.r` | Mineral rate laws in R (used by `rec_eqb_minerals`) and rate plots. |
+| `phreeqc_tools.R` | Locates and runs PHREEQC from R; warns if it isn't the expected version (3.8.6). |
 | `parameter_sweep.R` | Parameter sweep helper used by `ENTICES_runs.Rmd`. |
 | `CHANGELOG.md` | Change log for the main file. |
 | `databases/` | PHREEQC thermodynamic databases. See `databases/README.md` for which to use when. |
@@ -58,9 +59,12 @@ Run everything from the repo root.
 ```
 Rscript tests/iom_selftest.R        # IOM module calibration checks
 Rscript tests/rock_table_check.R    # ROCK_MOL_PER_KG vs reconstruction/rock_mol_per_kg.csv
+Rscript tests/db_load_check.R       # every databases/*.dat loads in PHREEQC with 0 errors
 ```
 
-Both print `SUMMARY: 0 failure(s)` when passing.
+Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` needs PHREEQC; set
+`PHREEQC_EXE` if it isn't at the default Windows install path or on the `PATH`
+(see `phreeqc_tools.R`).
 
 ## PHREEQC manual
 
