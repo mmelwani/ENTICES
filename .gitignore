@@ -10,3 +10,8 @@ phreeqc_inputs/*.pqi
 phreeqc_inputs/*.out
 phreeqc_inputs/*.csv
 phreeqc.log
+
+# PHREEQC writes its SELECTED_OUTPUT file to the working directory; keep stray
+# run outputs at the repo root out of git
+/enceladus_*.csv
+/selected_output_*.sel
