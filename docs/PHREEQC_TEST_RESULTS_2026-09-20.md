@@ -3,6 +3,10 @@
 Date: 2026-09-20
 Run with: PHREEQC 3.8.6 batch (`C:\Program Files\USGS\phreeqc-3.8.6-17100-x64\bin\Release\phreeqc.exe`)
 against `Core11_idealgas_mod_v4.dat`.
+
+> **2026-10-23:** Core11 is retired to `legacy/`. Tests A4 and B2 now run on
+> `databases/coreclath_CH4coupled.dat` and reproduce every number below; the
+> only output differences are three extra hydrate SI lines.
 Answers: `OPTION3_decision.md` §4(a) and §4(b), `PROGRESS.md` Part 3's two
 open questions, `NEXT_STEPS.md` items 2 and 3.
 
