@@ -1,0 +1,661 @@
+---
+title: "Primordial CI chondrite mineralogy"
+output: html_notebook
+date: 2026-09-11
+author: "Mohit Melwani Daswani"
+---
+
+**[Bug 6 fix, 2026-09-12]** The first code chunk that used to sit here was
+the original single-scenario CIPW-style normative calculation (hand-typed
+mineral densities, `Rutile`/`Orthoclase`, CIPW allocation ordering). It is
+superseded by the NNLS two-scenario fit below and was removed because:
+(a) it reintroduced `Ti`/`Rutile`, which were deliberately dropped from the
+model (`drop_TiCo()`, decision in RECONSTRUCTION_STATUS.md) — a prior NA
+crash traced to exactly this leftover; (b) it imported CIPW allocation
+ordering from igneous petrology, which RECONSTRUCTION_STATUS.md §6 flags
+as an error not to reintroduce (no justification for nebular condensates);
+(c) it defined its own global `AW`, `b`, `n`, `phases`, silently shadowed
+by the second chunk's versions of the same names when run top-to-bottom -
+a stale-duplicate-definition risk. Its two numeric checks (O-balance,
+closure) are superseded by the same checks done properly in the fit
+pipeline below (§1 "Check inputs", §12 "Run"). Nothing here computed a
+number that isn't reproduced downstream. See RECONSTRUCTION_STATUS.md §6
+for the full record of why this approach was abandoned.
+
+```{r}
+# =====================================================================
+# Primordial CI chondrite mineralogy: two-scenario mass balance
+#
+#   Scenario R: Alexander (2019) reduced, anhydrous CI reservoir
+#   Scenario C: Charnoz et al. (2026) kinetic "type C" assemblage
+#
+# Method: non-negative least squares over a FIXED phase list.
+# There are NO allocation-ordering rules (no CIPW), no volume-expansion
+# factors, and no fudge factors. Stoichiometry is parsed from chemical
+# formulas; no element weight fraction is ever hand-typed.
+#
+# STATUS: this file has NOT been executed by its author. Every number it
+# produces must come from your run. Prose summaries written elsewhere
+# must be recomputed from actual output, never from memory.
+# =====================================================================
+
+
+# ---- 1. Atomic weights ----------------------------------------------
+# IUPAC 2021 conventional standard atomic weights.
+# Prohaska et al. (2022) Pure Appl. Chem. 94, 573-600.
+AW <- c(H = 1.008,     O  = 15.999,   F  = 18.998403, Na = 22.98977,
+        Mg = 24.305,   Al = 26.9815,  Si = 28.085,    P  = 30.97376,
+        S  = 32.06,    K  = 39.0983,  Ca = 40.078,    Ti = 47.867,
+        Cr = 51.9961,  Mn = 54.938,   Fe = 55.845,    Co = 58.9332,
+        Ni = 58.6934)
+
+
+# ---- 2. Formula handling --------------------------------------------
+# Formulas are written EXPANDED, with no parentheses: lizardite
+# Mg3Si2O5(OH)4 is entered as Mg3Si2O9H4. This avoids a recursive parser
+# and removes a class of transcription error, at the cost of one manual
+# expansion check per phase. Do that check once and record it.
+
+parse_formula <- function(f) {
+  tok <- regmatches(f, gregexpr("[A-Z][a-z]?[0-9]*\\.?[0-9]*", f))[[1]]
+  el  <- sub("[0-9]*\\.?[0-9]*$", "", tok)
+  num <- sub("^[A-Z][a-z]?", "", tok)
+  num[num == ""] <- "1"
+  stats::setNames(as.numeric(num), el)
+}
+
+formula_mass <- function(f) {
+  s <- parse_formula(f)
+  if (!all(names(s) %in% names(AW)))
+    stop("Unknown element in formula: ", f)
+  sum(s * AW[names(s)])
+}
+
+# Weight fraction of each requested element in a phase -> one column of A.
+# NOTE: elements present in the formula but ABSENT from `elements` are
+# silently omitted from the column while still contributing to M. That is
+# intentional (e.g. F in fluorapatite when F is not a fit element), but it
+# means such elements are unconstrained by the fit. Keep track of which.
+wt_fraction_vector <- function(f, elements) {
+  s <- parse_formula(f); M <- formula_mass(f)
+  v <- stats::setNames(numeric(length(elements)), elements)
+  common <- intersect(names(s), elements)
+  v[common] <- s[common] * AW[common] / M
+  v
+}
+
+# Build the stoichiometry matrix. matrix() coercion makes this safe for a
+# single-phase list, where sapply would collapse to a vector.
+build_A <- function(phases, elements) {
+  cols <- sapply(phase_lib$formula[match(phases, phase_lib$phase)],
+                 wt_fraction_vector, elements = elements)
+  matrix(cols, nrow = length(elements),
+         dimnames = list(elements, phases))
+}
+
+
+# ---- 3. Target composition ------------------------------------------
+# Alexander, C.M.O'D. (2019) Geochim. Cosmochim. Acta 254, 277-309,
+# Table 6, column "CI": the reduced, anhydrous CI reservoir, in mg/g.
+#
+# CRITICAL: this reservoir is reduced and anhydrous BY CONSTRUCTION (see
+# the Table 6 caption). Its oxygen content is therefore NOT independent
+# evidence about the oxidation state of the real precursor. A near-zero
+# O residual in Scenario R is a consistency check on the phase list only.
+b_raw <- c(Mg = 140.0, Al = 12.3,  Si = 157.0, Ca = 13.4,  Ti = 0.65,
+           Cr = 3.85,  Mn = 2.81,  K  = 0.80,  Na = 7.28,  P  = 1.45,
+           S  = 78.5,  Fe = 271.5, Ni = 15.6,  Co = 0.76,  O  = 293.2)
+
+# Ti and Co dropped by user decision (2026-09): Ti for low abundance and
+# very low solubility of Ti phases in aqueous alteration; Co for low
+# abundance. Ti's oxygen must be removed with it (TiO2 stoichiometry),
+# otherwise a spurious ~0.43 mg/g O excess enters the fit.
+drop_TiCo <- function(b) {
+  O_with_Ti <- 2 * (b["Ti"] / AW["Ti"]) * AW["O"]
+  b["O"] <- b["O"] - O_with_Ti
+  b <- b[setdiff(names(b), c("Ti", "Co"))]
+  b * 1000 / sum(b)   # renormalise to 1000 mg/g
+}
+b_CI <- drop_TiCo(b_raw)
+
+# ---- Lodders et al. (2025) Table 4: the PRIMARY composition ----------
+# [D] 2026-09-13, final (RECONSTRUCTION_STATUS.md §1): Lodders et al.
+# (2025) Table 4 is the primary composition (A-quality-rated Mg and Si,
+# real 1-sigma uncertainties). Alexander (2019) above (b_raw/b_CI) is
+# kept only as the bracketing comparison, not recomputed further.
+#
+# DISCREPANCY FOUND AND FIXED, 2026-09-14: this block did not exist
+# before now. STATUS.md §1 already documented a Lodders-based headline
+# table as "final," but nothing in this file (or any tracked file)
+# actually produced it — it had been computed in an untracked ad-hoc
+# script. §12 "Run" below fit b_CI (Alexander) and called it final. That
+# is now corrected: b_CI_Lodders, defined here, is what §12 fits.
+#
+# Units mg/g. O (465.7) is Lodders' TOTAL bulk-CI oxygen (hydrous: water,
+# organics, sulfate, ferric phases) — NOT usable directly for the
+# reduced-anhydrous reservoir. recompute_O() below replaces it before any
+# fit uses this vector; the 465.7 is only ever used as a sigma_rel
+# denominator in the montecarlo .Rmd, never as a fit target.
+b_bulk_CI_LoddersT4 <- c(Mg = 95.6,  Al = 8.47,  Si = 106.6, Ca = 9.148,
+               Ti = 0.442, Cr = 2.616, Mn = 1.936, K  = 0.544,
+               Na = 4.96,  P  = 0.989, S  = 51.8,  Fe = 185.0,
+               Ni = 11.18, Co = 0.514, O  = 465.7)
+
+# O recomputed from cation oxidation states (all lithophiles oxidised,
+# Fe/Ni/Co/P reduced), never read from a table. Defined here (single
+# source of truth) so both this file and the montecarlo .Rmd share one
+# copy — a second copy in the montecarlo .Rmd has been removed to avoid
+# the stale-duplicate-definition pattern flagged elsewhere in this
+# project (RECONSTRUCTION_STATUS.md §6).
+recompute_O <- function(b) {
+  m <- b / AW[names(b)]
+  O <- with(as.list(m),
+            Mg + 2*Si + 1.5*Al + Ca + 2*Ti + 1.5*Cr + Mn + 0.5*Na + 0.5*K)
+  b["O"] <- O * AW["O"]
+  b
+}
+
+b_CI_Lodders <- drop_TiCo(recompute_O(b_bulk_CI_LoddersT4))
+
+# ---- Anhydrous reservoir -> present-day bulk CI ----------------------
+# Table 6 is water-free and carbon-free, so EVERY element in it is
+# concentrated relative to measured bulk CI. Any comparison of model
+# modes against measured modes (King et al. 2015) MUST apply this factor.
+#
+# Derivation, both numbers from the same author:
+#   Alexander (2019) compilation, bulk CI S      = 5.35 wt%
+#     [quoted as "Alex'19" in Alexander et al. (2021) MAPS 57, Table 4]
+#   Alexander (2019) Table 6, reduced CI S       = 7.85 wt%
+#   ratio = 5.35 / 7.85 = 0.682
+# Cross-check on Mg: Table 6 gives 14.0 wt%; bulk CI Mg is near 9.5 wt%,
+# giving ~0.68. The agreement indicates a uniform renormalisation rather
+# than anything S-specific.
+# [U] VERIFY the Mg cross-check against a sourced bulk CI composition
+#     before relying on it; the 9.5 wt% here is not traced to a table.
+ANHYDROUS_TO_BULK <- 5.35 / 7.85
+
+# RHO_CI_GRAIN (not RHO_CI_BULK -- previous name was physically
+# backwards, RESOLVED 2026-09-15/16, RECONSTRUCTION_STATUS.md S8 item 4).
+# King et al. (2015)'s XRD modal percentages are volume fractions of the
+# SOLID material; porosity is invisible to XRD. The correct density for
+# anhydrous-to-solid-volume conversion is grain density, not the
+# porosity-inclusive bulk density.
+#
+# Friedrich (2024), ideal gas pycnometry (method Friedrich identifies as
+# most reliable per Britt & Consolmagno 2003; CCl4/water immersion
+# methods underestimate grain density and are not used): Ivuna 2.55
+# g/cm3, Orgueil 2.44 g/cm3, plus Flynn et al. (1999) 2.46 g/cm3 on an
+# independent Orgueil sample. Sample-mass-weighted mean: 2.46 +/- 0.05
+# g/cm3.
+#
+# Do NOT use CI bulk/porous density (1.61-2.10 g/cm3, same source) --
+# that includes ~15-34% macroscopic porosity plus additional unresolved
+# sub-micron microporosity, and would inflate every bulk-basis vol% to
+# account for pore space the XRD analysis never measured.
+RHO_CI_GRAIN <- 2.46
+# Not yet used by any function -- recorded here for future Monte Carlo
+# propagation of vol% uncertainty, so it exists before it's needed
+# rather than being bolted on later.
+RHO_CI_GRAIN_sigma <- 0.05
+
+
+# ---- 4. Phase library ------------------------------------------------
+# Vm in cm3/mol. Source flags:
+#   [db]   -Vm entry in Core11_idealgas_mod_v3.dat (user-verified 2026-09)
+#   [wm]   Webmineral.com, via Core11 comment
+#   [HoM]  derived as M/rho from a Handbook of Mineralogy density
+#   [??]   NOT VERIFIED - replace before trusting any volume percentage
+#
+# role: "R"  reactant only  - needs KINETICS, no thermodynamic entry
+#       "P"  product only   - needs a thermodynamic entry
+#       "RP" both
+# Rationale: phases we expect only to dissolve (forsterite, metal, etc.)
+# need rate laws, not stability. Phases that may precipitate during
+# alteration (magnetite, lizardite) need thermodynamics. Greenalite is
+# both: a type-C reactant and a possible alteration product.
+phase_lib <- data.frame(
+  phase = c("Forsterite","Enstatite","Diopside","Fayalite","Tephroite",
+            "Rhodonite","Anorthite","Albite","K-Feldspar",
+            "Magnesiochromite","Magnetite","Troilite","Iron","Nickel",
+            "Greenalite","Lizardite","Spinel","Gehlenite","Akermanite",
+            "Fluorapatite","Schreibersite"),
+  formula = c("Mg2SiO4","MgSiO3","CaMgSi2O6","Fe2SiO4","Mn2SiO4",
+              "MnSiO3","CaAl2Si2O8","NaAlSi3O8","KAlSi3O8",
+              "MgCr2O4","Fe3O4","FeS","Fe","Ni",
+              "Fe3Si2O9H4","Mg3Si2O9H4","MgAl2O4","Ca2Al2SiO7",
+              "Ca2MgSi2O7","Ca5P3O12F","Fe3P"),
+  Vm = c(43.79, 31.276, 66.09, 46.39, 47.52,
+         35.87, 100.79, 100.25, 108.87,
+         43.564, 44.524, 19.07, 7.092, 6.588,
+         115.0, 107.31, 39.71, 90.26, 92.81,
+         158.8, formula_mass("Fe3P") / 7.44),
+  # Schreibersite Vm SOURCED 2026-09-15 (RECONSTRUCTION_STATUS.md S4/S8
+  # item 1a): Handbook of Mineralogy, Fe3P endmember (matches this row's
+  # formula exactly), D(calc.) = 7.44 g/cm3 (Fasiska & Zweil 1967, Trans.
+  # AIME 239, 924-925). Computed here, not hardcoded, so the quotient is
+  # always consistent with formula_mass("Fe3P") above. The Handbook's
+  # other three analyses (D = 7.0-7.3 g/cm3) are Ni-bearing natural
+  # schreibersite (18-43 wt% Ni) and are NOT used -- mixing that density
+  # with the Ni-free Fe3P formula here would be a basis mismatch.
+  Vm_src = c("db","db","db","??","wm",
+             "wm","db","db","db",
+             "db","db","db","db","db",
+             "db","db","db","HoM","db",
+             "HoM","HoM, Fe3P endmember, D=7.44 (Fasiska & Zweil 1967)"),
+  role = c("R","R","R","R","R",
+           "R","R","R","R",
+           "R","P","R","R","R",
+           "RP","P","R","R","R",
+           "R","R"),
+  # kin_proxy: the PK04 rate law actually used. Where a phase has no rate
+  # law of its own, the substitution and its direction of bias are noted.
+  #   Troilite  -> Pyrrhotite: SR() in the RATES block must reference
+  #                "Troilite", not "Pyrrhotite". Vacancy-bearing
+  #                pyrrhotite likely dissolves faster than stoichiometric
+  #                FeS, so early S release is over-predicted.
+  #   Greenalite-> Lizardite: structural analogue but Mg endmember;
+  #                Fe-serpentines likely dissolve faster, so biased slow.
+  #   Tephroite -> Fayalite, Rhodonite -> Ferrosilite: same structure,
+  #                same divalent site; Mn is 2.81 mg/g so error is bounded.
+  #   Iron, Nickel -> EQUILIBRIUM_PHASES with dissolve_only. Metal
+  #                corrosion in reducing aqueous fluid is fast relative to
+  #                silicate dissolution, so it is not rate-limiting.
+  #                [U] verify dissolve_only syntax for your PHREEQC build.
+  kin_proxy = c("Forsterite","Enstatite","Diopside","Fayalite","Fayalite",
+                "Ferrosilite","Anorthite","Oligoclase","K-Feldspar",
+                "(none)","Magnetite","Pyrrhotite","EQ dissolve_only",
+                "EQ dissolve_only","Lizardite","Lizardite","(none)",
+                "(none)","(none)","(none)",
+                "(none -- rate not sourced, see STATUS.md S4)"),
+  stringsAsFactors = FALSE
+)
+
+# KNOWN DATABASE FAULT, fix before running Scenario C:
+# Core11's Fayalite acid mechanism is missing its ACT("H+")^n term.
+# Correct form (user-verified against PK04 Table 20, 2026-09):
+#   kacid = 10^(-4.80) * exp(-94.4e3/8.314*(1/TK-1/298.15)) * ACT("H+")^1.0
+#   kneut = 10^(-12.80)* exp(-94.4e3/8.314*(1/TK-1/298.15))
+# [U] PK04 Table 20 reportedly gives NO neutral mechanism for fayalite,
+#     yet kneut exists with an Ea identical to the acid branch. Trace its
+#     provenance. Fayalite carries much of the Fe in Scenario C.
+
+
+# ---- 5. NNLS (Lawson & Hanson 1974, Ch. 23) -------------------------
+# Implemented in base R deliberately: no package dependency.
+nnls_lh <- function(A, b, tol = 1e-12, maxit = 500) {
+  if (any(!is.finite(A)) || any(!is.finite(b)))
+    stop("Non-finite entries in A or b")
+  n <- ncol(A); P <- logical(n); x <- rep(0, n)
+  w <- as.vector(crossprod(A, b - A %*% x))
+  if (any(!is.finite(w)))
+    stop("Non-finite NNLS gradient at initialisation")
+  it <- 0
+  while (any(!P) && max(w[!P]) > tol && it < maxit) {
+    it <- it + 1
+    j <- which(!P)[which.max(w[!P])]; P[j] <- TRUE
+    repeat {
+      s <- rep(0, n)
+      s[P] <- qr.solve(A[, P, drop = FALSE], b)
+      if (all(s[P] >= 0)) { x <- s; break }
+      neg   <- P & (s <= 0)
+      alpha <- min(x[neg] / (x[neg] - s[neg]))
+      x <- x + alpha * (s - x); P <- P & (x > tol)
+    }
+    w <- as.vector(crossprod(A, b - A %*% x))
+    if (any(!is.finite(w)))
+      stop("Non-finite NNLS gradient at iteration ", it)
+  }
+  if (it >= maxit)
+    warning("NNLS hit maxit = ", maxit, "; solution may not be converged")
+  x
+}
+
+
+# ---- 6. Input validation --------------------------------------------
+# Top-level and always called. Every NA failure in this file so far has
+# come from a phase absent from phase_lib or an element absent from the
+# target; both now report themselves by name.
+check_inputs <- function(phases, target, fit_elements) {
+  missing_ph <- setdiff(phases, phase_lib$phase)
+  missing_el <- setdiff(fit_elements, names(target))
+  if (length(missing_ph))
+    stop("Not in phase_lib: ", paste(missing_ph, collapse = ", "))
+  if (length(missing_el))
+    stop("Not in target: ", paste(missing_el, collapse = ", "))
+  if (any(duplicated(phases)))
+    stop("Duplicated phase(s): ",
+         paste(unique(phases[duplicated(phases)]), collapse = ", "))
+  b <- target[fit_elements]
+  if (any(!is.finite(b)) || any(b <= 0))
+    stop("Target values must be finite and positive: ",
+         paste(fit_elements[!is.finite(b) | b <= 0], collapse = ", "))
+  if (any(!is.finite(build_A(phases, fit_elements))))
+    stop("Non-finite entries in stoichiometry matrix A")
+  invisible(TRUE)
+}
+
+
+# ---- 7. Fit driver ---------------------------------------------------
+# WEIGHTING: W = diag(1/b_i) gives every element equal RELATIVE weight.
+# Alexander (2019) supplies no analytical uncertainties, so this is a
+# MODELLING CHOICE, not a measurement. Unweighted, the fit is dominated
+# by Fe, Si, Mg and O and effectively discards Cr, Mn, K and Na. Always
+# re-run with weight = "none" to see how far the answer moves; if the
+# major phases shift materially, the choice belongs in the methods.
+fit_scenario <- function(phases, target, fit_elements,
+                         weight = c("relative", "none")) {
+  weight <- match.arg(weight)
+  check_inputs(phases, target, fit_elements)
+
+  b <- as.vector(target[fit_elements])
+  A <- build_A(phases, fit_elements)
+
+  W <- if (weight == "relative") diag(1 / b) else diag(length(b))
+  x <- nnls_lh(W %*% A, as.vector(W %*% b))
+  names(x) <- phases
+
+  fitted <- as.vector(A %*% x)
+  list(
+    phases   = phases,
+    weight   = weight,
+    mg_g     = x,        # mg of phase per g of anhydrous reservoir
+    wt_pct   = x / 10,
+    residual = data.frame(
+      element   = fit_elements,
+      target    = b,
+      fitted    = fitted,
+      resid_mg  = fitted - b,
+      resid_pct = 100 * (fitted - b) / b,
+      row.names = NULL
+    ),
+    closure_mg_g = sum(x)
+  )
+}
+
+
+# ---- 8. Scenario definitions -----------------------------------------
+# Defined ONCE. Do not redefine below; a stale duplicate definition was
+# the cause of an earlier NA failure.
+
+# Scenario R -- primary composition (Lodders, b_CI_Lodders), Alexander
+# (b_CI) kept as bracket. O IS fitted (recomputed, never tabulated, for
+# the Lodders target; tabulated Table 6 value for the Alexander target).
+phases_R <- c("Forsterite","Enstatite","Diopside","Tephroite","Rhodonite",
+              "Anorthite","Albite","K-Feldspar","Magnesiochromite",
+              "Troilite","Iron","Nickel","Schreibersite")
+# Rhodonite returns exactly 0 -> drop it. All Mn goes to tephroite.
+phases_R <- setdiff(phases_R, "Rhodonite")
+
+# Fe and Ni are fitted as separate native phases because the fit has no
+# way to know they alloy. Report as a single Fe-Ni alloy (see STATUS.md
+# S1 for the current wt%/Ni-fraction numbers, which move slightly once
+# Schreibersite below takes some Fe).
+
+# 2026-09-14: P and Schreibersite ADDED (RECONSTRUCTION_STATUS.md S1,
+# S4) -- reaction chemistry finalized, Vm and rate constant still [U].
+elements_R <- c("Mg","Al","Si","Ca","Cr","Mn","K","Na","S","Fe","Ni","O","P")
+# Ti and Co were removed upstream by drop_TiCo() and must not appear
+# here.
+
+# Scenario C -- Charnoz et al. (2026) Nature 652, 925-, kinetic "type C".
+# Phase list from SI Table 2 and the type C figures.
+#   - Anorthite IS present in the type C output (user-verified in the SI,
+#     at both fast and slow nebular reaction rates). An earlier version of
+#     this file wrongly excluded all feldspar on the basis of the main
+#     text statement about plagioclase; that was an over-generalisation.
+#   - Microcline is present in their THERMODYNAMIC DATA but does not
+#     appear in the model output, i.e. K-feldspar was available to form
+#     and did not. K therefore goes to the amorphous phase.
+#   [U] Check whether ALBITE appears in type C. The main text singles out
+#       albite as blocked by Si and Al availability. If absent, Na joins K
+#       in the amorphous phase; if present, add it to phases_C.
+# O and H are NOT fitted here: the type C assemblage needs more oxygen
+# than the reduced reservoir supplies, and that deficit is a RESULT.
+phases_C <- c("Forsterite","Enstatite","Fayalite","Tephroite","Magnetite",
+              "Troilite","Iron","Nickel","Greenalite","Lizardite",
+              "Diopside","Spinel","Gehlenite","Magnesiochromite",
+              "Anorthite")
+elements_C <- c("Mg","Al","Si","Ca","Cr","Mn","S","Fe","Ni")
+# Na and K omitted: no host phase in this list. They must be added to the
+# amorphous phase explicitly - see add_unhosted() below.
+
+
+# ---- 9. Oxygen and water demand (Scenario C) -------------------------
+# Reports the oxygen the assemblage requires against what the reduced
+# reservoir supplies. The deficit, as equivalent wt% H2O, is a result.
+oxygen_demand <- function(fit, target = b_CI) {
+  A_OH  <- build_A(fit$phases, c("O", "H"))
+  O_req <- sum(A_OH["O", ] * fit$mg_g)
+  H_req <- sum(A_OH["H", ] * fit$mg_g)
+  c(O_required_mg_g  = O_req,
+    O_available_mg_g = unname(target["O"]),
+    O_deficit_mg_g   = O_req - unname(target["O"]),
+    H_required_mg_g  = H_req,
+    # structural H expressed as the H2O mass it corresponds to
+    H2O_equiv_wt_pct = unname(H_req * (2*AW["H"] + AW["O"]) /
+                              (2*AW["H"]) / 10))
+}
+
+
+# ---- 10. Amorphous (GEMS-like) phase ---------------------------------
+# TWO DISTINCT OPERATIONS, kept separate on purpose.
+#
+# (a) add_unhosted(): a MASS BALANCE step. Elements with no crystalline
+#     host (Na, K in Scenario C) are assigned to the amorphous phase as
+#     oxides. This ADDS mass and oxygen demand, so run it before
+#     oxygen_demand() if you want the total.
+#
+# (b) make_amorphous(): a KINETIC step. A fraction f of named silicate
+#     phases is relabelled as amorphous with IDENTICAL stoichiometry.
+#     Mass balance is untouched, so f cannot be tuned to fix a fit.
+#
+# Rationale for the phase existing at all: Charnoz et al. (2026) state
+# that primary amorphous silicates cannot be modelled for want of
+# thermodynamic data, so any condensation-derived phase list under-counts
+# them by construction.
+
+add_unhosted <- function(fit, target = b_CI,
+                         elements = c("Na", "K"),
+                         oxide_O_per_cation = c(Na = 0.5, K = 0.5)) {
+  el_mg <- target[elements]
+  O_mg  <- sum((el_mg / AW[elements]) * oxide_O_per_cation[elements]) * AW["O"]
+  added <- sum(el_mg) + O_mg
+  fit$mg_g["Amorphous"] <- unname(sum(fit$mg_g["Amorphous"], 0, na.rm = TRUE) + added)
+  fit$wt_pct <- fit$mg_g / 10
+  fit$unhosted <- c(el_mg, O_added_mg_g = unname(O_mg))
+  fit
+}
+
+make_amorphous <- function(fit, f, from_phases) {
+  stopifnot(f >= 0, f <= 1)
+  if (!all(from_phases %in% names(fit$mg_g)))
+    stop("from_phases not in fit: ",
+         paste(setdiff(from_phases, names(fit$mg_g)), collapse = ", "))
+  moved <- fit$mg_g[from_phases] * f
+  fit$mg_g[from_phases] <- fit$mg_g[from_phases] - moved
+  fit$mg_g["Amorphous"] <- unname(sum(fit$mg_g["Amorphous"], 0, na.rm = TRUE) +
+                                  sum(moved))
+  fit$wt_pct <- fit$mg_g / 10
+  fit$amorphous_from <- moved
+  fit
+}
+
+# Si:O of the amorphous phase. Needed to test the Wolff-Boenisch (2006)
+# threshold: glasses and minerals of Si:O <= 0.28 dissolve at SIMILAR
+# rates (95% CIs overlap), so if GEMS sit at or below 0.28 the amorphous
+# enhancement factor f_enh should default to 1, NOT to orders of
+# magnitude. Forsterite is Si:O = 0.25, enstatite 0.333.
+amorphous_si_o <- function(fit, f, from_phases,
+                           elements = c("Mg","Fe","Mn","Si","O","Al","Ca")) {
+  moved <- fit$mg_g[from_phases] * f
+  A     <- build_A(from_phases, elements)
+  el_mg <- stats::setNames(as.vector(A %*% moved), elements)
+  mol   <- el_mg / AW[elements]
+  list(element_mg_g = el_mg,
+       Si_O_molar   = unname(mol["Si"] / mol["O"]))
+}
+
+
+# ---- 11. Volume conversion (densities DERIVED, never asserted) -------
+# Returns vol% of the ANHYDROUS assemblage.
+#
+# BUG FIXED 2026-09-14: this function only ever excluded phases missing
+# from phase_lib entirely. A phase IN phase_lib with Vm = NA (e.g.
+# Schreibersite, unsourced -- STATUS.md S4) passed that check, then
+# silently propagated NA through rho/cm3/sum(cm3) into EVERY phase's
+# vol_pct, not just its own -- the exact "silently produces a number"
+# failure mode this project's handoffs keep warning about. Phases with a
+# known phase_lib entry but Vm = NA are now excluded from the volume
+# table the same way phases absent from phase_lib are: named in a
+# warning, dropped from both the numerator and the sum(cm3) denominator.
+to_volume <- function(fit) {
+  phases <- names(fit$mg_g)
+  known  <- phases[phases %in% phase_lib$phase]
+  if (length(known) < length(phases))
+    warning("No phase_lib entry for: ",
+            paste(setdiff(phases, known), collapse = ", "),
+            " - excluded from volume calculation")
+
+  Vm_known <- phase_lib$Vm[match(known, phase_lib$phase)]
+  has_Vm <- known[!is.na(Vm_known)]
+  no_Vm  <- known[is.na(Vm_known)]
+  if (length(no_Vm))
+    warning("No Vm for: ", paste(no_Vm, collapse = ", "),
+            " - excluded from volume calculation")
+
+  M   <- sapply(phase_lib$formula[match(has_Vm, phase_lib$phase)], formula_mass)
+  Vm  <- phase_lib$Vm[match(has_Vm, phase_lib$phase)]
+  rho <- M / Vm
+  cm3 <- (fit$mg_g[has_Vm] / 1000) / rho
+  data.frame(phase = has_Vm, mg_g = unname(fit$mg_g[has_Vm]),
+             wt_pct = unname(fit$mg_g[has_Vm]) / 10,
+             density = unname(rho),
+             vol_pct = unname(100 * cm3 / sum(cm3)),
+             row.names = NULL)
+}
+
+# Convert to the present-day hydrated rock basis for comparison against
+# King et al. (2015), who report VOLUME percentages of the altered rock
+# from XRD -- a SOLID-material (grain), not bulk/porous, volume basis.
+# Without ANHYDROUS_TO_BULK every phase is overstated by ~47%.
+to_bulk_basis <- function(vol_tbl, rho_grain = RHO_CI_GRAIN) {
+  wt_bulk  <- vol_tbl$wt_pct * ANHYDROUS_TO_BULK
+  vol_bulk <- (wt_bulk / vol_tbl$density) / (100 / rho_grain) * 100
+  cbind(vol_tbl[, c("phase", "density")],
+        wt_pct_bulk = wt_bulk, vol_pct_bulk = vol_bulk)
+}
+
+
+# ---- 12. Run ---------------------------------------------------------
+# fit_R is the PRIMARY, FINAL Scenario R fit (RECONSTRUCTION_STATUS.md
+# S1): Lodders-based target, P and Schreibersite included (2026-09-14).
+fit_R <- fit_scenario(phases_R, b_CI_Lodders, elements_R)
+
+print(round(fit_R$wt_pct, 3))
+print(round(fit_R$residual[, -1], 3))
+cat("closure:", round(fit_R$closure_mg_g, 1), "of 1000 mg/g\n")
+print(to_volume(fit_R), digits = 3)
+print(to_bulk_basis(to_volume(fit_R)), digits = 3)
+
+# Weighting sensitivity - REQUIRED, not optional
+fit_R_unw <- fit_scenario(phases_R, b_CI_Lodders, elements_R, weight = "none")
+print(round(cbind(relative = fit_R$wt_pct,
+                  unweighted = fit_R_unw$wt_pct), 3))
+
+# Alexander bracket comparison (RECONSTRUCTION_STATUS.md S1's "old vs
+# new" table) -- same phase list/elements, Alexander target, not the
+# headline result.
+fit_R_Alexander <- fit_scenario(phases_R, b_CI, elements_R)
+print(round(cbind(Lodders_primary = fit_R$wt_pct,
+                  Alexander_bracket = fit_R_Alexander$wt_pct), 3))
+
+# Scenario C
+fit_C <- fit_scenario(phases_C, b_CI, elements_C)
+print(round(fit_C$wt_pct, 3))
+print(round(fit_C$residual[, -1], 3))
+print(round(oxygen_demand(fit_C), 2))
+
+
+# ---- 13. What to look at --------------------------------------------
+# 1. resid_pct > a few percent means the phase list cannot accommodate
+#    that element. That is the fit telling you something. Do not add a
+#    phase purely to absorb it without a reason the phase should exist.
+# 2. Any phase returning exactly 0 is unnecessary: drop it rather than
+#    keeping a token abundance.
+# 3. 2026-09-14: P/Schreibersite are now IN the fit (RECONSTRUCTION_
+#    STATUS.md S1/S4), so Scenario R closure should land near 1000 mg/g
+#    -- the ~1.5 mg/g P-shaped gap this comment used to describe is gone.
+#    Do not assume what the new (small) residual is made of; read it off
+#    fit_R$residual and say so in STATUS.md rather than predicting it.
+# 4. The Scenario R O residual should be near zero. Again: a consistency
+#    check on the phase list, NOT evidence about redox.
+# 5. Compare the weighted and unweighted columns before writing anything.
+
+
+# ---- 14. Still open --------------------------------------------------
+# Schreibersite: mass balance is now IN the fit (elements_R/phases_R,
+#   2026-09-14) and the reaction chemistry is FINALIZED -- see
+#   RECONSTRUCTION_STATUS.md S4 for the reaction, its derivation, and the
+#   independent check against Pasek & Lauretta (2005)'s own Reaction 7
+#   (5.5 H2 per Fe3P, matching this project's coefficient before their
+#   paper was consulted). Two sub-items remain genuinely open, tracked in
+#   STATUS.md S8: (1a) Vm/density -- unsourced, phase_lib carries NA on
+#   purpose, do not fill it in; (1b) rate constant -- Pasek & Lauretta
+#   give no stated sample mass/surface area, so no mol m-2 s-1 number can
+#   be extracted without guessing; do not do that conversion.
+#
+# Chlorine: absent from Alexander Table 6 and from Charnoz's element set,
+#   so neither source constrains it. Chlorapatite cannot host it (all
+#   1.45 mg/g P as chlorapatite yields only 0.55 mg/g Cl, and requires
+#   zero schreibersite). Recommendation: initial fluid, following Neveu
+#   et al. (2015), who used 520 mol ppm Cl from Wasson & Kallemeyn (1988).
+#
+# GEMS: composition to be taken from amorphous_si_o() once the fit runs;
+#   grain size has NO source and must come from the TEM literature;
+#   f_enh defaults to 1 per Wolff-Boenisch (2006) - see amorphous_si_o().
+#
+# Sulfur speciation: Alexander et al. (2021) report IOM carries 2-7% of
+#   bulk S. For the sulfide/sulfate/S0 split see Labidi et al. (2017) and
+#   Gao & Thiemens (1993); neither is CI-specific and neither is in the
+#   project yet.
+```
+
+
+## Machine-readable output for ENTICES
+
+Writes `rock_mol_per_kg.csv` next to this file: the headline Scenario R fit
+(`fit_R`, Lodders 2025 Table 4 target), one row per phase. ENTICES does not
+read this file at run time; `tests/rock_table_check.R` in the ENTICES repo
+asserts that `ROCK_MOL_PER_KG` matches it. `role` records how ENTICES treats
+the phase (kinetic, equilibrium, or inert = carried in the mass basis but not
+reacted). Lawrencite is not part of this fit; ENTICES adds it and takes its Fe
+out of the metal.
+
+```{r write-rock-csv}
+rock_roles <- c(Forsterite = "kinetic", Enstatite = "kinetic", Diopside = "kinetic",
+                Tephroite = "kinetic", Anorthite = "kinetic", Albite = "kinetic",
+                `K-Feldspar` = "kinetic", Troilite = "kinetic", Schreibersite = "kinetic",
+                Iron = "equilibrium", Nickel = "equilibrium",
+                Magnesiochromite = "inert")
+stopifnot(setequal(names(rock_roles), fit_R$phases))
+rock_formula <- phase_lib$formula[match(fit_R$phases, phase_lib$phase)]
+rock_mw <- vapply(rock_formula, formula_mass, numeric(1))
+rock_tbl <- data.frame(
+  phase      = fit_R$phases,
+  formula    = rock_formula,
+  mw_g_mol   = unname(rock_mw),
+  wt_pct     = unname(fit_R$wt_pct),
+  mol_per_kg = unname(fit_R$mg_g / rock_mw),   # mg/g == g/kg
+  role       = unname(rock_roles[fit_R$phases]),
+  scenario   = "R_Lodders2025T4"
+)
+rock_commit <- tryCatch(system("git rev-parse --short HEAD", intern = TRUE),
+                        error = function(e) "unknown", warning = function(w) "unknown")
+writeLines(c(sprintf("# Written by Primordial_CI_chondrite_mineralogy.Rmd on %s (git %s)",
+                     format(Sys.Date()), rock_commit),
+             "# mol_per_kg = mol of phase per kg of anhydrous rock; Fe metal NOT yet reduced for lawrencite"),
+           "rock_mol_per_kg.csv")
+suppressWarnings(write.table(rock_tbl, "rock_mol_per_kg.csv", sep = ",", row.names = FALSE,
+                             append = TRUE, col.names = TRUE, quote = FALSE))
+rock_tbl
+```

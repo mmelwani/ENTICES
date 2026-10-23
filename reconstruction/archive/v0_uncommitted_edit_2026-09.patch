@@ -1,0 +1,79 @@
+diff --git a/Primordial_CI_chondrite_mineralogy.Rmd b/Primordial_CI_chondrite_mineralogy.Rmd
+index 9c72bc1..2d1e13f 100644
+--- a/Primordial_CI_chondrite_mineralogy.Rmd
++++ b/Primordial_CI_chondrite_mineralogy.Rmd
+@@ -35,14 +35,15 @@ ferrosilite_density <- 3.960 # g/cm³
+ kamacite_density <- 7.900    # g/cm³ (α-Fe,Ni with ~5-7% Ni)
+ taenite_density <- 8.200     # g/cm³ (γ-Fe,Ni with higher Ni)
+ troilite_density <- 4.610    # g/cm³
+-pyrrhotite_density <- 4.580  # g/cm³
++pyrrhotite_density <- mean(c(4.58,4.65))  # g/cm^3; Specific gravity = rho = 4.58-4.65 mindat.org, Handbook of mineralogy, webmineral.com, Wikipedia.
+ anorthite_density <- 2.760   # g/cm³
+ albite_density <- 2.620      # g/cm³
+-magnetite_density <- 5.175   # g/cm³
+-serpentine_density <- 2.550  # g/cm³ (adjusted for Fe content)
+-saponite_density <- 2.300    # g/cm³
+-dolomite_density <- 2.870    # g/cm³
+-ferrihydrite_density <- 3.800 # g/cm³
++orthoclase_density 
++magnetite_density <- 5.175   # g/cm³ specific gravity on mindat.org; also rho in Handbook of Mineralogy.
++serpentine_density <- 2.67  # Mg-endmember lizardite  Mg3Si2O5(OH)4 is ~2.55 g/cm^3 (mindat, Wikipedia); Webmineral: 2.55 - 2.6, Average = 2.57. For Fe-bearing serpentine (Tomeoka and Buseck, 1988) MgO 34.6, Al2O3 6.4, SiO2 40.5, FeO 10.9, slightly higher; Fe/(Mg+Fe) molar = 0.1517/(0.8585+0.1517) = 0.1517/1.0102 = 0.150.The unit-cell mass increases by ~15% × (55.8−24.3)/(weighted formula mass) — for the (Mg,Fe)₃ site, going from 3 Mg to 2.55 Mg + 0.45 Fe adds 0.45×(55.8−24.3) = 14.2 to a formula mass of ~277, so ~+5% mass at roughly constant volume → density ~2.55 × 1.05 ≈ 2.67 g/cm³ for the Fe-bearing lizardite.
++saponite_density <- 2.30    # 2.24 - 2.30 mindat, Wikipedia and Handbook of Mineralogy; 2.3 (density)
++dolomite_density <- 2.86    # g/cm^3 2.8 - 2.9 webmineral; 2.84 - 2.86 mindat; 2.86 (measured) Handbook of mineralogy
++ferrihydrite_density <- 3.96 # g/cm^3 specific gravity on mindat.org; rho = 3.800 g/cm^3 on Wikipedia; rho = 3.77 g/cm^3 on webmineral.com; specific gravity = 3.93 g/cm^3 on webmineral.com
+ amorphous_density <- 2.200   # g/cm³
+ 
+ # Calculation of solid solution densities based on composition
+@@ -89,8 +90,8 @@ cat(sprintf("Plagioclase (An₈₀Ab₂₀): %.3f g/cm³\n", plagioclase_density
+ # 2. Define key relationships and parameters
+ # ===========================================
+ 
+-# Serpentine:Saponite ratio in phyllosilicates (Tomeoka & Buseck, 1988)
+-serp_ratio <- 0.7  # 70% serpentine
++# Serpentine:Saponite ratio in phyllosilicates (Tomeoka & Buseck, 1988; "Intersection A gives an average molar proportion of serpentine and saponite of ~50:~50.")
++serp_ratio <- 0.7  # 70% serpentine; Table 2: serpentine endmember MgO 34.6, Al2O3 6.4, SiO2 40.5, FeO 10.9, ~(Mg,Fe)6(Si,Al)4O10(OH)8) - Lizardite
+ sap_ratio <- 0.3   # 30% saponite
+ serp_ratio_err <- 0.05  # uncertainty
+ 
+@@ -520,13 +521,16 @@ px_fs_mol_percent <- px_fs_moles / px_total_moles * 100
+ pl_mass <- anorthite_final_vol * d_anorthite$mean
+ pl_an_mass <- pl_mass * plagioclase_an_fraction * (anorthite_density/plagioclase_density)
+ pl_ab_mass <- pl_mass * plagioclase_ab_fraction * (albite_density/plagioclase_density)
++pl_or_mass <- pl_mass * plagioclase_or_fraction * (orthoclase_density/plagioclase_density)
+ 
+ # Calculate molar amounts
+ mol_mass_an <- 278.21  # g/mol for CaAl₂Si₂O₈
+ mol_mass_ab <- 262.22  # g/mol for NaAlSi₃O₈
++mol_mass_or <-   # g/mol for KAlSi₃O₈
+ pl_an_moles <- pl_an_mass / mol_mass_an
+ pl_ab_moles <- pl_ab_mass / mol_mass_ab
+-pl_total_moles <- pl_an_moles + pl_ab_moles
++pl_or_moles <- pl_or_mass / mol_mass_or
++pl_total_moles <- pl_an_moles + pl_ab_moles + pl_or_moles
+ 
+ # Molar percentages
+ pl_an_mol_percent <- pl_an_moles / pl_total_moles * 100
+@@ -723,6 +727,7 @@ troilite_density <- 4.610    # g/cm³
+ pyrrhotite_density <- 4.580  # g/cm³
+ anorthite_density <- 2.760   # g/cm³
+ albite_density <- 2.620      # g/cm³
++orthoclase <- 2.563          # g/cm³ 2.563 (measured, HoM; 2.55 - 2.63 g/cm³ calculated; HoM)
+ magnetite_density <- 5.175   # g/cm³
+ serpentine_density <- 2.550  # g/cm³ (adjusted for Fe content)
+ saponite_density <- 2.300    # g/cm³
+@@ -756,11 +761,13 @@ pyroxene_fs_fraction <- 0.15
+ pyroxene_density <- (pyroxene_en_fraction * enstatite_density) + 
+                     (pyroxene_fs_fraction * ferrosilite_density)
+ 
+-# Plagioclase (An₈₀Ab₂₀)
++# Plagioclase (An₈₀Ab₂₀) Or?
+ plagioclase_an_fraction <- 0.80
+ plagioclase_ab_fraction <- 0.20
++plagioclase_or_fraction <- 0.00
+ plagioclase_density <- (plagioclase_an_fraction * anorthite_density) + 
+-                       (plagioclase_ab_fraction * albite_density)
++                       (plagioclase_ab_fraction * albite_density) + 
++                       (plagioclase_or_fraction * orthoclase_density)   
+ 
+ # Metal (93% Fe, 7% Ni)
+ metal_density <- kamacite_density  # Dominated by kamacite in primitive material

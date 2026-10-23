@@ -1,4 +1,4 @@
-DATABASE C:/Users/melwa/GitHub/ENTICES/Core11_idealgas_mod_v4.dat
+DATABASE databases/Core11_idealgas_mod_v4.dat
 TITLE Test A4 -- coupled vs decoupled at REDUCING conditions (the real case)
 #
 # Test A3 compared at pe 4, where coupled S goes to sulfate rather than

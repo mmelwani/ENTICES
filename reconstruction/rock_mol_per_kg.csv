@@ -1,0 +1,15 @@
+# Written by Primordial_CI_chondrite_mineralogy.Rmd on 2026-10-22 (git 78730a8)
+# mol_per_kg = mol of phase per kg of anhydrous rock; Fe metal NOT yet reduced for lawrencite
+phase,formula,mw_g_mol,wt_pct,mol_per_kg,role,scenario
+Forsterite,Mg2SiO4,140.691,22.6087005047949,1.60697560645634,kinetic,R_Lodders2025T4
+Enstatite,MgSiO3,100.387,22.8447554528896,2.27566870739136,kinetic,R_Lodders2025T4
+Diopside,CaMgSi2O6,216.547,5.94454301235085,0.274515140470699,kinetic,R_Lodders2025T4
+Tephroite,Mn2SiO4,201.957,0.524831334317271,0.0259872811696188,kinetic,R_Lodders2025T4
+Anorthite,CaAl2Si2O8,278.203,1.72860674945797,0.0621347271401806,kinetic,R_Lodders2025T4
+Albite,NaAlSi3O8,262.21827,8.34388540538363,0.31820381567553,kinetic,R_Lodders2025T4
+K-Feldspar,KAlSi3O8,278.3268,0.571155528002588,0.0205210395837766,kinetic,R_Lodders2025T4
+Magnesiochromite,MgCr2O4,192.2932,0.713442921440194,0.0371018279086413,inert,R_Lodders2025T4
+Troilite,FeS,87.905,20.9477871797391,2.38300292130586,kinetic,R_Lodders2025T4
+Iron,Fe,55.845,13.1885231782549,2.36163007937235,equilibrium,R_Lodders2025T4
+Nickel,Ni,58.6934,1.64892209167181,0.280938247174607,equilibrium,R_Lodders2025T4
+Schreibersite,Fe3P,198.50876,0.934846641697143,0.0470934704189953,kinetic,R_Lodders2025T4

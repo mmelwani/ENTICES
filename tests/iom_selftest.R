@@ -28,7 +28,7 @@
 # environment) -- it is a fast, dependency-free check of the calibration
 # itself.
 #
-# Usage: Rscript iom_selftest.R
+# Usage (from the repo root): Rscript tests/iom_selftest.R
 # =============================================================================
 
 source("iom_module.R")

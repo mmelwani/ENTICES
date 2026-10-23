@@ -1,4 +1,4 @@
-DATABASE C:/Users/melwa/GitHub/ENTICES/coreclath_CH4coupled.dat
+DATABASE databases/coreclath_CH4coupled.dat
 TITLE Test B3 -- Hdg carbon decoupling, REAL secondary mineral assemblage + real database
 #
 # SUPERSEDES test_B2_Hdg_carbon.pqi's "realistic" cases (sims 3/4 there used a
@@ -8,7 +8,7 @@ TITLE Test B3 -- Hdg carbon decoupling, REAL secondary mineral assemblage + real
 #     ENTICES_LF_20260917.R's example run (has Hdg/Sg/Mtg/Ntg, confirmed
 #     2026-09-24, AND three clathrate phases Mohit's copy lacks).
 #   - The REAL 78-entry ocean secondary-mineral list (EQUILIBRIUM_PHASES 2),
-#     extracted directly from phreeqc_inputs/from_lucas_20260924/
+#     extracted directly from examples/from_lucas_20260924/
 #     enceladus_k1.00e-07_d194200_T150_org15_orb12.pqi.out, not reconstructed
 #     from memory. Ocean list chosen (not the 81-entry porewater list)
 #     because it matches this test's cold/reducing conditions and because

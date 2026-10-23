@@ -1,0 +1,223 @@
+```{r}
+# ---- Bulk CI composition, two sourced options -------------------------
+# Kept as two SEPARATELY NAMED vectors on purpose: reassigning the same
+# name twice (as this file used to do) means the second definition
+# silently wins and the first becomes unreachable dead code - the same
+# stale-duplicate-definition pattern flagged elsewhere in this project.
+# Units mg/g. Table 6 (b_raw, main .Rmd) is EITHER of these times 1.4683
+# +/- 0.0038 (n=14, see ANHYDROUS_TO_BULK): Table 6 therefore carries NO
+# independent information. Perturb THESE vectors, never Table 6.
+
+# Alexander (2019) GCA 254:277-309, Table 1, column "CI".
+# O is BACK-CALCULATED from Table 6 (293.2/1.4683) because Table 1 reports
+# oxygen split into anhydrous (Oan) and excess (Oex) rather than as a
+# single value - this O is not an independent bulk measurement.
+b_bulk_CI_AlexanderT1 <- c(Mg = 95.4,  Al = 8.4,   Si = 107.0, Ca = 9.11,
+               Ti = 0.440, Cr = 2.62,  Mn = 1.92,  K  = 0.546,
+               Na = 4.96,  P  = 0.985, S  = 53.5,  Fe = 185.0,
+               Ni = 10.6,  Co = 0.519, O  = 293.2 / 1.4683)
+
+# Lodders et al. (2025) Table 4, column "CI".
+# 2026-09-14: moved to the main .Rmd (it is now also the source for the
+# primary point-estimate fit, b_CI_Lodders) so there is one copy, not
+# two -- a second copy here previously duplicated it, the same
+# stale-duplicate-definition pattern this file's own header warns about.
+# `b_bulk_CI_LoddersT4` is defined in Primordial_CI_chondrite_mineralogy.Rmd,
+# which must be sourced/run before this file. O here (465.7) is Lodders'
+# TOTAL bulk-CI oxygen (hydrous) -- it is used below ONLY as the
+# denominator for sigma_rel_Lodders, never as a fit target; recompute_O()
+# (also now defined in the main .Rmd) replaces it before any fit runs.
+
+# ACTIVE choice for the Monte Carlo below.
+b_bulk_CI <- b_bulk_CI_LoddersT4
+
+
+# ---- Relative uncertainties --------------------------------------------
+# Two sourced options, same reasoning as above: separate names, one
+# ACTIVE choice, so the discarded option stays legible instead of being
+# silently overwritten.
+
+# DECLARED ASSUMPTION, not measurement (pairs with b_bulk_CI_AlexanderT1).
+# Table 1 gives no uncertainties. The one element with a real spread is S:
+# Alexander et al. (2021) Table 4 lists five independent CI determinations
+# (5.20, 5.24, 5.35, 5.40, 6.07 wt%) -> 6.5% RSD. In the absence of
+# anything better, 5% is applied to majors and 10% to minors, with S at
+# its measured 6.5%. REPLACE with Palme et al. (2014) uncertainties if you
+# can get them (RECONSTRUCTION_STATUS.md open item #1).
+sigma_rel_assumed <- c(Mg = 0.05, Al = 0.05, Si = 0.05, Ca = 0.05, Ti = 0.10,
+               Cr = 0.05, Mn = 0.05, K  = 0.10, Na = 0.05, P  = 0.10,
+               S  = 0.065, Fe = 0.05, Ni = 0.05, Co = 0.10, O = 0.0)
+
+# [Bug 1] Lodders et al. (2025) Table 4 1-sigma column. These are ABSOLUTE
+# uncertainties in mg/g (matching b_bulk_CI_LoddersT4's units), NOT
+# fractions. A prior run assigned this vector directly into `sigma_rel`,
+# which mc_fit()/mc_fit2() use as a lognormal `sd` - i.e. a value that
+# must be a FRACTION. That produced nonsensical draws (NNLS hitting
+# maxit, phases collapsing to zero). Fix: keep the absolute values
+# separate and divide by the composition they belong to.
+sigma_abs_Lodders  <- c(Mg = 3.0, Al = 0.48, Si = 4.00, Ca = 0.544, Ti = 0.03,
+               Cr = 0.116, Mn = 0.153, K  = 0.041, Na = 0.512, P  = 0.089,
+               S  = 4.6, Fe = 6.0, Ni = 0.3, Co = 0.026, O = 8.0)
+sigma_rel_Lodders <- sigma_abs_Lodders / b_bulk_CI_LoddersT4
+
+# ACTIVE choice for the Monte Carlo below.
+sigma_rel <- sigma_rel_Lodders
+
+# Sanity check (handoff requirement): fractions should read approximately
+# Si ~3.8-4.0%, Mg ~3.1%, Fe ~3.2%, Al ~5.7%, Ca ~5.9-6.1%, S ~8.9-9.3%,
+# Na ~10.3%, O ~1.7%. If any land far outside this, stop - do not proceed.
+print(round(100 * sigma_rel_Lodders, 2))
+
+
+# ---- Oxygen: always recomputed, never read from a table ---------------
+# [Bug 2 fix] `recompute_O()` moved to the main .Rmd, 2026-09-14 (same
+# reasoning as b_bulk_CI_LoddersT4 above: single source of truth, since
+# the main file's own primary fit now needs it too). Derives O from
+# cation oxidation states - all lithophiles oxidised, Fe/Ni/Co/P reduced
+# - never from a table.
+
+
+# ---- Monte Carlo, naive baseline: independent per-element errors ------
+# Elements are treated as INDEPENDENT, which is conservative: real
+# compilations share sources, so Mg and Si errors are likely correlated,
+# and correlated errors would leave Mg/Si -- the quantity that decides Fo
+# vs En -- better constrained than this assumes. Superseded by mc_fit2()
+# below, which models the shared component explicitly. Kept as the
+# "before" baseline for that comparison, not as a second independent
+# result to report.
+mc_fit <- function(n = 2000, phases, fit_elements,
+                   bulk = b_bulk_CI, sigma = sigma_rel, seed = 1) {
+  set.seed(seed)
+  out <- matrix(NA_real_, n, length(phases),
+                dimnames = list(NULL, phases))
+  ratio <- numeric(n)
+  for (i in seq_len(n)) {
+    s  <- sigma[names(bulk)]
+    bp <- bulk * exp(rnorm(length(bulk),
+                           mean = -s^2/2,   # so E[bp] = bulk
+                           sd   = s))
+    bp <- recompute_O(bp)                   # [Bug 2 fix] never bulk["O"]
+    tgt <- drop_TiCo(bp)                    # [Bug 4 fix] no *1.4683: any
+    # constant scalar applied here cancels in drop_TiCo's final
+    # renormalisation to 1000 mg/g (verified algebraically - see
+    # RECONSTRUCTION_STATUS.md), so it was a no-op left over from an
+    # earlier draft. Removed for clarity, not because it was wrong.
+    f <- tryCatch(fit_scenario(phases, tgt, fit_elements),
+                  error = function(e) NULL)
+    if (is.null(f)) next
+    out[i, ] <- f$wt_pct
+    ratio[i] <- f$wt_pct["Enstatite"] / f$wt_pct["Forsterite"]
+  }
+  # p_En_gt_Fo REMOVED, 2026-09-13 (RECONSTRUCTION_STATUS.md §2): a
+  # P(En>Fo) figure is a coin-flip statement about a ~50/50 split and
+  # adds no information beyond "uncertain" -- do not reintroduce it here.
+  # `en_fo` (the raw ratio draws) is kept for anyone who wants to inspect
+  # the distribution directly, but it is not printed as a probability.
+  list(modes = out, en_fo = ratio,
+       summary = t(apply(out, 2, quantile,
+                         c(0.025, 0.5, 0.975), na.rm = TRUE)),
+       p_An_zero  = mean(out[, "Anorthite"] < 1e-6, na.rm = TRUE))
+}
+
+mc_R_naive <- mc_fit(phases = phases_R, fit_elements = elements_R)
+print(round(mc_R_naive$summary, 3))
+cat("P(anorthite vanishes) =", mc_R_naive$p_An_zero, "\n")
+```
+
+```{r}
+# Scenario R Monte Carlo, validated approach. Two changes from mc_fit():
+#  (1) Mg and Si errors are CORRELATED. CI compilations share samples and
+#      calibrations, and ratios cancel the systematics that dominate
+#      absolute abundances (Alexander T1 molar Mg/Si = 1.0303; Lodders
+#      2003 = 1.0398, 0.9% apart). Independent errors overstate
+#      sigma(Mg/Si) -- the ONLY quantity that decides Fo vs En.
+#      Modelled as a shared multiplicative factor plus a small
+#      element-specific residual.
+#  (2) O is RECOMPUTED from the perturbed cations via recompute_O(),
+#      never read from bulk["O"] (see [Bug 2] above).
+
+mc_fit2 <- function(n = 2000, phases, fit_elements,
+                    bulk = b_bulk_CI, sigma = sigma_rel,
+                    sigma_shared = 0.04,   # common-mode, cancels in ratios
+                    seed = 1) {
+  set.seed(seed)
+  el  <- setdiff(names(bulk), "O")
+  out <- matrix(NA_real_, n, length(phases), dimnames = list(NULL, phases))
+  for (i in seq_len(n)) {
+    # sigma_ind is the part that does NOT cancel in a ratio. Total
+    # per-element sigma is sqrt(shared^2 + ind^2); set shared so the
+    # residual reproduces your sourced sigma(Mg/Si).
+    s_ind <- sqrt(pmax(sigma[el]^2 - sigma_shared^2, 1e-6))
+    bp <- bulk[el] * exp(rnorm(1, -sigma_shared^2/2, sigma_shared)) *
+                     exp(rnorm(length(el), -s_ind^2/2, s_ind))
+    bp  <- recompute_O(c(bp, O = 0))        # [Bug 2] never a table value
+    tgt <- drop_TiCo(bp)                    # [Bug 4] no *1.4683 (no-op)
+    f <- tryCatch(fit_scenario(phases, tgt, fit_elements),
+                  error = function(e) NULL)
+    if (!is.null(f)) out[i, ] <- f$wt_pct
+  }
+  fo <- out[, "Forsterite"]; en <- out[, "Enstatite"]
+  # p_En_gt_Fo REMOVED, 2026-09-13 (RECONSTRUCTION_STATUS.md §2, closing
+  # note): do not reintroduce it. `fo_frac` is the reported summary of
+  # the split -- report it with its interval, not as a P(En>Fo) figure.
+  list(modes = out,
+       summary = t(apply(out, 2, quantile, c(0.025,0.5,0.975), na.rm=TRUE)),
+       # Fo and En are strongly ANTI-correlated: Fo+En is well
+       # constrained while the split is not, so report the split.
+       fo_frac = quantile(fo/(fo+en), c(0.025,0.5,0.975), na.rm = TRUE),
+       fo_plus_en = quantile(fo+en, c(0.025,0.5,0.975), na.rm = TRUE))
+}
+
+mc_R <- mc_fit2(phases = phases_R, fit_elements = elements_R)
+print(round(mc_R$summary, 3))
+cat("Fo/(Fo+En), 2.5/50/97.5%:\n")
+print(round(mc_R$fo_frac, 4))
+```
+
+```{r}
+# 1. Are Fo and En anti-correlated in the MC? Expect about -0.95.
+cat("cor(Fo, En) =",
+    cor(mc_R$modes[, "Forsterite"], mc_R$modes[, "Enstatite"], use = "complete"),
+    "\n")
+
+# 2. Does the NNLS solution equal the closed form? Expect ~0 both.
+norm_closed <- function(b) {           # b in mg/g, reservoir basis
+  m <- b / AW[names(b)]
+  Si_rem <- m["Si"] - 3*m["Na"] - 3*m["K"] - 2*m["Ca"] - 0.5*m["Mn"]
+  Mg_rem <- m["Mg"] - m["Ca"] + 0.5*(m["Al"] - m["Na"] - m["K"]) - 0.5*m["Cr"]
+  c(Fo = unname((Mg_rem - Si_rem) * 140.693),
+    En = unname((2*Si_rem - Mg_rem) * 100.389),
+    r  = unname(Mg_rem / Si_rem))
+}
+# 2026-09-14: fit_R now targets b_CI_Lodders, not b_CI (RECONSTRUCTION_
+# STATUS.md S1, Lodders is primary) -- this check must validate against
+# the SAME composition fit_R was actually fit to, or it compares two
+# different targets and reports a spurious mismatch. Updated accordingly.
+# norm_closed() is unaffected by the 2026-09-14 P/Schreibersite addition
+# either way: P and Fe3P carry no Mg or Si, so Fo/En are untouched by it.
+cat("closed form (Fo, En) - NNLS (Fo, En), mg/g:\n")
+print(norm_closed(b_CI_Lodders)[c("Fo","En")] - c(fit_R$mg_g["Forsterite"], fit_R$mg_g["Enstatite"]))
+
+# 2b. Closed-form crossover check (handoff verification task B). Mass
+# crossover (Fo = En by mass) is at Mg_rem/Si_rem = 1.4164 -- solving
+# 140.693*(r-1) = 100.389*(2-r) for r:
+#   140.693 r - 140.693 = 200.778 - 100.389 r    (2*100.389 = 200.778)
+#   241.082 r = 341.471                          (140.693 + 100.389)
+#   r = 341.471 / 241.082 = 1.41642
+crossover_r <- (2*100.389 + 140.693) / (140.693 + 100.389)
+cat("Crossover r solved here:", round(crossover_r, 4),
+    "| RECONSTRUCTION_STATUS.md claims 1.4164\n")
+
+r_actual <- norm_closed(b_CI_Lodders)["r"]
+cat("Actual r (b_CI_Lodders):", round(r_actual, 4),
+    "| distance from crossover:",
+    sprintf("%.2f%%\n", 100 * (r_actual - crossover_r) / crossover_r))
+r_actual_Alexander <- norm_closed(b_CI)["r"]
+cat("Actual r (b_CI, Alexander bracket):", round(r_actual_Alexander, 4),
+    "| distance from crossover:",
+    sprintf("%.2f%%\n", 100 * (r_actual_Alexander - crossover_r) / crossover_r))
+
+# 3. Is the perturbed system still exactly solvable? Expect ~0.
+#    If not, NNLS is distributing a misfit and that would decouple Fo/En.
+cat("max |resid_pct| Scenario R fit:", max(abs(fit_R$residual$resid_pct)), "\n")
+```

@@ -10,8 +10,8 @@ open questions, `NEXT_STEPS.md` items 2 and 3.
 Question (a) is answered, and it corrects `OPTION3_decision.md`: the proposed
 `Sg 1 H -1` is wrong by 2 mol H per mol S. `Mtg 1 H 0.435` is right.**
 
-Corrected/extended input files are in the repo: `test_A4_formulas.pqi`,
-`test_B2_Hdg_carbon.pqi`. Raw outputs in `phreeqc_test_output/`.
+Corrected/extended input files are in the repo: `tests/test_A4_formulas.pqi`,
+`tests/test_B2_Hdg_carbon.pqi`. Raw outputs in `tests/output/`.
 
 ---
 

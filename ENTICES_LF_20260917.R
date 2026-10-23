@@ -795,7 +795,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                        decoupled     = decoupled,
                                        ch4_aq        = if (decoupled) "Mtg"    else "CH4",
                                        ch4_gas       = if (decoupled) "Mtg(g)" else "CH4(g)",
-                                       database      = if (decoupled) "coreclath_CH4uncoupled.dat" else "coreclath_CH4coupled.dat",
+                                       database      = if (decoupled) "databases/coreclath_CH4uncoupled.dat" else "databases/coreclath_CH4coupled.dat",
                                        hydrate_phase = if (decoupled) "Mtg_hydrate" else "CH4_hydrate"
                                      )
                                    },
