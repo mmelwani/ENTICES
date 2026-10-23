@@ -605,3 +605,21 @@ IOM_CO2, IOM_CH4, IOM_N, IOM_S). Verified against a synthetic CSV: the
 default call still returns `NA` for minerals missing from the data (as
 before), and `minerals = c("Forsterite", "Albite")` correctly restricts both
 functions' output to just that pair.
+
+### coreclath_CH4coupled.dat and coreclath_CH4uncoupled.dat: fluorine added (2026-10-23)
+
+Both coreclath databases were missing fluorine entirely relative to
+`Core11_idealgas_mod_v4.dat`: no `F` master species, no `F-` solution
+species, none of the 9 F-bearing aqueous complexes (CaF+, HF, HF2-, MgF+,
+MnF+, NaF, SiF6-2, HPO3F-, H2PO3F, PO3F-2), and neither of the two
+F-bearing phases (Fluorite, Fluorapatite). Ported all of the above from
+`Core11_idealgas_mod_v4.dat` into both coreclath databases, at the same
+alphabetical positions Core11 uses.
+
+**Verified:** confirmed via a full phase-name and solution-species diff
+that, aside from this fluorine gap and the two databases' intentional
+CH4/clathrate coupling differences (`CH4(g)`/`CH4_hydrate` vs. the
+decoupled `Mtg_hydrate` scheme), `Core11_idealgas_mod_v4.dat` and both
+coreclath databases now carry identical phase and species lists, and that
+their `RATES` blocks were already functionally identical (prior diffs were
+comment text and `°` character encoding only).
