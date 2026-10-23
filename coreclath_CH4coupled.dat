@@ -279,6 +279,7 @@ E	e-	0	0	0
 Eu	Eu+3	0	Eu	151.965
 Eu(+2)	Eu+2	0	Eu	
 Eu(+3)	Eu+3	0	Eu	
+F	F-	0	F	18.9984
 Fe	Fe+2	0	Fe	55.847
 Fe(+2)	Fe+2	0	Fe	
 Fe(+3)	Fe+3	-2	Fe	
@@ -401,6 +402,12 @@ Eu+3 = Eu+3
 	-delta_H	0		kJ/mol
 #	deltafH		-144.7		kcal/mol
 	-Vm		-3.1037 -15.3599 11.7871 -2.144 2.3161 0 0 0 0 0 # SH88
+
+F- =  F- 
+	-llnl_gamma	3.5000	
+	log_k	0
+	-delta_H	0	kJ/mol	# Calculated enthalpy of reaction	F- #Added by MMD on 2025/01/27
+#	Enthalpy of formation:	-80.15 kcal/mol
 
 Fe+2 = Fe+2 
 	-llnl_gamma	6	
@@ -1453,6 +1460,14 @@ Cl- + Ca+2 = CaCl+
 #	Extrapol	supcrt92
 #	Ref		SSH97
  
+1.0000 F- + 1.0000 Ca++  =  CaF+ #Added by MMD 2025/06/05
+    -llnl_gamma     4.0    
+    log_k           0.6817
+	-delta_H	5.6484	kJ/mol	# Calculated enthalpy of reaction	CaF+
+#	Enthalpy of formation:	-208.6 kcal/mol
+    -analytic 7.8058e+001 3.8276e-002 -1.3289e+003 -3.4071e+001 -2.0759e+001
+#   -Range:  0-300
+ 
 SO4-2 + Ca+2 = CaSO4
 	-llnl_gamma	3.0    
 	log_k		2.1111
@@ -2153,6 +2168,70 @@ H+ + Cl- = HCl
 	-Vm		1.2547 -4.7177 7.6043 -2.5840 -0.7
 #	Extrapol	supcrt92, ?
 #	Ref		MS97, 87rua/sew match
+ 
+H+ + F-  =  HF #Added by MMD on 2025/01/24
+        -llnl_gamma           3.0    
+        log_k           3.1681
+#	-delta_H	13.87	kJ/mol	# Calculated enthalpy of reaction	HF
+#	Enthalpy of formation:	-76.835 kcal/mol
+        -analytic 8.6626e1 3.2861e-2 -2.3026e3 -3.4559e1 -3.5956e1
+#       -Range:  0-300
+
+2 F- + H+  =  HF2- ##Added by MMD on 2025/01/24
+        -llnl_gamma           4.0    
+        log_k           2.5509
+#	-delta_H	20.7526	kJ/mol	# Calculated enthalpy of reaction	HF2-
+#	Enthalpy of formation:	-155.34 kcal/mol
+        -analytic 1.4359e2 4.0866e-2 -4.6776e3 -5.5574e1 -7.3032e1
+#       -Range:  0-300
+
+2 H+ + HPO4-2 + F-  =  HPO3F- + H2O #Added by MMD on 2025/1/24
+        -llnl_gamma           4.0    
+        log_k           11.2988
+#	-delta_H	0	      	# Not possible to calculate enthalpy of reaction	HPO3F-
+#	Enthalpy of formation:	-0 kcal/mol
+
+3 H+ + HPO4-2 + F-  =  H2PO3F +H2O #Added by MMD on 2025/1/24
+        -llnl_gamma           3.0    
+        log_k           +12.1047
+#	-delta_H	0	      	# Not possible to calculate enthalpy of reaction	H2PO3F
+#	Enthalpy of formation:	-0 kcal/mol
+
+Mg+2 + F-  =  MgF+ #Added by MMD on 2025/1/24
+        -llnl_gamma           4.0    
+        log_k           1.3524
+#	-delta_H	2.37233	kJ/mol	# Calculated enthalpy of reaction	MgF+
+#	Enthalpy of formation:	-190.95 kcal/mol
+        -analytic 6.4311e1 3.5184e-2 -7.3241e2 -2.8678e1 -1.1448e1
+#       -Range:  0-300
+
+Mn+2 + F-  =  MnF+ #Added by MMD on 2025/1/24
+        -llnl_gamma           4.0    
+        log_k           +1.4300
+#	-delta_H	0	      	# Not possible to calculate enthalpy of reaction	MnF+
+#	Enthalpy of formation:	-0 kcal/mol
+
+Na+ + F-  =  NaF #Added by MMD on 2025/1/24
+        -llnl_gamma           3.0    
+        log_k           -0.9976
+#	-delta_H	7.20903	kJ/mol	# Calculated enthalpy of reaction	NaF
+#	Enthalpy of formation:	-135.86 kcal/mol
+        -analytic 1.2507e2 3.8619e-2 -3.5436e3 -5.0787e1 -5.5332e1
+#       -Range:  0-300
+
+HPO4-2 + H+ + F-  =  PO3F-2 + H2O #Added by MMD on 2025/1/24
+        -llnl_gamma           4.0    
+        log_k           +7.1993
+#	-delta_H	0	      	# Not possible to calculate enthalpy of reaction	PO3F-2
+#	Enthalpy of formation:	-0 kcal/mol
+
+6 F- + 4 H+ + SiO2  =  SiF6-2 +2 H2O #Added by MMD on 2025/1/24
+        -llnl_gamma           4.0    
+        log_k           +26.2749
+#	-delta_H	-70.9565	kJ/mol	# Calculated enthalpy of reaction	SiF6-2
+#	Enthalpy of formation:	-571 kcal/mol
+        -analytic 2.3209e2 1.0685e-1 5.8428e2 -9.6798e1 9.0486
+#       -Range:  0-300
  
 H+ + CrO4-2 = HCrO4-
 	-llnl_gamma	4.0    
@@ -4590,6 +4669,22 @@ Ferrosilite
 	-Vm		32.952
 #	Extrapol	supcrt92
 #	Ref		HDN+78
+
+Fluorapatite #Added by MMD on 2025/01/24
+        Ca5(PO4)3F + 3 H+  =  + F- + 3 HPO4-2 + 5 Ca+2
+        log_k           -24.9940
+#	-delta_H	-90.8915	kJ/mol	# Calculated enthalpy of reaction	Fluorapatite
+#	Enthalpy of formation:	-6836.12 kJ/mol
+        -analytic -9.3648e2 -3.2688e-1 2.4398e4 3.7461e2 3.8098e2
+#       -Range:  0-300
+
+Fluorite
+        CaF2  =  + Ca+2 + 2 F- #Added by MMD on 2025/01/24
+        log_k           -10.0370
+#	-delta_H	12.1336	kJ/mol	# Calculated enthalpy of reaction	Fluorite
+#	Enthalpy of formation:	-293 kcal/mol
+        -analytic -2.5036e2 -8.4183e-2 4.9525e3 1.0054e2 7.7353e1
+#       -Range:  0-300
 
 Forsterite
 	Mg2SiO4 + 4 H+ =  SiO2 + 2 H2O + 2 Mg+2
