@@ -7207,18 +7207,6 @@ C2H4(g)
 #	Ref		Sho93
 
 C2H6(g)
-	C2H6 = C2H6
-	log_k		-2.93276
-	-delta_H	-4.509		kcal/mol
-	-analytic	-23.1154 0.0354 3289.1 0 0 -1.5637e-5
-#	Range		0-350
-#	-T_c		305 # K
-#	-P_c		48.16
-#	-Omega		0.100 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
-#	Extrapol	supcrt92
-#	Ref		HOK+98	
-
-C2H6(g)
 	C2H6 + 3.5 O2 = 2 HCO3- + 2 H+ + H2O #8/31/2021
 	log_k		251.5706
 	-delta_H	-367.7618		kcal/mol
@@ -7241,19 +7229,6 @@ C3H8(g)
 #	-Omega		0.152 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
 #	Extrapol	supcrt92
 #	Ref		HOK+98
-
-CH4(g)
-	CH4 + 2 O2 = HCO3- + H+ + H2O #8/31/2021
-	log_k		141.29093
-	-delta_H	-876.6936	kJ/mol
-#	deltafH		-17.88		kcal/mol
-	-analytic	-2761 -0.3907 2.081e5 984.9 -1.037e7 #JD 2021
-#	Range		0-350
-#	-T_c		190.6 # K
-#	-P_c		45.40
-#	-Omega		0.008 # phreeqc.dat
-#	Extrapol	supcrt92
-#	Ref		WEP+82, Kel60
 
 CH4(g) # Updated 8/11/2021, JD 2021
 	CH4 = CH4 
@@ -7576,7 +7551,7 @@ Forsterite
 Fayalite
 	-start
 	1   REM Ref PK04
-	10  kacid = 10^(-4.80) * exp(-94.4e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1 #MMD 2026/9/11 "n" was missing from Palandri and Kharaka 2004 USGS. Now corrected.
+	10  kacid = 10^(-4.80) * exp(-94.4e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.0 #MMD 2026/9/11 "n" was missing from Palandri and Kharaka 2004 USGS. Now corrected.
 	20  kneut = 10^(-12.80) * exp(-94.4e3/8.314 * (1/TK-1/298.15))
 	40  k = kacid + kneut
 	50  rate = k * (1 - SR("Fayalite"))
@@ -8120,7 +8095,7 @@ Dolomite-ord # hydrothermal
 	# -start
 	# 1   REM Ref PK04 who assigned activation energies of calcite
 	# 2   REM Pokrovsky and Schott (1999) have quantified the chemical affinity parameters
-        # 3   REM at 25  C with pH ranging from 0.2 to 12, with p = 4.00 and q = 1.00.
+        # 3   REM at 25 C with pH ranging from 0.2 to 12, with p = 4.00 and q = 1.00.
 	# 10   if (M < 0) then goto 200
 	# 110  kacid = 10^(-6.38) * exp(-14.4e3/8.314 * (1/TK-1/298.15)) * ACT("H+")
 	# 120  kneut = 10^(-9.34) * exp(-23.5e3/8.314 * (1/TK-1/298.15))

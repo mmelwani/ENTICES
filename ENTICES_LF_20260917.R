@@ -37,41 +37,44 @@ library(R6)
 # IOM (organic decomposition) channel definitions live in iom_module.R, kept
 # separate so circulation-physics edits here can't touch organics calibration
 # and vice versa. Run from the repo root so this relative path resolves, same
-# convention as the ENTICES_v3.R / ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
+# convention as the ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
 source("iom_module.R")
 # k_primary_mineral() -- reused by generate_phreeqc_input_bulk_kinetic's
 # rec_eqb_minerals half-life check, so the auto-equilibrium decision uses the
 # exact same rate laws as the RATES blocks below (verified consistent, see
 # CHANGELOG 2026-10 Tephroite/Albite/K-Feldspar half-life entries).
 source("mineral_dissolution_constants.r")
+# phreeqc_tools.R -- PHREEQC_EXPECTED_VERSION (stamped into every .pqi header by
+# stamp_pqi_header()) and run_phreeqc(), which warns if the executable differs.
+source("phreeqc_tools.R")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
-# Single source for all four generators that build primary-mineral inventories;
-# they previously each carried their own copy of these numbers.
-# Source: RECONSTRUCTION_STATUS.md §1 (final 2026-09-15; Lodders et al. 2025
-# Table 4, Scenario R, schreibersite included), wt% x 10 / molar mass.
-# Deliberately NOT renormalised: magnesiochromite (0.713 wt%, 0.037079 mol/kg)
-# is treated as inert, so it keeps its share of the mass but is not added to
-# PHREEQC. (The previous coefficients dropped it and renormalised, inflating
-# every other phase by +0.73%.)
-# Lawrencite (FeCl2) is intentional (Cl in the rock); its Fe is taken out of
-# the metal, so fe = 2.361715 - 0.011250. Total Fe is then 4.8859 mmol/g, which
-# matches the reconstruction.
-# Schreibersite (Fe3P, 0.047101 mol/kg) is listed here but is wired in
-# separately; see the generators.
+# Single source for all four generators that build primary-mineral inventories.
+# Source: reconstruction/rock_mol_per_kg.csv (written by
+# reconstruction/Primordial_CI_chondrite_mineralogy.Rmd: Scenario R, Lodders et
+# al. 2025 Table 4, schreibersite included), rounded to 6 decimals. Regenerated
+# 2026-10-23 from the CSV; the previous values came from 3-decimal wt% and were
+# off by up to 3e-4 relative. tests/rock_table_check.R asserts the match.
+# Deliberately NOT renormalised: magnesiochromite (0.037102 mol/kg) is treated
+# as inert, so it keeps its share of the mass but is not added to PHREEQC.
+# Lawrencite (FeCl2) is intentional (Cl in the rock); it is not part of the
+# reconstruction, and its Fe is taken out of the metal: fe = 2.361630 - 0.011250.
+# Total Fe (fe + lawrencite + troilite + 3 x schreibersite) is 4.8859 mmol/g.
+# Schreibersite (Fe3P) is listed here but is wired in separately; see the
+# generators.
 ROCK_MOL_PER_KG <- c(
-  enstatite     = 2.275648,
-  forsterite    = 1.606974,
-  troilite      = 2.382864,
-  albite        = 0.318202,
-  diopside      = 0.274529,
-  anorthite     = 0.062148,
-  kfeldspar     = 0.020515,
-  tephroite     = 0.025995,
-  fe            = 2.350465,
-  ni            = 0.280953,
+  enstatite     = 2.275669,
+  forsterite    = 1.606976,
+  troilite      = 2.383003,
+  albite        = 0.318204,
+  diopside      = 0.274515,
+  anorthite     = 0.062135,
+  kfeldspar     = 0.020521,
+  tephroite     = 0.025987,
+  fe            = 2.350380,
+  ni            = 0.280938,
   lawrencite    = 0.011250,
-  schreibersite = 0.047101
+  schreibersite = 0.047093
 )
 
 # Schreibersite (Fe3P) -- kinetic primary, defined once here and spliced into the
@@ -777,6 +780,18 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      names(thresholds_C)[temp_C >= thresholds_C]
                                    },
 
+                                   # Insert provenance lines after the TITLE line of a rendered .pqi:
+                                   # the PHREEQC version these inputs are written for, and the database
+                                   # they need. run_phreeqc() (phreeqc_tools.R) reads the version line back
+                                   # and warns if the executable reports a different one.
+                                   stamp_pqi_header = function(content, database) {
+                                     lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
+                                     stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
+                                                sprintf("# Database: %s", database))
+                                     at <- if (length(lines) && startsWith(lines[1], "TITLE")) 1 else 0
+                                     paste(append(lines, stamp, after = at), collapse = "\n")
+                                   },
+
                                    # CH4 vs Mtg (decoupled methane) mode for a generated .pqi file.
                                    # Default (CH4_redox_override = NULL): decoupled below 150 C, coupled at/above.
                                    # override = "coupled"/"decoupled" forces the choice regardless of temperature.
@@ -1395,13 +1410,15 @@ Tephroite
   32  REM This is generally consistent with other minerals that lack base
   33  REM dissolution mechanisms. 
 
-  35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17
-  36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea
-  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
-  45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47
+  34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.
+  35  aH = ACT("H+")
+  36  IF aH < 1e-7 THEN aH = 1e-7
+  37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17
+  38  IF Ea < 0 THEN Ea = 0
+  40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
   46  SSA = 0.1
   47  mw = 201.96
-  50  k = (kacid + kneut) * SSA * mw * M
+  50  k = kacid * SSA * mw * M
   60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
   70  moles = rate * TIME
   80  SAVE moles
@@ -1931,7 +1948,8 @@ SELECTED_OUTPUT
                                        )
                                      }), collapse = "\n")
 
-                                     return(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode))
+                                     return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
+                                                                  ch4_mode$database))
                                    },
 
                                    # ---------------------------------------------------------------
@@ -1955,6 +1973,8 @@ SELECTED_OUTPUT
                                        n_orbital_cycles, suffix
                                      ))
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles)
+                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
+                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -2557,6 +2577,10 @@ SELECTED_OUTPUT
                                        fe_moles, ni_moles, lawrencite_moles
                                      )
 
+                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
+                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater equilibrium" else
                                                       "Enceladus bulk hydrosphere equilibrium"
@@ -2601,7 +2625,7 @@ SOLUTION 1 {.soln_label}
     units     mol/kgw
     density   1
     water     {.water_mass}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(.solution_pressure_atm, 1)}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium) ---
@@ -2754,6 +2778,8 @@ USER_PUNCH
 END
 ')
 
+                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
+                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -2766,7 +2792,7 @@ END
                                      porewater_temp      = "ocean",
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
-                                     rec_eqb_minerals    = TRUE,
+                                     rec_eqb_minerals    = FALSE,
                                      rec_eqb_margin      = 2
                                    ) {
                                      mode <- match.arg(mode)
@@ -2865,14 +2891,19 @@ END
                                      schreibersite_moles <- ROCK_MOL_PER_KG[["schreibersite"]] * .rock_kg * mineral_scale_factor
 
                                      # ---- rec_eqb_minerals: auto-promote fast-dissolving primaries to equilibrium ----
-                                     # At a conservatively alkaline reference pH of 11, some primaries' kinetic
-                                     # half-life, times a safety margin (rec_eqb_margin), is shorter than one
-                                     # orbital period -- treating them as kinetic is both numerically fragile
-                                     # (CVODE can need to resolve a near-instant reaction within one macro step)
-                                     # and physically no different from equilibrium. rec_eqb_margin=2 (default)
-                                     # means only promote if even DOUBLE the half-life still fits inside one
-                                     # orbit -- a margin against the pH 11 reference being an underestimate of
-                                     # the real in-run pH excursion. Uses k_primary_mineral()
+                                     # Off by default (rec_eqb_minerals = FALSE). When on, a primary whose
+                                     # kinetic half-life, times a safety margin (rec_eqb_margin), is shorter
+                                     # than one orbital period is moved to dissolve_only equilibrium.
+                                     # Reference pH is chosen to be conservative (it under-promotes) for each
+                                     # rate law: pH 11 for acid-branch minerals, whose rate is slowest at high
+                                     # pH, and pH 9 for the base-branch minerals (Albite, K-Feldspar), whose
+                                     # rate is slowest at the low end of the alkaline range seen in runs
+                                     # (pH ~9-11.5). At pH 11 the base branch is ~14x (Albite) and ~44x
+                                     # (K-Feldspar) faster than at pH 9, so a single pH-11 reference
+                                     # over-promoted them. rec_eqb_margin = 2 means promote only if double the
+                                     # half-life still fits inside one orbit. Promotion is a modelling choice,
+                                     # not a convergence fix: the 10-06 hang was the unguarded tephroite rate
+                                     # (CHANGELOG 2026-10-19). Uses k_primary_mineral()
                                      # (mineral_dissolution_constants.r), the same rate laws as the RATES
                                      # blocks below. Schreibersite is excluded: it cannot be an equilibrium
                                      # primary (no Fe3P phase/log K in the database).
@@ -2880,14 +2911,17 @@ END
                                                       "Diopside", "Anorthite", "K-Feldspar", "Tephroite")
                                      orbital_period <- self$simulator$config$orbital_period
                                      if (rec_eqb_minerals) {
+                                       base_branch_minerals <- c("Albite", "K-Feldspar")
+                                       ref_pH <- ifelse(all_primary %in% base_branch_minerals, 9, 11)
+                                       names(ref_pH) <- all_primary
                                        half_life_s <- sapply(all_primary, function(m) {
-                                         k <- k_primary_mineral(m, H = 1e-11, TK = porewater_temp_C + 273.15)
+                                         k <- k_primary_mineral(m, H = 10^(-ref_pH[[m]]), TK = porewater_temp_C + 273.15)
                                          if (k <= 0) Inf else log(2) / k
                                        })
                                        equil_primary <- names(half_life_s)[rec_eqb_margin * half_life_s < orbital_period]
-                                       print(sprintf("rec_eqb_minerals: half-life @ pH 11, T=%.1fC, x%g margin vs 1 orbit (%.0f s)",
+                                       print(sprintf("rec_eqb_minerals: half-life @ pH 9 (base-branch) / 11 (acid-branch), T=%.1fC, x%g margin vs 1 orbit (%.0f s)",
                                                      porewater_temp_C, rec_eqb_margin, orbital_period))
-                                       print(data.frame(mineral = all_primary, half_life_yr = half_life_s / (365.25*24*3600),
+                                       print(data.frame(mineral = all_primary, ref_pH = unname(ref_pH), half_life_yr = half_life_s / (365.25*24*3600),
                                                         promoted_to_equilibrium = all_primary %in% equil_primary))
                                      } else {
                                        equil_primary <- character(0)
@@ -2896,10 +2930,10 @@ END
                                      rec_eqb_note <- if (!rec_eqb_minerals) {
                                        "# rec_eqb_minerals=FALSE: all primaries kinetic regardless of half-life"
                                      } else if (length(equil_primary) > 0) {
-                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): promoted to equilibrium (half-life at pH 11, T=%.1fC, x%g < 1 orbital period [%.0f s]): %s",
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): promoted to equilibrium (half-life at pH 9 base-branch / 11 acid-branch, T=%.1fC, x%g < 1 orbital period [%.0f s]): %s",
                                                rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period, paste(equil_primary, collapse = ", "))
                                      } else {
-                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): no primaries promoted (all half-lives at pH 11, T=%.1fC, x%g exceed 1 orbital period [%.0f s])",
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): no primaries promoted (all half-lives at pH 9 base-branch / 11 acid-branch, T=%.1fC, x%g exceed 1 orbital period [%.0f s])",
                                                rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period)
                                      }
 
@@ -2967,13 +3001,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
@@ -3329,7 +3365,7 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$apply_ch4_mode(content, ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -3649,13 +3685,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
@@ -3879,7 +3917,7 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$apply_ch4_mode(content, ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -4213,13 +4251,15 @@ END
                                          '\t1   REM Pincus et al. (2026) ACS Earth Space Chem 10, 1174-1184, Table S1,',
                                          '\t2   REM citing Casey et al. (1993) GCA 57, 785-793. See generate_phreeqc_input_tidal_kinetic',
                                          '\t3   REM for full derivation notes -- identical rate law, ported here verbatim.',
-                                         '\t35  Ea = -60.11*LOG(-LOG10(ACT("H+"))) + 106.17',
-                                         '\t36  IF Ea < 0 THEN Ea = 0 ELSE Ea = Ea',
-                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
-                                         '\t45  kneut = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47',
+                                         '\t34  REM pH >= 7: acid branch evaluated at a(H+) = 1e-7 (flat at the pH-7 rate). No neutral term is summed.',
+                                         '\t35  aH = ACT("H+")',
+                                         '\t36  IF aH < 1e-7 THEN aH = 1e-7',
+                                         '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
+                                         '\t38  IF Ea < 0 THEN Ea = 0',
+                                         '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
                                          '\t46  SSA = 0.1',
                                          '\t47  mw = 201.96',
-                                         '\t50  k = (kacid + kneut) * SSA * mw * M',
+                                         '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
                                          '\t70  moles = rate * TIME',
                                          '\t80  SAVE moles',
@@ -4401,9 +4441,9 @@ END
                                        paste("    -kinetics           ", paste(.kin_names, collapse = " "))
                                      else ""
 
-                                     .all_eq_so  <- c(always_equil_primary, equil_primary,
-                                                       append(secondary_minerals, "Magnetite",
-                                                              after = which(secondary_minerals == "Lizardite")),
+                                     # Magnetite is already in secondary_minerals (2026-10-07); appending it
+                                     # again here listed it twice in -equilibrium_phases.
+                                     .all_eq_so  <- c(always_equil_primary, equil_primary, secondary_minerals,
                                                        union(extra_pw_minerals, extra_ocean_minerals))
                                      .eq_chunks  <- split(.all_eq_so, ceiling(seq_along(.all_eq_so) / 7))
                                      equil_so_line <- paste(
@@ -4619,7 +4659,8 @@ SELECTED_OUTPUT
                                        )
                                      }), collapse = "\n")
 
-                                     content <- self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
+                                                                      ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    }

@@ -436,12 +436,15 @@ HCO3- = HCO3-
 #	deltafH		-164.898	kcal/mol
 	-Vm		7.5621 1.1505 1.2346 -2.8266 1.27330 0 0 0 0 0 # SH88
 	
-CO2 = CO2 #JD 2021
-	-llnl_gamma 	4
-	log_k 		0
-	-delta_h 	0	KJ/mol
+# CO2 = CO2 commented out 2026-10-23 (dead code): CO2 is not a master species here; aqueous CO2
+# is defined by HCO3- + H+ = CO2 + H2O below, and a test at pH 6 with 10 mmol C(4) gave identical
+# speciation and CO2(g) SI with and without this entry (Core11 never had it).
+#CO2 = CO2 #JD 2021
+#	-llnl_gamma 	4
+#	log_k 		0
+#	-delta_h 	0	KJ/mol
 # deltafh		-98.9	kcal/mol
-	-Vm		15.2964	-10.0382 -55.4493 7.4092 36.8069 3.5851 0 0 0 0 #PS01
+#	-Vm		15.2964	-10.0382 -55.4493 7.4092 36.8069 3.5851 0 0 0 0 #PS01
 
 # O2 = O2 #JD 2021
 	# -llnl_gamma	3
@@ -7230,18 +7233,6 @@ C2H4(g)
 #	Ref		Sho93
 
 C2H6(g)
-	C2H6 = C2H6
-	log_k		-2.93276
-	-delta_H	-4.509		kcal/mol
-	-analytic	-23.1154 0.0354 3289.1 0 0 -1.5637e-5
-#	Range		0-350
-#	-T_c		305 # K
-#	-P_c		48.16
-#	-Omega		0.100 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
-#	Extrapol	supcrt92
-#	Ref		HOK+98	
-
-C2H6(g)
 	C2H6 + 3.5 O2 = 2 HCO3- + 2 H+ + H2O #8/31/2021
 	log_k		251.5706
 	-delta_H	-367.7618		kcal/mol
@@ -7264,19 +7255,6 @@ C3H8(g)
 #	-Omega		0.152 # http://webserver.dmt.upm.es/~isidoro/dat1/eGAS.pdf
 #	Extrapol	supcrt92
 #	Ref		HOK+98
-
-CH4(g)
-	CH4 + 2 O2 = HCO3- + H+ + H2O #8/31/2021
-	log_k		141.29093
-	-delta_H	-876.6936	kJ/mol
-#	deltafH		-17.88		kcal/mol
-	-analytic	-2761 -0.3907 2.081e5 984.9 -1.037e7 #JD 2021
-#	Range		0-350
-#	-T_c		190.6 # K
-#	-P_c		45.40
-#	-Omega		0.008 # phreeqc.dat
-#	Extrapol	supcrt92
-#	Ref		WEP+82, Kel60
 
 CH4(g) # Updated 8/11/2021, JD 2021
 	CH4 = CH4 
@@ -7441,20 +7419,20 @@ SO2(g)
 Oxg(g)
 	Oxg = Oxg
 	-analytic -7.5001 7.8981e-3 0.0 0.0 2.0027e5
-	-T_c  154.6 ; -P_c   49.80 ; -Omega 0.021 #MMD uncommented temperature + pressure 
+#	-T_c  154.6 ; -P_c   49.80 ; -Omega 0.021 #MMD uncommented temperature + pressure   # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Hdg(g)
 	Hdg = Hdg
 	-analytic   -9.3114    4.6473e-3   -49.335    1.4341    1.2815e5
-	-T_c  33.2 ; -P_c   12.80 ; -Omega -0.225 #MMD uncommented temperature + pressure 
+#	-T_c  33.2 ; -P_c   12.80 ; -Omega -0.225 #MMD uncommented temperature + pressure   # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Ntg(g)
 	Ntg = Ntg
 	-analytic -58.453 1.81800e-3  3199  17.909 -27460
-	T_c  126.2 ; -P_c   33.50 ; -Omega 0.039
+#	-T_c  126.2 ; -P_c   33.50 ; -Omega 0.039  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 Mtg(g)
 	Mtg = Mtg
 	-log_k -2.8
 	-analytic   10.44  -7.65e-3  -6669  0  1.014e6 # CH4 solubilities 25 - 1008C
-	-T_c  190.6 ; -P_c   45.40 ; -Omega 0.008
+#	-T_c  190.6 ; -P_c   45.40 ; -Omega 0.008  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 H2Sg(g)
 	H2Sg  =  H+ + HSg-
 #	-analytic -97.354 -3.1576e-2 1.8285e3 37.44 28.56
@@ -7462,7 +7440,7 @@ H2Sg(g)
 	log_k	   -7.93 # MMD added from PHREEQC database 2024/07/07.
 	-delta_h   9.1
 	-analytic -45.07  -0.02418  0  17.9205 # H2S solubilities, 0 - 300�C, 1 - 987 atm, Jiang et al., 2020, CG 555, 119816
-	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1
+#	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1  # commented out 2026-10-23: ideal gas, so it can share a GAS_PHASE with the (ideal) ordinary gases
 
 RATES
 
@@ -7499,7 +7477,7 @@ Albite # Na-endmember of plagioclase
 	1   REM 3 mechanisms: acid, neutral, base (PK04)
 	2   REM Chemical affinity parameters p and q for albite are 0.760 and 90.0 respectively
         3   REM (Alekseyev et al., 1997), but their use in modeling should be limited to conditions 
-        4   REM near the experimental conditions under which they were obtained, 300 �C and pH = 9.
+        4   REM near the experimental conditions under which they were obtained, 300 C and pH = 9.
 	10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
 	20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
 	30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
@@ -7847,7 +7825,7 @@ Kaolinite
 	-start
 	1   REM Ref PK04
 	2   REM Nagy et al. (1991) have quantified the chemical affinity parameters 
-        3   REM at 80 �C and pH = 3 as either p = 1.000 and q = 0.897, or p = 0.850 and q = 1.000 
+        3   REM at 80 C and pH = 3 as either p = 1.000 and q = 0.897, or p = 0.850 and q = 1.000 
         4   REM within experimental uncertainty.
 	10  kacid = 10^(-11.31) * exp(-65.9e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.777
 	20  kneut = 10^(-13.18) * exp(-22.2e3/8.314 * (1/TK-1/298.15))
@@ -8143,7 +8121,7 @@ Dolomite-ord # hydrothermal
 	# -start
 	# 1   REM Ref PK04 who assigned activation energies of calcite
 	# 2   REM Pokrovsky and Schott (1999) have quantified the chemical affinity parameters
-        # 3   REM at 25 �C with pH ranging from 0.2 to 12, with p = 4.00 and q = 1.00.
+        # 3   REM at 25 C with pH ranging from 0.2 to 12, with p = 4.00 and q = 1.00.
 	# 10   if (M < 0) then goto 200
 	# 110  kacid = 10^(-6.38) * exp(-14.4e3/8.314 * (1/TK-1/298.15)) * ACT("H+")
 	# 120  kneut = 10^(-9.34) * exp(-23.5e3/8.314 * (1/TK-1/298.15))

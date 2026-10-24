@@ -92,11 +92,12 @@ k_primary_mineral <- function(mineral, mol=1.0, H=1e-7, TK = 274.6, fe3 = 1e-30)
         # source data not fittable, so neutral rate is held flat at its
         # pH=7 value for all pH>7. See ENTICES_LF_*.R's Tephroite RATES
         # block (ported 1:1 here) for the full derivation.
-        Ea <- -60.11 * log(-log10(H)) + 106.17
+        # pH >= 7: acid branch evaluated at a(H+) = 1e-7, i.e. flat at the
+        # pH-7 rate (no neutral term summed; that doubled the rate at pH 7).
+        aH <- max(H, 1e-7)
+        Ea <- -60.11 * log(-log10(aH)) + 106.17
         if (Ea < 0) Ea <- 0
-        kacid <- 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * H^0.47
-        kneut <- 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * 1e-7^0.47
-        k <- kacid + kneut
+        k <- 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
         mw <- 201.96
         SSA <- 0.1
         k <- k*SSA*mw*mol
