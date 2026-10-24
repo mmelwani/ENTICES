@@ -37,7 +37,7 @@ library(R6)
 # IOM (organic decomposition) channel definitions live in iom_module.R, kept
 # separate so circulation-physics edits here can't touch organics calibration
 # and vice versa. Run from the repo root so this relative path resolves, same
-# convention as the ENTICES_v3.R / ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
+# convention as the ENTICES_LF_* sourcing in ENTICES_runs.Rmd.
 source("iom_module.R")
 # k_primary_mineral() -- reused by generate_phreeqc_input_bulk_kinetic's
 # rec_eqb_minerals half-life check, so the auto-equilibrium decision uses the
