@@ -3,6 +3,21 @@ title: "ENTICES runs"
 output: html_notebook
 ---
 
+> **Sandbox notebook: run it chunk by chunk, not with Knit or Run All.** It
+> holds example and exploratory calls of the generators (`generate_phreeqc_input_*`)
+> and restarts, kept as Lucas's working record. It isn't a test or a
+> reproducible pipeline: chunks depend on one another's state and on local file
+> paths, and several chunks `source()` scripts that **are not in this repo**:
+> `minerals_plot.R`, `chemistry_plot.R`, `sweep_heatmaps.R`,
+> `porewater_kinetic_plots.R`, `sweep_plots.R`, `ph_fp_wr_plot.R`,
+> `stacked_rxn_progress_plots.R`, `bulk_comparison_plots.R`,
+> `bulk_kinetic_comparison.R`, `step_comparison.R`, `stitch_plots.R`,
+> `check1_regression.R`, `check2_grouping.R`, `check3_conservation.R` and
+> `water_rock_calculator.R`. Those chunks fail without them.
+> (`mineral_dissolution_constants.R` with a capital R resolves to
+> `mineral_dissolution_constants.r` only on case-insensitive file systems.)
+> For the supported entry points and self-tests, see `README.md`.
+
 ```{r, fig.show='hide'}
 # Create Enceladus configuration
 source("ENTICES_LF_20260917.R")
