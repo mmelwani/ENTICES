@@ -2772,7 +2772,7 @@ END
                                      porewater_temp      = "ocean",
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
-                                     rec_eqb_minerals    = TRUE,
+                                     rec_eqb_minerals    = FALSE,
                                      rec_eqb_margin      = 2
                                    ) {
                                      mode <- match.arg(mode)
@@ -2871,14 +2871,19 @@ END
                                      schreibersite_moles <- ROCK_MOL_PER_KG[["schreibersite"]] * .rock_kg * mineral_scale_factor
 
                                      # ---- rec_eqb_minerals: auto-promote fast-dissolving primaries to equilibrium ----
-                                     # At a conservatively alkaline reference pH of 11, some primaries' kinetic
-                                     # half-life, times a safety margin (rec_eqb_margin), is shorter than one
-                                     # orbital period -- treating them as kinetic is both numerically fragile
-                                     # (CVODE can need to resolve a near-instant reaction within one macro step)
-                                     # and physically no different from equilibrium. rec_eqb_margin=2 (default)
-                                     # means only promote if even DOUBLE the half-life still fits inside one
-                                     # orbit -- a margin against the pH 11 reference being an underestimate of
-                                     # the real in-run pH excursion. Uses k_primary_mineral()
+                                     # Off by default (rec_eqb_minerals = FALSE). When on, a primary whose
+                                     # kinetic half-life, times a safety margin (rec_eqb_margin), is shorter
+                                     # than one orbital period is moved to dissolve_only equilibrium.
+                                     # Reference pH is chosen to be conservative (it under-promotes) for each
+                                     # rate law: pH 11 for acid-branch minerals, whose rate is slowest at high
+                                     # pH, and pH 9 for the base-branch minerals (Albite, K-Feldspar), whose
+                                     # rate is slowest at the low end of the alkaline range seen in runs
+                                     # (pH ~9-11.5). At pH 11 the base branch is ~14x (Albite) and ~44x
+                                     # (K-Feldspar) faster than at pH 9, so a single pH-11 reference
+                                     # over-promoted them. rec_eqb_margin = 2 means promote only if double the
+                                     # half-life still fits inside one orbit. Promotion is a modelling choice,
+                                     # not a convergence fix: the 10-06 hang was the unguarded tephroite rate
+                                     # (CHANGELOG 2026-10-19). Uses k_primary_mineral()
                                      # (mineral_dissolution_constants.r), the same rate laws as the RATES
                                      # blocks below. Schreibersite is excluded: it cannot be an equilibrium
                                      # primary (no Fe3P phase/log K in the database).
@@ -2886,14 +2891,17 @@ END
                                                       "Diopside", "Anorthite", "K-Feldspar", "Tephroite")
                                      orbital_period <- self$simulator$config$orbital_period
                                      if (rec_eqb_minerals) {
+                                       base_branch_minerals <- c("Albite", "K-Feldspar")
+                                       ref_pH <- ifelse(all_primary %in% base_branch_minerals, 9, 11)
+                                       names(ref_pH) <- all_primary
                                        half_life_s <- sapply(all_primary, function(m) {
-                                         k <- k_primary_mineral(m, H = 1e-11, TK = porewater_temp_C + 273.15)
+                                         k <- k_primary_mineral(m, H = 10^(-ref_pH[[m]]), TK = porewater_temp_C + 273.15)
                                          if (k <= 0) Inf else log(2) / k
                                        })
                                        equil_primary <- names(half_life_s)[rec_eqb_margin * half_life_s < orbital_period]
-                                       print(sprintf("rec_eqb_minerals: half-life @ pH 11, T=%.1fC, x%g margin vs 1 orbit (%.0f s)",
+                                       print(sprintf("rec_eqb_minerals: half-life @ pH 9 (base-branch) / 11 (acid-branch), T=%.1fC, x%g margin vs 1 orbit (%.0f s)",
                                                      porewater_temp_C, rec_eqb_margin, orbital_period))
-                                       print(data.frame(mineral = all_primary, half_life_yr = half_life_s / (365.25*24*3600),
+                                       print(data.frame(mineral = all_primary, ref_pH = unname(ref_pH), half_life_yr = half_life_s / (365.25*24*3600),
                                                         promoted_to_equilibrium = all_primary %in% equil_primary))
                                      } else {
                                        equil_primary <- character(0)
@@ -2902,10 +2910,10 @@ END
                                      rec_eqb_note <- if (!rec_eqb_minerals) {
                                        "# rec_eqb_minerals=FALSE: all primaries kinetic regardless of half-life"
                                      } else if (length(equil_primary) > 0) {
-                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): promoted to equilibrium (half-life at pH 11, T=%.1fC, x%g < 1 orbital period [%.0f s]): %s",
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): promoted to equilibrium (half-life at pH 9 base-branch / 11 acid-branch, T=%.1fC, x%g < 1 orbital period [%.0f s]): %s",
                                                rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period, paste(equil_primary, collapse = ", "))
                                      } else {
-                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): no primaries promoted (all half-lives at pH 11, T=%.1fC, x%g exceed 1 orbital period [%.0f s])",
+                                       sprintf("# rec_eqb_minerals=TRUE (margin=%gx): no primaries promoted (all half-lives at pH 9 base-branch / 11 acid-branch, T=%.1fC, x%g exceed 1 orbital period [%.0f s])",
                                                rec_eqb_margin, porewater_temp_C, rec_eqb_margin, orbital_period)
                                      }
 
