@@ -46,32 +46,32 @@ source("iom_module.R")
 source("mineral_dissolution_constants.r")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
-# Single source for all four generators that build primary-mineral inventories;
-# they previously each carried their own copy of these numbers.
-# Source: RECONSTRUCTION_STATUS.md §1 (final 2026-09-15; Lodders et al. 2025
-# Table 4, Scenario R, schreibersite included), wt% x 10 / molar mass.
-# Deliberately NOT renormalised: magnesiochromite (0.713 wt%, 0.037079 mol/kg)
-# is treated as inert, so it keeps its share of the mass but is not added to
-# PHREEQC. (The previous coefficients dropped it and renormalised, inflating
-# every other phase by +0.73%.)
-# Lawrencite (FeCl2) is intentional (Cl in the rock); its Fe is taken out of
-# the metal, so fe = 2.361715 - 0.011250. Total Fe is then 4.8859 mmol/g, which
-# matches the reconstruction.
-# Schreibersite (Fe3P, 0.047101 mol/kg) is listed here but is wired in
-# separately; see the generators.
+# Single source for all four generators that build primary-mineral inventories.
+# Source: reconstruction/rock_mol_per_kg.csv (written by
+# reconstruction/Primordial_CI_chondrite_mineralogy.Rmd: Scenario R, Lodders et
+# al. 2025 Table 4, schreibersite included), rounded to 6 decimals. Regenerated
+# 2026-10-23 from the CSV; the previous values came from 3-decimal wt% and were
+# off by up to 3e-4 relative. tests/rock_table_check.R asserts the match.
+# Deliberately NOT renormalised: magnesiochromite (0.037102 mol/kg) is treated
+# as inert, so it keeps its share of the mass but is not added to PHREEQC.
+# Lawrencite (FeCl2) is intentional (Cl in the rock); it is not part of the
+# reconstruction, and its Fe is taken out of the metal: fe = 2.361630 - 0.011250.
+# Total Fe (fe + lawrencite + troilite + 3 x schreibersite) is 4.8859 mmol/g.
+# Schreibersite (Fe3P) is listed here but is wired in separately; see the
+# generators.
 ROCK_MOL_PER_KG <- c(
-  enstatite     = 2.275648,
-  forsterite    = 1.606974,
-  troilite      = 2.382864,
-  albite        = 0.318202,
-  diopside      = 0.274529,
-  anorthite     = 0.062148,
-  kfeldspar     = 0.020515,
-  tephroite     = 0.025995,
-  fe            = 2.350465,
-  ni            = 0.280953,
+  enstatite     = 2.275669,
+  forsterite    = 1.606976,
+  troilite      = 2.383003,
+  albite        = 0.318204,
+  diopside      = 0.274515,
+  anorthite     = 0.062135,
+  kfeldspar     = 0.020521,
+  tephroite     = 0.025987,
+  fe            = 2.350380,
+  ni            = 0.280938,
   lawrencite    = 0.011250,
-  schreibersite = 0.047101
+  schreibersite = 0.047093
 )
 
 # Schreibersite (Fe3P) -- kinetic primary, defined once here and spliced into the
