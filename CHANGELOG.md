@@ -648,3 +648,33 @@ comment text and `°` character encoding only).
 > - There are 10 F-bearing aqueous complexes (the list above names 10), not 9.
 > - The coupled file also carried a `CO2 = CO2` identity not in Core11 (dead
 >   code; now commented out).
+
+### Fixes branch: databases, tephroite, pressure, rock table, rec_eqb, provenance (2026-10-23)
+
+One commit per item; each commit message has its pass check.
+
+- **coreclath_CH4uncoupled.dat loads again.** The Hdg/Oxg/Mtg/Ntg/H2Sg identity
+  reactions removed in 2e13e34 are restored. `tests/db_load_check.R` now requires
+  every `databases/*.dat` to load with 0 errors.
+- **Databases:** earlier duplicate `CH4(g)`/`C2H6(g)` definitions deleted (PHREEQC
+  used the last; output unchanged); dead `CO2 = CO2` commented out in the coupled
+  file; RATES comments' mis-encoded degree signs fixed and Fayalite written `^1.0`
+  everywhere; critical constants on the five decoupled gases commented out (all
+  gases ideal, so they can share a fixed-pressure GAS_PHASE) and the `Ntg(g)`
+  `T_c` typo fixed.
+- **Core11 retired** to `legacy/`: `coreclath_CH4coupled.dat` contains all of it.
+  Tests A4/B2 now use the coupled file and reproduce PHREEQC_TEST_RESULTS.
+- **Tephroite:** single acid term at `max(ACT("H+"), 1e-7)` in all four kinetic
+  generators and `k_primary_mineral()`; the summed `kneut` (2x at pH 7) is gone.
+- **bulk_equil** porewater mode reacts at `pore_pressure_atm`.
+- **tidal_kinetic_restart** lists Magnetite once in SELECTED_OUTPUT.
+- **ROCK_MOL_PER_KG** regenerated from `reconstruction/rock_mol_per_kg.csv`
+  (changes up to 3.1e-4 relative); `tests/rock_table_check.R` passes at 1e-4.
+- **rec_eqb_minerals:** default FALSE; reference pH 9 for the base-branch
+  feldspars, pH 11 for acid-branch minerals. At 160 C, K-feldspar is no longer
+  promoted (its half-life at pH 9 is 2.2e5 s); albite still is.
+- **Provenance:** every generated `.pqi` carries `# Target PHREEQC version: 3.8.6`
+  and `# Database: <file>`; `run_phreeqc()` (new `phreeqc_tools.R`) warns when the
+  executable's version differs.
+- **ENTICES_runs.Rmd** has a sandbox header listing the 15 local scripts it needs;
+  **legacy/ENTICES_v3.R** stops if sourced.
