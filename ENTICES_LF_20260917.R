@@ -44,6 +44,9 @@ source("iom_module.R")
 # exact same rate laws as the RATES blocks below (verified consistent, see
 # CHANGELOG 2026-10 Tephroite/Albite/K-Feldspar half-life entries).
 source("mineral_dissolution_constants.r")
+# phreeqc_tools.R -- PHREEQC_EXPECTED_VERSION (stamped into every .pqi header by
+# stamp_pqi_header()) and run_phreeqc(), which warns if the executable differs.
+source("phreeqc_tools.R")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
 # Single source for all four generators that build primary-mineral inventories.
@@ -782,6 +785,18 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # override = "coupled"/"decoupled" forces the choice regardless of temperature.
                                    # The two modes require different databases (CH4 master species present vs.
                                    # commented out in favor of the independent Mtg species) — see CHANGELOG.md.
+                                   # Insert provenance lines after the TITLE line of a rendered .pqi:
+                                   # the PHREEQC version these inputs are written for, and the database
+                                   # they need. run_phreeqc() (phreeqc_tools.R) reads the version line back
+                                   # and warns if the executable reports a different one.
+                                   stamp_pqi_header = function(content, database) {
+                                     lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
+                                     stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
+                                                sprintf("# Database: %s", database))
+                                     at <- if (length(lines) && startsWith(lines[1], "TITLE")) 1 else 0
+                                     paste(append(lines, stamp, after = at), collapse = "\n")
+                                   },
+
                                    resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL) {
                                      if (!is.null(CH4_redox_override) && !CH4_redox_override %in% c("coupled", "decoupled")) {
                                        stop('CH4_redox_override must be NULL, "coupled", or "decoupled"')
@@ -1933,7 +1948,8 @@ SELECTED_OUTPUT
                                        )
                                      }), collapse = "\n")
 
-                                     return(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode))
+                                     return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
+                                                                  ch4_mode$database))
                                    },
 
                                    # ---------------------------------------------------------------
@@ -1957,6 +1973,8 @@ SELECTED_OUTPUT
                                        n_orbital_cycles, suffix
                                      ))
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles)
+                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
+                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -2760,6 +2778,8 @@ USER_PUNCH
 END
 ')
 
+                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
+                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -3345,7 +3365,7 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$apply_ch4_mode(content, ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -3897,7 +3917,7 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$apply_ch4_mode(content, ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -4639,7 +4659,8 @@ SELECTED_OUTPUT
                                        )
                                      }), collapse = "\n")
 
-                                     content <- self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
+                                                                      ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    }

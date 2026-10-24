@@ -37,8 +37,15 @@ run_phreeqc <- function(input, database, output = tempfile(fileext = ".out"),
   status <- attr(console, "status"); if (is.null(status)) status <- 0L
   ver <- regmatches(console, regexpr("PHREEQC-[0-9.]+[0-9]", console))
   ver <- if (length(ver)) sub("PHREEQC-", "", ver[1], fixed = TRUE) else NA_character_
-  if (warn_version && !identical(ver, PHREEQC_EXPECTED_VERSION))
-    warning(sprintf("PHREEQC version %s differs from the expected %s", ver, PHREEQC_EXPECTED_VERSION))
+  # The version an input was generated for: the '# Target PHREEQC version:' line
+  # that stamp_pqi_header() writes, else PHREEQC_EXPECTED_VERSION.
+  head_lines <- readLines(input, n = 20, warn = FALSE)
+  stamped <- grep("^# Target PHREEQC version: ", head_lines, value = TRUE)
+  target <- if (length(stamped)) trimws(sub("# Target PHREEQC version: ", "", stamped[1], fixed = TRUE))
+            else PHREEQC_EXPECTED_VERSION
+  if (warn_version && !identical(ver, target))
+    warning(sprintf("PHREEQC version %s differs from %s, the version %s was generated for",
+                    ver, target, basename(input)))
   out <- if (file.exists(output)) readLines(output, warn = FALSE) else character(0)
   list(status = status, version = ver, output_lines = out,
        errors = sum(startsWith(out, "ERROR")), warnings = sum(startsWith(out, "WARNING")),
