@@ -2559,6 +2559,10 @@ SELECTED_OUTPUT
                                        fe_moles, ni_moles, lawrencite_moles
                                      )
 
+                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
+                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater equilibrium" else
                                                       "Enceladus bulk hydrosphere equilibrium"
@@ -2603,7 +2607,7 @@ SOLUTION 1 {.soln_label}
     units     mol/kgw
     density   1
     water     {.water_mass}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(.solution_pressure_atm, 1)}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium) ---
