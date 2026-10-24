@@ -4413,9 +4413,9 @@ END
                                        paste("    -kinetics           ", paste(.kin_names, collapse = " "))
                                      else ""
 
-                                     .all_eq_so  <- c(always_equil_primary, equil_primary,
-                                                       append(secondary_minerals, "Magnetite",
-                                                              after = which(secondary_minerals == "Lizardite")),
+                                     # Magnetite is already in secondary_minerals (2026-10-07); appending it
+                                     # again here listed it twice in -equilibrium_phases.
+                                     .all_eq_so  <- c(always_equil_primary, equil_primary, secondary_minerals,
                                                        union(extra_pw_minerals, extra_ocean_minerals))
                                      .eq_chunks  <- split(.all_eq_so, ceiling(seq_along(.all_eq_so) / 7))
                                      equil_so_line <- paste(
