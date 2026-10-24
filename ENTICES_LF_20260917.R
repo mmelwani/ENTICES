@@ -780,11 +780,6 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      names(thresholds_C)[temp_C >= thresholds_C]
                                    },
 
-                                   # CH4 vs Mtg (decoupled methane) mode for a generated .pqi file.
-                                   # Default (CH4_redox_override = NULL): decoupled below 150 C, coupled at/above.
-                                   # override = "coupled"/"decoupled" forces the choice regardless of temperature.
-                                   # The two modes require different databases (CH4 master species present vs.
-                                   # commented out in favor of the independent Mtg species) — see CHANGELOG.md.
                                    # Insert provenance lines after the TITLE line of a rendered .pqi:
                                    # the PHREEQC version these inputs are written for, and the database
                                    # they need. run_phreeqc() (phreeqc_tools.R) reads the version line back
@@ -797,6 +792,11 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      paste(append(lines, stamp, after = at), collapse = "\n")
                                    },
 
+                                   # CH4 vs Mtg (decoupled methane) mode for a generated .pqi file.
+                                   # Default (CH4_redox_override = NULL): decoupled below 150 C, coupled at/above.
+                                   # override = "coupled"/"decoupled" forces the choice regardless of temperature.
+                                   # The two modes require different databases (CH4 master species present vs.
+                                   # commented out in favor of the independent Mtg species) — see CHANGELOG.md.
                                    resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL) {
                                      if (!is.null(CH4_redox_override) && !CH4_redox_override %in% c("coupled", "decoupled")) {
                                        stop('CH4_redox_override must be NULL, "coupled", or "decoupled"')
