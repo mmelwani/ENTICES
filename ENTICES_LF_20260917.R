@@ -1981,24 +1981,27 @@ SELECTED_OUTPUT
                                                                            mode = NULL,
                                                                            n_circulations = NULL,
                                                                            grouping_factor = NULL,
-                                                                           suffix = "") {
+                                                                           suffix = "",
+                                                                           porewater_temp = "ocean",
+                                                                           CH4_redox_override = NULL) {
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+                                     temp_tag <- if (is.numeric(porewater_temp)) sprintf("T%g", porewater_temp) else sprintf("T%s", porewater_temp)
                                      filename <- file.path(output_dir, sprintf(
-                                       "enceladus_k%.2e_d%g_orb%g_equil%s.pqi",
+                                       "enceladus_k%.2e_d%g_%s_orb%g_equil%s.pqi",
                                        self$simulator$params$k,
                                        self$simulator$params$layer_thickness,
-                                       n_orbital_cycles, suffix
+                                       temp_tag, n_orbital_cycles, suffix
                                      ))
-                                     content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles)
-                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
-                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
+                                     content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles, porewater_temp = porewater_temp,
+                                                                                         CH4_redox_override = CH4_redox_override)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
 
-                                   create_phreeqc_template_tidal_equil = function(filename, n_orbital_cycles) {
+                                   create_phreeqc_template_tidal_equil = function(filename, n_orbital_cycles, porewater_temp = "ocean",
+                                                                                  CH4_redox_override = NULL) {
                                      metrics         <- self$simulator$get_summary_metrics()
                                      orbital_period  <- self$simulator$config$orbital_period
                                      time_step_years <- orbital_period / (365.25 * 24 * 3600)
@@ -2041,6 +2044,27 @@ SELECTED_OUTPUT
                                        ocean_pressure_atm <- 70
                                      }
 
+                                     # Resolve porewater_temp as in create_phreeqc_template_tidal_kinetic()
+                                     porewater_temp_C <- if (is.numeric(porewater_temp)) {
+                                       porewater_temp
+                                     } else if (porewater_temp == "profile") {
+                                       pore_temp_C
+                                     } else if (porewater_temp == "ocean") {
+                                       ocean_temp_C
+                                     } else {
+                                       stop("porewater_temp must be a number (°C), \"profile\", or \"ocean\"")
+                                     }
+
+                                     # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_db_note_line <- sprintf(
+                                       "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
+                                       ch4_mode$database,
+                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       porewater_temp_C, ch4_override_note
+                                     )
+
                                      # Mineral moles (ROCK_MOL_PER_KG, shared with the other generators; all 11
                                      # are equilibrium here, no kinetics at all). Magnetite is no longer primary.
                                      # SCHREIBERSITE IS NOT INCLUDED in this equilibrium-only generator. The
@@ -2072,6 +2096,7 @@ SELECTED_OUTPUT
 
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
+{ch4_db_note_line}
 
 KNOBS
    -logfile true
@@ -2094,7 +2119,7 @@ KNOBS
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
 SOLUTION 1 Enceladus porewater
-    temp      {round(ocean_temp_C, 2)}#{round(pore_temp_C, 2)}
+    temp      {round(porewater_temp_C, 2)}
     pH        7
     pe        4
     redox     pe
@@ -2114,7 +2139,7 @@ SOLUTION 2 Enceladus ocean
     pressure  {round(ocean_pressure_atm, 1)}
 
 REACTION_TEMPERATURE 1
-    {round(ocean_temp_C, 2)}#{round(pore_temp_C, 2)}
+    {round(porewater_temp_C, 2)}
 
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
@@ -2504,7 +2529,8 @@ SELECTED_OUTPUT
                                        )
                                      }), collapse = "\n")
 
-                                     return(paste0(template, "\n", cycle_blocks))
+                                     return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
+                                                                  ch4_mode$database))
                                    },
 
                                    # Single-step bulk equilibrium: entire hydrosphere (ocean + porewater)
