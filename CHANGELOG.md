@@ -678,3 +678,30 @@ One commit per item; each commit message has its pass check.
   executable's version differs.
 - **ENTICES_runs.Rmd** has a sandbox header listing the 15 local scripts it needs;
   **legacy/ENTICES_v3.R** stops if sourced.
+
+### Consistency branch: Fe_metal column, equilibrium generators, initial fluid composition (2026-10-25)
+
+One commit per item; each commit message has its pass check.
+
+- **Fe_metal:** Fe metal is punched as `Fe_metal` / `d_Fe_metal` instead of being
+  listed in `-equilibrium_phases`, where its column was a second "Fe" next to the
+  `-totals` Fe (dissolved iron). Every CSV now has one Fe column. The phase is
+  still `Fe` in the databases and EQUILIBRIUM_PHASES. Both restart readers use
+  `ep_column()`, which still reads CSVs written before this change.
+- **tidal_equil:** new `porewater_temp` ("ocean" default, "profile" or degrees C)
+  and `CH4_redox_override`; CH4 mode and database come from `resolve_ch4_mode()`,
+  as in the kinetic generators. The default (1.45 C) is therefore now decoupled
+  and stamped for `coreclath_CH4uncoupled.dat`. Filenames gain the T tag.
+  Secondary minerals are temperature-gated per block (separate commit).
+- **bulk_equil:** `temp_gated_minerals(water_temp_C)` appended, as in bulk_kinetic.
+- **Equilibrium generators** say in their `.pqi` header and source comment that
+  they are inorganic limiting cases (no IOM, no Schreibersite).
+- **trace_C_molal** (tidal_kinetic, bulk_kinetic; default NULL): C seed in every
+  initial SOLUTION, stamped in the header. 1e-12 lets tidal_kinetic at 25 C
+  finish (1e-16 also does); NULL still fails as before.
+- **initial_ocean** (tidal_kinetic, tidal_equil; default "pure_water"): named list
+  of element totals in mol/kgw for the ocean SOLUTION 2 only, stamped in the
+  header. No values chosen.
+- **pair_organic_run()** (new `organic_contribution.R`): a run and its
+  `organic_wt_percent = 0` blank, and the organics' contribution to ocean DIC,
+  CH4, NH4+ and H2 by difference. The blank has 1/0.85 the minerals at 15 wt%.
