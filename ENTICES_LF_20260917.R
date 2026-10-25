@@ -2065,6 +2065,16 @@ SELECTED_OUTPUT
                                        porewater_temp_C, ch4_override_note
                                      )
 
+                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic
+                                     # (clathrate phases are not added here).
+                                     extra_pw_minerals    <- self$temp_gated_minerals(porewater_temp_C)
+                                     extra_ocean_minerals <- self$temp_gated_minerals(ocean_temp_C)
+                                     extra_pw_lines    <- if (length(extra_pw_minerals) > 0)
+                                       paste0("   ", extra_pw_minerals, " 0 0", collapse = "\n") else ""
+                                     extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
+                                       paste0("   ", extra_ocean_minerals, " 0 0", collapse = "\n") else ""
+                                     extra_eq_so_line  <- paste(union(extra_pw_minerals, extra_ocean_minerals), collapse = " ")
+
                                      # Mineral moles (ROCK_MOL_PER_KG, shared with the other generators; all 11
                                      # are equilibrium here, no kinetics at all). Magnetite is no longer primary.
                                      # SCHREIBERSITE IS NOT INCLUDED in this equilibrium-only generator. The
@@ -2288,6 +2298,7 @@ EQUILIBRIUM_PHASES 1
    Thenardite 0 0
 #   Thermonatrite 0 0
    Tobermorite-11A 0 0
+{extra_pw_lines}
 
 EQUILIBRIUM_PHASES 2
 #   Alabandite 0 0
@@ -2420,6 +2431,7 @@ EQUILIBRIUM_PHASES 2
    Thenardite 0 0
 #   Thermonatrite 0 0
    Tobermorite-11A 0 0
+{extra_ocean_lines}
 
 SELECTED_OUTPUT
     -file {base_name}.csv
@@ -2462,6 +2474,7 @@ SELECTED_OUTPUT
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
                          Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         {extra_eq_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Fe Ni Lawrencite
     -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
