@@ -112,6 +112,21 @@ schreibersite_kinetics_entry <- function(m0) {
 # called Fe in the databases and in EQUILIBRIUM_PHASES blocks.
 FE_METAL_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal"
 FE_METAL_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n'
+# Optional trace carbon in the initial SOLUTIONs of the kinetic generators (trace_C_molal, mol/kgw;
+# NULL = pure water). A numerical seed, not a composition: the science case is pure water, so that
+# all ocean carbon can be attributed to the organics. Returns the SOLUTION line, with its leading
+# newline, to append to the block's last line ("" for NULL).
+trace_C_solution_line <- function(trace_C_molal) {
+  if (is.null(trace_C_molal)) return("")
+  if (!is.numeric(trace_C_molal) || length(trace_C_molal) != 1 || !isTRUE(trace_C_molal > 0))
+    stop("trace_C_molal must be NULL or one positive number (mol/kgw)")
+  sprintf("\n    C         %.6e", trace_C_molal)
+}
+trace_C_header_line <- function(trace_C_molal) {
+  sprintf("# trace_C_molal: %s", if (is.null(trace_C_molal)) "NULL (no initial C)" else
+    sprintf("%.6e mol/kgw C added to every initial SOLUTION", trace_C_molal))
+}
+
 # Header note written into every tidal_equil / bulk_equil input.
 EQUIL_INORGANIC_NOTE <- paste(
   "# Inorganic limiting case: no IOM and no Schreibersite. organic_wt_percent only scales the",
@@ -977,7 +992,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
-                                                                     CH4_redox_override = NULL) {
+                                                                     CH4_redox_override = NULL, trace_C_molal = NULL) {
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -1049,7 +1064,8 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      }
 
                                      # Generate input file content
-                                     content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override)
+                                     content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override,
+                                                                                trace_C_molal = trace_C_molal)
 
                                      # Write to file
                                      writeLines(content, filename)
@@ -1057,7 +1073,8 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      return(filename)
                                    },
                                    
-                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL) {
+                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, trace_C_molal = NULL) {
+                                     trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      metrics <- self$simulator$get_summary_metrics()
 
                                      # Calculate adjusted cycles
@@ -1293,6 +1310,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation
+{trace_C_header_line(trace_C_molal)}
 {ch4_db_note_line}
 {clathrate_note_lines}
 
@@ -1326,7 +1344,7 @@ SOLUTION 1 Enceladus porewater
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}
+    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
@@ -1336,7 +1354,7 @@ SOLUTION 2 Enceladus ocean
     units     mol/kgw
     density   1
     water     {ocean_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(ocean_pressure_atm, 1)}{trace_C_line}
 
 REACTION_TEMPERATURE 1
     {round(porewater_temp_C, 2)}
@@ -2872,9 +2890,11 @@ END
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      rec_eqb_minerals    = FALSE,
-                                     rec_eqb_margin      = 2
+                                     rec_eqb_margin      = 2,
+                                     trace_C_molal       = NULL
                                    ) {
                                      mode <- match.arg(mode)
+                                     trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
@@ -3269,6 +3289,7 @@ END
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
+{trace_C_header_line(trace_C_molal)}
 {ch4_db_note_line}
 {clathrate_note_lines}
 
@@ -3286,7 +3307,7 @@ SOLUTION 1 {.soln_label}
     units     mol/kgw
     density   1
     water     {.water_mass}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(ocean_pressure_atm, 1)}{trace_C_line}
 
 INCREMENTAL_REACTIONS true
 
