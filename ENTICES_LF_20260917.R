@@ -2597,6 +2597,13 @@ SELECTED_OUTPUT
                                        stop('water_temp must be a number (°C), "profile", or "ocean"')
                                      }
 
+                                     # Temperature-gated secondary minerals, as in bulk_kinetic (single
+                                     # solution, so water_temp_C gates the whole block).
+                                     extra_gated_minerals <- self$temp_gated_minerals(water_temp_C)
+                                     extra_gated_lines <- if (length(extra_gated_minerals) > 0)
+                                       paste0("   ", extra_gated_minerals, " 0 0", collapse = "\n") else ""
+                                     extra_gated_so_line <- paste(extra_gated_minerals, collapse = " ")
+
                                      # Primary mineral moles (ROCK_MOL_PER_KG, shared with the other generators;
                                      # all 11 are equilibrium here since this function has no kinetics at all).
                                      # Magnetite is no longer primary — ordinary secondary phase only.
@@ -2765,6 +2772,7 @@ EQUILIBRIUM_PHASES 1
    SO2(g) 0 0
    Thenardite 0 0
    Tobermorite-11A 0 0
+{extra_gated_lines}
 
 SELECTED_OUTPUT
     -file {base_name}.csv
@@ -2803,6 +2811,7 @@ SELECTED_OUTPUT
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
                          Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         {extra_gated_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Fe Ni Lawrencite
     -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
