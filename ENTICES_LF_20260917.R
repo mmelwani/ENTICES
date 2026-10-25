@@ -112,6 +112,11 @@ schreibersite_kinetics_entry <- function(m0) {
 # called Fe in the databases and in EQUILIBRIUM_PHASES blocks.
 FE_METAL_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal"
 FE_METAL_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n'
+# Header note written into every tidal_equil / bulk_equil input.
+EQUIL_INORGANIC_NOTE <- paste(
+  "# Inorganic limiting case: no IOM and no Schreibersite. organic_wt_percent only scales the",
+  "# mineral mass by (100 - organic_wt_percent)/100; no organic carbon, N or S is added.", sep = "\n")
+
 # Index of the output column holding an equilibrium phase's moles. An index, not a name: with
 # check.names = FALSE a pre-Fe_metal CSV has two columns named "Fe", and [["Fe"]] takes the first.
 # Those older CSVs carry Fe metal in the second "Fe" column, used here so restarts from them still work.
@@ -1975,6 +1980,8 @@ SELECTED_OUTPUT
                                    # Equilibrium-porewater variant: primary minerals dissolve via
                                    # EQUILIBRIUM_PHASES instead of kinetics.  Everything else
                                    # (mixing, ocean, seafloor EQ2) is identical.
+                                   # An inorganic limiting case: no IOM and no Schreibersite (see
+                                   # EQUIL_INORGANIC_NOTE, written into the .pqi header).
                                    # ---------------------------------------------------------------
                                    generate_phreeqc_input_tidal_equil = function(output_dir = "phreeqc_inputs",
                                                                            n_orbital_cycles = NULL,
@@ -2107,6 +2114,7 @@ SELECTED_OUTPUT
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
+{EQUIL_INORGANIC_NOTE}
 
 KNOBS
    -logfile true
@@ -2549,6 +2557,8 @@ SELECTED_OUTPUT
                                    # Single-step bulk equilibrium: entire hydrosphere (ocean + porewater)
                                    # equilibrated against the full permeable rock layer in one PHREEQC step.
                                    # No permeability or fluid-flow parameters are used.
+                                   # An inorganic limiting case: no IOM and no Schreibersite (see
+                                   # EQUIL_INORGANIC_NOTE, written into the .pqi header).
                                    generate_phreeqc_input_bulk_equil = function(output_dir = "phreeqc_inputs",
                                                                                  mode             = c("hydrosphere", "porewater"),
                                                                                  water_rock_ratio = NULL,
@@ -2677,6 +2687,7 @@ SELECTED_OUTPUT
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
+{EQUIL_INORGANIC_NOTE}
 
 KNOBS
    -logfile true
