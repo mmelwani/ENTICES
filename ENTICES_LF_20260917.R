@@ -107,6 +107,24 @@ schreibersite_kinetics_entry <- function(m0) {
   sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.6e\n      -step_divide 1", m0)
 }
 
+# Fe metal is punched as Fe_metal / d_Fe_metal rather than listed in -equilibrium_phases, where its
+# column was headed "Fe", the same as the -totals Fe (dissolved iron) column. The phase is still
+# called Fe in the databases and in EQUILIBRIUM_PHASES blocks.
+FE_METAL_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal"
+FE_METAL_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n'
+# Index of the output column holding an equilibrium phase's moles. An index, not a name: with
+# check.names = FALSE a pre-Fe_metal CSV has two columns named "Fe", and [["Fe"]] takes the first.
+# Those older CSVs carry Fe metal in the second "Fe" column, used here so restarts from them still work.
+ep_column <- function(phase, col_names) {
+  if (phase == "Fe") {
+    if ("Fe_metal" %in% col_names) return(match("Fe_metal", col_names))
+    hits <- which(col_names == "Fe" | grepl("^Fe\\.[0-9]+$", col_names))
+    return(if (length(hits) > 1) tail(hits, 1) else NA_integer_)
+  }
+  hits <- which(make.names(col_names) == make.names(phase))
+  if (length(hits) > 0) tail(hits, 1) else NA_integer_
+}
+
 #===============================================================================
 # Universal Constants and Fluid Properties
 #===============================================================================
@@ -1806,7 +1824,7 @@ SELECTED_OUTPUT
                          SO2 SO4-2 SiO2 HSiO3-
     -kinetics            Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Schreibersite {iom_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
-    -equilibrium_phases  Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
+    -equilibrium_phases  Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
                          C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
@@ -1882,7 +1900,7 @@ SELECTED_OUTPUT
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings, "\n",
+                                         iom_punch_headings, FE_METAL_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          "   20 PUNCH KIN(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH KIN(\"Forsterite\") * 140.6715\n",
@@ -1896,6 +1914,7 @@ SELECTED_OUTPUT
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
                                          iom_punch_lines,
+                                         FE_METAL_PUNCH_LINES,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
@@ -2401,7 +2420,7 @@ SELECTED_OUTPUT
                          NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3-
                          SO2 SO4-2 SiO2 HSiO3-
     -equilibrium_phases  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
-                         Fe Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
+                         Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
                          C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
@@ -2438,7 +2457,7 @@ SELECTED_OUTPUT
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
-                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g\n",
+                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", FE_METAL_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f\n", cumulative_time),
                                          "   20 PUNCH EQUI(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH EQUI(\"Forsterite\") * 140.6715\n",
@@ -2450,6 +2469,7 @@ SELECTED_OUTPUT
                                          "   85 PUNCH EQUI(\"Tephroite\") * 201.96\n",
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
+                                         FE_METAL_PUNCH_LINES,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
@@ -2743,7 +2763,7 @@ SELECTED_OUTPUT
                          NO3- Na+ H2PO4- HPO4-2 PO4-3 HS- H2S SO3-2 HSO3-
                          SO2 SO4-2 SiO2 HSiO3-
     -equilibrium_phases  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
-                         Fe Ni Lawrencite
+                         Ni Lawrencite
                          Analcime Anhydrite Aragonite Bassanite Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
                          Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
@@ -2762,7 +2782,7 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{FE_METAL_PUNCH_HEADINGS}
    10 PUNCH 0.0
    20 PUNCH EQUI("Enstatite") * 100.3725
    30 PUNCH EQUI("Forsterite") * 140.6715
@@ -2774,7 +2794,7 @@ USER_PUNCH
    85 PUNCH EQUI("Tephroite") * 201.96
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
-
+{FE_METAL_PUNCH_LINES}
 END
 ')
 
@@ -3079,7 +3099,7 @@ END
 
                                      # ---- SELECTED_OUTPUT dynamic lines ----
                                      kin_so_line <- paste(c(kinetic_minerals, "Schreibersite"), collapse = " ")
-                                     equil_so_line <- paste(c("Fe", "Ni", "Lawrencite", equil_primary), collapse = " ")
+                                     equil_so_line <- paste(c("Ni", "Lawrencite", equil_primary), collapse = " ")
 
                                      # ---- USER_PUNCH: EQUI() for promoted minerals, KIN() otherwise ----
                                      punch_lines <- paste(
@@ -3355,13 +3375,14 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}{FE_METAL_PUNCH_HEADINGS}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    95 PUNCH KIN("Schreibersite") * 198.509
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
 {iom_punch_lines}
+{FE_METAL_PUNCH_LINES}
 END
 ')
 
@@ -3615,16 +3636,8 @@ END
                                                              self$stable_clathrate_phases(porewater_temp_C, ocean_pressure_atm, ch4_mode))
 
                                      get_equil_moles <- function(mineral) {
-                                       col <- make.names(mineral)
-                                       # "Fe" collides with the -totals Fe (dissolved iron) column — PHREEQC
-                                       # writes both under the literal header "Fe", and read.delim's default
-                                       # check.names=TRUE renames the second occurrence to "Fe.1". Since
-                                       # -equilibrium_phases always comes after -totals in these templates,
-                                       # take the LAST matching column so the mineral (not the solution
-                                       # total) is what's recovered.
-                                       matches <- names(last_row)[names(last_row) == col |
-                                                                   grepl(paste0("^", col, "\\.[0-9]+$"), names(last_row))]
-                                       val <- if (length(matches) > 0) suppressWarnings(as.numeric(last_row[[tail(matches, 1)]])) else NA_real_
+                                       col <- ep_column(mineral, names(last_row))
+                                       val <- if (!is.na(col)) suppressWarnings(as.numeric(last_row[[col]])) else NA_real_
                                        if (is.na(val) || val < 0) 0 else val
                                      }
 
@@ -3802,7 +3815,7 @@ END
                                        paste("    -kinetics           ", paste(.all_kin_so, collapse = " "))
                                      else ""
 
-                                     .all_eq_so  <- c(always_equil_primary, equil_primary, secondary_minerals)
+                                     .all_eq_so  <- c(setdiff(always_equil_primary, "Fe"), equil_primary, secondary_minerals)
                                      .eq_chunks  <- split(.all_eq_so, ceiling(seq_along(.all_eq_so) / 7))
                                      equil_so_line <- paste(
                                        c(paste0("    -equilibrium_phases  ", paste(.eq_chunks[[1]], collapse = " ")),
@@ -3908,12 +3921,13 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}{FE_METAL_PUNCH_HEADINGS}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    {10 + (length(all_primary) + 1) * 10} total_initial = {total_initial_expr}
    {10 + (length(all_primary) + 2) * 10} PUNCH total_initial
 {iom_punch_lines_restart}
+{FE_METAL_PUNCH_LINES}
 END
 ')
 
@@ -4123,16 +4137,10 @@ END
                                        0
                                      }
 
-                                     # Helper: read equilibrium phase moles from a given row. "Fe" collides
-                                     # with the -totals Fe (dissolved iron) column — PHREEQC writes both
-                                     # under the literal header "Fe", so with check.names = FALSE both stay
-                                     # named "Fe" (no automatic .1 suffix); take the LAST match, since
-                                     # -equilibrium_phases always comes after -totals in these templates.
+                                     # Helper: read equilibrium phase moles from a given row (column via ep_column()).
                                      get_ep_moles <- function(mineral, row) {
-                                       col <- make.names(mineral)
-                                       matches <- which(make.names(names(row)) == col)
-                                       val <- if (length(matches) > 0)
-                                         suppressWarnings(as.numeric(row[[tail(matches, 1)]])) else NA_real_
+                                       col <- ep_column(mineral, names(row))
+                                       val <- if (!is.na(col)) suppressWarnings(as.numeric(row[[col]])) else NA_real_
                                        if (is.na(val) || val < 0) 0 else val
                                      }
 
@@ -4443,7 +4451,7 @@ END
 
                                      # Magnetite is already in secondary_minerals (2026-10-07); appending it
                                      # again here listed it twice in -equilibrium_phases.
-                                     .all_eq_so  <- c(always_equil_primary, equil_primary, secondary_minerals,
+                                     .all_eq_so  <- c(setdiff(always_equil_primary, "Fe"), equil_primary, secondary_minerals,
                                                        union(extra_pw_minerals, extra_ocean_minerals))
                                      .eq_chunks  <- split(.all_eq_so, ceiling(seq_along(.all_eq_so) / 7))
                                      equil_so_line <- paste(
@@ -4611,7 +4619,7 @@ SELECTED_OUTPUT
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings_tidal, "\n",
+                                         iom_punch_headings_tidal, FE_METAL_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          paste(sapply(seq_along(all_primary), function(j) {
                                            make_punch_line(10 + j * 10, all_primary[j])
@@ -4619,6 +4627,7 @@ SELECTED_OUTPUT
                                          sprintf("   %d total_initial = %s\n", 10 + (length(all_primary) + 1) * 10, total_initial_expr),
                                          sprintf("   %d PUNCH total_initial\n", 10 + (length(all_primary) + 2) * 10),
                                          iom_punch_lines_tidal,
+                                         FE_METAL_PUNCH_LINES,
                                          "END\n\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases 2\n",
