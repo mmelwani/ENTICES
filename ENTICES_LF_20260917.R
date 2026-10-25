@@ -47,6 +47,9 @@ source("mineral_dissolution_constants.r")
 # phreeqc_tools.R -- PHREEQC_EXPECTED_VERSION (stamped into every .pqi header by
 # stamp_pqi_header()) and run_phreeqc(), which warns if the executable differs.
 source("phreeqc_tools.R")
+# organic_contribution.R -- pair_organic_run(): a run and its organic_wt_percent = 0 blank, and the
+# organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
+source("organic_contribution.R")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
 # Single source for all four generators that build primary-mineral inventories.
