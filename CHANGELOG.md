@@ -774,3 +774,7 @@ One commit per item; each commit message has its pass check.
   `# Recommended database:` line). A mismatch is an error unless the mode is
   given explicitly, then a warning; an unreadable parent mode is a warning.
   Header line `# parent carbon_mode:`.
+- **`scripts/make_c4only.py`** regenerates `coreclath_C4only.dat` from
+  `coreclath_CH4uncoupled.dat`; `tests/c4only_db_check.R` checks the committed
+  file matches it. The database header now names the script (otherwise
+  unchanged).
