@@ -758,3 +758,14 @@ One commit per item; each commit message has its pass check.
 - **`charge_balance`** = NULL | `"pH"` | an `initial_ocean` element, for the
   ocean SOLUTION 2 of tidal_kinetic and tidal_equil. NULL (default) is
   unchanged.
+
+### carbon-default branch: c4_only default, restart mode check, Na zeolites (2026-10-26)
+
+One commit per item; each commit message has its pass check.
+
+- **`carbon_mode = "c4_only"` is the default at every temperature.** Coupled
+  runs (`"coupled"`) are an upper bound on abiotic methanation: equilibrium
+  reduces carbonate with H2 there. `"coupled"` and `"ch4_uncoupled"` stay
+  selectable; the old temperature rule is `carbon_mode = "temperature"` (with
+  `ch4_cutoff_C`), and `CH4_redox_override` still works. Inputs generated with
+  the default before this change are reproduced by `carbon_mode = "temperature"`.

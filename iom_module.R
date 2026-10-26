@@ -210,8 +210,10 @@ iom_bulk_formula <- function() {
 #'                       is coupled C and speciates by equilibrium. ENTICES's
 #'                       kinetic generators and restarts pick this mode
 #'                       automatically whenever they select
-#'                       coreclath_CH4uncoupled.dat (below 150 C), and all
-#'                       coupled otherwise (PhreeqcIntegrator$resolve_iom_pools()).
+#'                       coreclath_CH4uncoupled.dat (carbon_mode
+#'                       "ch4_uncoupled", or "temperature" below the cutoff),
+#'                       and all coupled with the coupled database
+#'                       (PhreeqcIntegrator$resolve_iom_pools()).
 #'                       ENTICES enters no Hdg, so the H2-as-Hdg route that
 #'                       attr(cfg, "carbon_decoupling_note") describes is not
 #'                       used (see docs/PROGRESS.md Part 3).

@@ -918,33 +918,45 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    #                      other reduced carbon (C2H6, acetate, formate, ...) coupled.
                                    #   "c4_only"       -- coreclath_C4only.dat; methane is Mtg, and coupled carbon is
                                    #                      C(+4) only (the database comments out the rest).
-                                   # Default (carbon_mode = NULL): "ch4_uncoupled" below ch4_cutoff_C (150 C),
-                                   # "coupled" at/above. CH4_redox_override = "coupled"/"decoupled" is the older
-                                   # spelling of carbon_mode = "coupled"/"ch4_uncoupled"; give one or the other.
-                                   # `decoupled` (methane is Mtg) is TRUE for both "ch4_uncoupled" and "c4_only".
+                                   #   "temperature"   -- the rule that was the default before 2026-10-26:
+                                   #                      "ch4_uncoupled" below ch4_cutoff_C (150 C), "coupled" at/above.
+                                   # Default (carbon_mode = NULL): "c4_only" at every temperature. Coupled runs
+                                   # let equilibrium reduce carbonate with H2, so they are an upper bound on
+                                   # abiotic methanation, not the expected case. CH4_redox_override =
+                                   # "coupled"/"decoupled" is the older spelling of carbon_mode =
+                                   # "coupled"/"ch4_uncoupled"; give one or the other. ch4_cutoff_C is used only
+                                   # by "temperature". `decoupled` (methane is Mtg) is TRUE for both
+                                   # "ch4_uncoupled" and "c4_only"; `explicit` is TRUE when the caller chose the
+                                   # mode (carbon_mode or CH4_redox_override given).
                                    resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL, carbon_mode = NULL,
                                                                ch4_cutoff_C = 150) {
                                      if (!is.null(CH4_redox_override) && !CH4_redox_override %in% c("coupled", "decoupled")) {
                                        stop('CH4_redox_override must be NULL, "coupled", or "decoupled"')
                                      }
-                                     if (!is.null(carbon_mode) && !carbon_mode %in% c("coupled", "ch4_uncoupled", "c4_only")) {
-                                       stop('carbon_mode must be NULL, "coupled", "ch4_uncoupled", or "c4_only"')
+                                     if (!is.null(carbon_mode) && !carbon_mode %in% c("coupled", "ch4_uncoupled", "c4_only", "temperature")) {
+                                       stop('carbon_mode must be NULL, "coupled", "ch4_uncoupled", "c4_only", or "temperature"')
                                      }
                                      if (!is.null(carbon_mode) && !is.null(CH4_redox_override)) {
                                        stop("give carbon_mode or CH4_redox_override, not both")
                                      }
+                                     explicit <- !is.null(carbon_mode) || !is.null(CH4_redox_override)
+                                     # The header note: "temperature" writes what the old default wrote, so its
+                                     # inputs match those generated before the default changed.
                                      note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override)
-                                             else if (!is.null(carbon_mode)) sprintf(", carbon_mode=%s", carbon_mode)
-                                             else if (ch4_cutoff_C != 150) sprintf(", cutoff=%g C", ch4_cutoff_C)
-                                             else ""
-                                     if (is.null(carbon_mode)) {
-                                       carbon_mode <- if (!is.null(CH4_redox_override)) {
-                                         if (CH4_redox_override == "decoupled") "ch4_uncoupled" else "coupled"
-                                       } else if (porewater_temp_C < ch4_cutoff_C) "ch4_uncoupled" else "coupled"
-                                     }
+                                             else if (identical(carbon_mode, "temperature")) {
+                                               if (ch4_cutoff_C != 150) sprintf(", cutoff=%g C", ch4_cutoff_C) else ""
+                                             }
+                                             else sprintf(", carbon_mode=%s", if (is.null(carbon_mode)) "c4_only" else carbon_mode)
+                                     carbon_mode <- if (!is.null(CH4_redox_override)) {
+                                       if (CH4_redox_override == "decoupled") "ch4_uncoupled" else "coupled"
+                                     } else if (is.null(carbon_mode)) "c4_only"
+                                     else if (carbon_mode == "temperature") {
+                                       if (porewater_temp_C < ch4_cutoff_C) "ch4_uncoupled" else "coupled"
+                                     } else carbon_mode
                                      decoupled <- carbon_mode != "coupled"
                                      list(
                                        carbon_mode   = carbon_mode,
+                                       explicit      = explicit,
                                        decoupled     = decoupled,
                                        ch4_aq        = if (decoupled) "Mtg"    else "CH4",
                                        ch4_gas       = if (decoupled) "Mtg(g)" else "CH4(g)",

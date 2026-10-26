@@ -55,6 +55,21 @@ Run everything from the repo root.
    phreeqc phreeqc_inputs/<file>.pqi phreeqc_inputs/<file>.pqi.out databases/coreclath_CH4coupled.dat
    ```
 
+## Carbon mode
+
+`carbon_mode` picks how carbon redox is treated, and with it the database
+(`databases/README.md`):
+
+- `"c4_only"` (**default**, every temperature): coupled carbon is C(+4) only and
+  reduced carbon enters as decoupled methane (`Mtg`) from the IOM.
+- `"coupled"`: all carbon redox-coupled, so equilibrium reduces carbonate with
+  H2. **Coupled runs are an upper bound on abiotic methanation**, not the
+  expected case.
+- `"ch4_uncoupled"`: methane decoupled (`Mtg`), other reduced carbon (ethane,
+  acetate, formate, ...) coupled.
+- `"temperature"`: the default before 2026-10-26, `"ch4_uncoupled"` below
+  `ch4_cutoff_C` (150 °C) and `"coupled"` at or above it.
+
 ## Initial fluid
 
 The initial fluid is pure water by default, so all ocean carbon comes from the
