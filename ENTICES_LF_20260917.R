@@ -149,8 +149,11 @@ parent_fluid_header_lines <- function(prev_csv) {
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
+# charge_balance: NULL (default, no charge balance), "pH", or one of the initial_ocean names, whose
+# total PHREEQC then adjusts to balance SOLUTION 2's charge.
 # Returns the SOLUTION lines, each with its leading newline ("" for "pure_water").
-initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL) {
+initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL, charge_balance = NULL) {
+  check_ocean_charge_balance(initial_ocean, charge_balance)
   if (identical(initial_ocean, "pure_water")) return("")
   nm <- names(initial_ocean)
   if (!is.list(initial_ocean) || length(initial_ocean) == 0 || is.null(nm) || any(!nzchar(nm)) || anyDuplicated(nm))
@@ -161,12 +164,23 @@ initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL) {
   if (!all(ok)) stop("initial_ocean: each total must be one positive number (mol/kgw): ", paste(nm[!ok], collapse = ", "))
   if (!is.null(trace_C_molal) && any(grepl("^C(\\(|$)", nm)))
     stop("trace_C_molal and initial_ocean both set the ocean's C; give only one")
-  paste0(sprintf("\n    %-9s %.6e", nm, unlist(initial_ocean)), collapse = "")
+  paste0(sprintf("\n    %-9s %.6e%s", nm, unlist(initial_ocean),
+                 ifelse(nm %in% charge_balance, " charge", "")), collapse = "")
 }
-initial_ocean_header_line <- function(initial_ocean) {
-  if (identical(initial_ocean, "pure_water")) return("# initial_ocean: pure_water")
-  sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only",
-          paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "))
+check_ocean_charge_balance <- function(initial_ocean, charge_balance) {
+  if (is.null(charge_balance) || identical(charge_balance, "pH")) return(invisible(TRUE))
+  ok <- is.character(charge_balance) && length(charge_balance) == 1 && is.list(initial_ocean) &&
+    charge_balance %in% names(initial_ocean)
+  if (!ok) stop('charge_balance must be NULL, "pH", or the name of one of the initial_ocean totals')
+  invisible(TRUE)
+}
+# " charge" for SOLUTION 2's pH line when charge_balance = "pH", else "".
+ocean_pH_charge <- function(charge_balance) if (identical(charge_balance, "pH")) " charge" else ""
+initial_ocean_header_line <- function(initial_ocean, charge_balance = NULL) {
+  cb <- if (is.null(charge_balance)) "" else sprintf("; charge balance on %s", charge_balance)
+  if (identical(initial_ocean, "pure_water")) return(paste0("# initial_ocean: pure_water", cb))
+  sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only%s",
+          paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "), cb)
 }
 
 # Header note written into every tidal_equil / bulk_equil input.
@@ -889,45 +903,76 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # and warns if the executable reports a different one.
                                    stamp_pqi_header = function(content, database) {
                                      lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
+                                     dropped <- attr(content, "dropped")
                                      stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
-                                                sprintf("# Database: %s", database))
+                                                sprintf("# Database: %s", database),
+                                                if (length(dropped)) sprintf("# Not defined in %s, so removed from this input: %s",
+                                                                             basename(database), paste(dropped, collapse = " ")))
                                      at <- if (length(lines) && startsWith(lines[1], "TITLE")) 1 else 0
                                      paste(append(lines, stamp, after = at), collapse = "\n")
                                    },
 
-                                   # CH4 vs Mtg (decoupled methane) mode for a generated .pqi file.
-                                   # Default (CH4_redox_override = NULL): decoupled below 150 C, coupled at/above.
-                                   # override = "coupled"/"decoupled" forces the choice regardless of temperature.
-                                   # The two modes require different databases (CH4 master species present vs.
-                                   # commented out in favor of the independent Mtg species) — see CHANGELOG.md.
-                                   resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL) {
+                                   # Carbon mode for a generated .pqi file, and the database it needs:
+                                   #   "coupled"       -- coreclath_CH4coupled.dat; all carbon redox-coupled (CH4/CH4(g)).
+                                   #   "ch4_uncoupled" -- coreclath_CH4uncoupled.dat; methane decoupled as Mtg/Mtg(g),
+                                   #                      other reduced carbon (C2H6, acetate, formate, ...) coupled.
+                                   #   "c4_only"       -- coreclath_C4only.dat; methane is Mtg, and coupled carbon is
+                                   #                      C(+4) only (the database comments out the rest).
+                                   # Default (carbon_mode = NULL): "ch4_uncoupled" below ch4_cutoff_C (150 C),
+                                   # "coupled" at/above. CH4_redox_override = "coupled"/"decoupled" is the older
+                                   # spelling of carbon_mode = "coupled"/"ch4_uncoupled"; give one or the other.
+                                   # `decoupled` (methane is Mtg) is TRUE for both "ch4_uncoupled" and "c4_only".
+                                   resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL, carbon_mode = NULL,
+                                                               ch4_cutoff_C = 150) {
                                      if (!is.null(CH4_redox_override) && !CH4_redox_override %in% c("coupled", "decoupled")) {
                                        stop('CH4_redox_override must be NULL, "coupled", or "decoupled"')
                                      }
-                                     decoupled <- if (!is.null(CH4_redox_override)) {
-                                       CH4_redox_override == "decoupled"
-                                     } else {
-                                       porewater_temp_C < 150
+                                     if (!is.null(carbon_mode) && !carbon_mode %in% c("coupled", "ch4_uncoupled", "c4_only")) {
+                                       stop('carbon_mode must be NULL, "coupled", "ch4_uncoupled", or "c4_only"')
                                      }
+                                     if (!is.null(carbon_mode) && !is.null(CH4_redox_override)) {
+                                       stop("give carbon_mode or CH4_redox_override, not both")
+                                     }
+                                     note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override)
+                                             else if (!is.null(carbon_mode)) sprintf(", carbon_mode=%s", carbon_mode)
+                                             else if (ch4_cutoff_C != 150) sprintf(", cutoff=%g C", ch4_cutoff_C)
+                                             else ""
+                                     if (is.null(carbon_mode)) {
+                                       carbon_mode <- if (!is.null(CH4_redox_override)) {
+                                         if (CH4_redox_override == "decoupled") "ch4_uncoupled" else "coupled"
+                                       } else if (porewater_temp_C < ch4_cutoff_C) "ch4_uncoupled" else "coupled"
+                                     }
+                                     decoupled <- carbon_mode != "coupled"
                                      list(
+                                       carbon_mode   = carbon_mode,
                                        decoupled     = decoupled,
                                        ch4_aq        = if (decoupled) "Mtg"    else "CH4",
                                        ch4_gas       = if (decoupled) "Mtg(g)" else "CH4(g)",
-                                       database      = if (decoupled) "databases/coreclath_CH4uncoupled.dat" else "databases/coreclath_CH4coupled.dat",
-                                       hydrate_phase = if (decoupled) "Mtg_hydrate" else "CH4_hydrate"
+                                       database      = switch(carbon_mode,
+                                                              coupled       = "databases/coreclath_CH4coupled.dat",
+                                                              ch4_uncoupled = "databases/coreclath_CH4uncoupled.dat",
+                                                              c4_only       = "databases/coreclath_C4only.dat"),
+                                       hydrate_phase = if (decoupled) "Mtg_hydrate" else "CH4_hydrate",
+                                       description   = switch(carbon_mode,
+                                                              coupled       = "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                                              ch4_uncoupled = "decoupled -> aqueous/gas species are Mtg/Mtg(g)",
+                                                              c4_only       = "decoupled -> aqueous/gas species are Mtg/Mtg(g); coupled C is C(+4) only"),
+                                       note          = note
                                      )
                                    },
 
-                                   # IOM channel config matching the CH4 mode's database. With the uncoupled
+                                   # IOM channel config matching the carbon mode's database. With the uncoupled
                                    # database (no coupled CH4), IOM_CH4 releases its carbon as Mtg
-                                   # (redox_mode C = "decoupled": "Mtg 1 H 0.435"); otherwise everything is
+                                   # (redox_mode C = "decoupled": "Mtg 1 H 0.435"); with C4only, IOM_CHn too
+                                   # (C = "c4_only", see iom_default_config()); otherwise everything is
                                    # coupled. N and S stay coupled. Rebuilt on every call so a config from
                                    # one temperature is never reused at another; a config the caller set
                                    # in self$iom_pools (without the "auto_ch4_mode" attribute) is kept.
                                    resolve_iom_pools = function(ch4_mode) {
                                      if (!is.null(self$iom_pools) && !isTRUE(attr(self$iom_pools, "auto_ch4_mode")))
                                        return(invisible(self$iom_pools))
-                                     cfg <- iom_default_config(redox_mode = c(C = if (ch4_mode$decoupled) "decoupled" else "coupled",
+                                     cfg <- iom_default_config(redox_mode = c(C = switch(ch4_mode$carbon_mode, coupled = "coupled",
+                                                                                         ch4_uncoupled = "decoupled", c4_only = "c4_only"),
                                                                               N = "coupled", S = "coupled"))
                                      attr(cfg, "auto_ch4_mode") <- TRUE
                                      self$iom_pools <- cfg
@@ -938,10 +983,21 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # PHREEQC input text, for decoupled-mode files. Applied once to the final
                                    # assembled text so every block (static text and vector-built lists alike)
                                    # is covered without threading a placeholder through each one individually.
+                                   # With carbon_mode "c4_only" it then removes every phase and species the
+                                   # C4only database does not define but its source, coreclath_CH4uncoupled.dat,
+                                   # does (the reduced-carbon entries the templates list), via
+                                   # restrict_to_database() (phreeqc_tools.R). stamp_pqi_header() records what
+                                   # was removed.
                                    apply_ch4_mode = function(text, ch4_mode) {
                                      if (!ch4_mode$decoupled) return(text)
                                      text <- gsub("CH4\\(g\\)", "Mtg(g)", text)
                                      text <- gsub("(?<![A-Za-z0-9_])CH4(?![A-Za-z0-9_\\(])", "Mtg", text, perl = TRUE)
+                                     if (identical(ch4_mode$carbon_mode, "c4_only")) {
+                                       text <- restrict_to_database(text, ch4_mode$database, base = "databases/coreclath_CH4uncoupled.dat")
+                                       if (length(attr(text, "dropped_nonzero")))
+                                         warning("carbon_mode c4_only: removed phases that had a nonzero amount: ",
+                                                 paste(attr(text, "dropped_nonzero"), collapse = ", "))
+                                     }
                                      text
                                    },
 
@@ -1073,8 +1129,8 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
-                                                                     CH4_redox_override = NULL, trace_C_molal = NULL,
-                                                                     initial_ocean = "pure_water") {
+                                                                     CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
+                                                                     initial_ocean = "pure_water", charge_balance = NULL) {
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -1146,8 +1202,8 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      }
 
                                      # Generate input file content
-                                     content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override,
-                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean)
+                                     content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
+                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean, charge_balance = charge_balance)
 
                                      # Write to file
                                      writeLines(content, filename)
@@ -1155,9 +1211,9 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      return(filename)
                                    },
                                    
-                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, trace_C_molal = NULL, initial_ocean = "pure_water") {
+                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL) {
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
-                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal))
+                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics <- self$simulator$get_summary_metrics()
 
                                      # Calculate adjusted cycles
@@ -1276,15 +1332,15 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      }
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
-                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        porewater_temp_C, ch4_override_note
                                      )
 
@@ -1395,7 +1451,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation
 {trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
-{initial_ocean_header_line(initial_ocean)}
+{initial_ocean_header_line(initial_ocean, charge_balance)}
 {ch4_db_note_line}
 {clathrate_note_lines}
 
@@ -1433,7 +1489,7 @@ SOLUTION 1 Enceladus porewater
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
-    pH        7
+    pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
     units     mol/kgw
@@ -2094,7 +2150,8 @@ SELECTED_OUTPUT
                                                                            suffix = "",
                                                                            porewater_temp = "ocean",
                                                                            CH4_redox_override = NULL,
-                                                                           initial_ocean = "pure_water") {
+                                                                           carbon_mode = NULL, ch4_cutoff_C = 150,
+                                                                           initial_ocean = "pure_water", charge_balance = NULL) {
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -2106,16 +2163,17 @@ SELECTED_OUTPUT
                                        temp_tag, n_orbital_cycles, suffix
                                      ))
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles, porewater_temp = porewater_temp,
-                                                                                         CH4_redox_override = CH4_redox_override,
-                                                                                         initial_ocean = initial_ocean)
+                                                                                         CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
+                                                                                         initial_ocean = initial_ocean, charge_balance = charge_balance)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
 
                                    create_phreeqc_template_tidal_equil = function(filename, n_orbital_cycles, porewater_temp = "ocean",
                                                                                   CH4_redox_override = NULL,
-                                                                                  initial_ocean = "pure_water") {
-                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean)
+                                                                                  carbon_mode = NULL, ch4_cutoff_C = 150,
+                                                                                  initial_ocean = "pure_water", charge_balance = NULL) {
+                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean, charge_balance = charge_balance)
                                      metrics         <- self$simulator$get_summary_metrics()
                                      orbital_period  <- self$simulator$config$orbital_period
                                      time_step_years <- orbital_period / (365.25 * 24 * 3600)
@@ -2170,12 +2228,12 @@ SELECTED_OUTPUT
                                      }
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
-                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        porewater_temp_C, ch4_override_note
                                      )
 
@@ -2230,7 +2288,7 @@ TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
-{initial_ocean_header_line(initial_ocean)}
+{initial_ocean_header_line(initial_ocean, charge_balance)}
 
 KNOBS
    -logfile true
@@ -2264,7 +2322,7 @@ SOLUTION 1 Enceladus porewater
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
-    pH        7
+    pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
     units     mol/kgw
@@ -2680,7 +2738,7 @@ SELECTED_OUTPUT
                                                                                  water_rock_ratio = NULL,
                                                                                  water_temp       = "ocean",
                                                                                  suffix = "",
-                                                                                 CH4_redox_override = NULL) {
+                                                                                 CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150) {
                                      mode <- match.arg(mode)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -2739,12 +2797,12 @@ SELECTED_OUTPUT
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) and the database — see
                                      # resolve_ch4_mode(); water_temp_C plays the role of porewater T.
-                                     ch4_mode <- self$resolve_ch4_mode(water_temp_C, CH4_redox_override)
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_mode <- self$resolve_ch4_mode(water_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; water T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        water_temp_C, ch4_override_note
                                      )
 
@@ -3004,6 +3062,8 @@ END
                                      porewater_temp      = "ocean",
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
+                                     carbon_mode         = NULL,
+                                     ch4_cutoff_C        = 150,
                                      rec_eqb_minerals    = FALSE,
                                      rec_eqb_margin      = 2,
                                      trace_C_molal       = NULL
@@ -3052,15 +3112,15 @@ END
                                        if (porewater_temp == "profile") pore_temp_C else ocean_temp_C
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
-                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        porewater_temp_C, ch4_override_note
                                      )
 
@@ -3596,7 +3656,9 @@ END
                                      mode                = c("porewater", "hydrosphere"),
                                      porewater_temp      = "ocean",
                                      suffix              = "",
-                                     CH4_redox_override  = NULL
+                                     CH4_redox_override  = NULL,
+                                     carbon_mode         = NULL,
+                                     ch4_cutoff_C        = 150
                                    ) {
                                      mode <- match.arg(mode)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -3671,15 +3733,15 @@ END
                                        if (porewater_temp == "profile") pore_temp_C else ocean_temp_C
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
-                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        porewater_temp_C, ch4_override_note
                                      )
 
@@ -4155,7 +4217,9 @@ END
                                      porewater_temp      = "ocean",
                                      depletion_mineral   = NULL,
                                      suffix              = "",
-                                     CH4_redox_override  = NULL
+                                     CH4_redox_override  = NULL,
+                                     carbon_mode         = NULL,
+                                     ch4_cutoff_C        = 150
                                    ) {
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
@@ -4273,15 +4337,15 @@ END
                                        if (porewater_temp == "profile") pore_temp_C else ocean_temp_C
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
-                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
-                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
-                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       ch4_mode$description,
                                        porewater_temp_C, ch4_override_note
                                      )
 

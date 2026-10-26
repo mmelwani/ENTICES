@@ -215,6 +215,11 @@ iom_bulk_formula <- function() {
 #'                       ENTICES enters no Hdg, so the H2-as-Hdg route that
 #'                       attr(cfg, "carbon_decoupling_note") describes is not
 #'                       used (see docs/PROGRESS.md Part 3).
+#'     C="c4_only"    -> for coreclath_C4only.dat (carbon_mode "c4_only"),
+#'                       where coupled carbon can only be C(+4): IOM_CH4 is
+#'                       "Mtg 1 H 0.435" as above, and IOM_CHn is
+#'                       "Mtg 1 H -2.2". IOM_CO2 keeps its coupled formula
+#'                       (its carbon ends up C(+4)). See C4ONLY_FORMULAS.
 #'     N="decoupled"  -> refused with an error. Not a gap: NH3/NH4+ is
 #'                       already the stable N species at Enceladus pore
 #'                       conditions, and the only decoupled N species in the
@@ -293,6 +298,20 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
     IOM_CH4 = "Mtg 1 H 0.435",
     IOM_S   = "Sg 1 H 1"
   )
+  # redox_mode C = "c4_only" (coreclath_C4only.dat has no coupled reduced
+  # carbon, so both reduced-carbon channels release Mtg):
+  #   IOM_CH4 -> "Mtg 1 H 0.435", as for C = "decoupled".
+  #   IOM_CHn -> "Mtg 1 H -2.2". Same rule as IOM_CH4 (Mtg's four H sit
+  #     outside the H balance, so the formula carries the solid's H minus 4:
+  #     1.8 - 4 = -2.2). This IMPOSES A 2.2 e- REDUCTION BY HAND: the solid's
+  #     carbon (mean oxidation state -1.8 in CH1.8) is put in as methane (-4)
+  #     without equilibrium deciding it, and the -2.2 H debits the system the
+  #     reductant that takes (CH1.8 + 1.1 H2 -> CH4). It is a choice of
+  #     product, not a computed one.
+  C4ONLY_FORMULAS <- list(
+    IOM_CH4 = "Mtg 1 H 0.435",
+    IOM_CHn = "Mtg 1 H -2.2"
+  )
 
   subpool_rows <- function(prefix, bins, w, shift, m0_tot, formula_coupled, family) {
     data.frame(
@@ -323,8 +342,10 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   # identical behavior to before redox_mode existed) ---
   allowed <- c("coupled", "decoupled")
   for (el in names(redox_mode)) {
+    if (el == "C" && identical(redox_mode[[el]], "c4_only")) next
     if (!redox_mode[[el]] %in% allowed)
-      stop("iom_default_config: redox_mode['", el, "'] must be 'coupled' or 'decoupled'")
+      stop("iom_default_config: redox_mode['", el, "'] must be 'coupled' or 'decoupled'",
+           if (el == "C") " (or 'c4_only')")
   }
   # Nitrogen decoupling is a decision made AGAINST, not a gap: the only
   # decoupled N species in the database is Ntg (N2), which is the wrong end
@@ -345,6 +366,11 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   # Only IOM_CH4 (Mtg) and IOM_S (Sg) actually swap formula.
   use_decoupled <- redox_mode[cfg$family] == "decoupled" & !is.na(cfg$formula_decoupled)
   cfg$formula <- ifelse(use_decoupled, cfg$formula_decoupled, cfg$formula_coupled)
+  if (identical(redox_mode[["C"]], "c4_only")) {
+    prefix <- sub("_[0-9]+$", "", cfg$name)
+    hit <- prefix %in% names(C4ONLY_FORMULAS)
+    cfg$formula[hit] <- unlist(C4ONLY_FORMULAS[prefix[hit]])
+  }
   attr(cfg, "redox_mode") <- redox_mode
   attr(cfg, "carbon_decoupling_note") <-
     if (identical(redox_mode[["C"]], "decoupled"))

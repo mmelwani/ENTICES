@@ -47,8 +47,9 @@ Run everything from the repo root.
    Generated files go to `phreeqc_inputs/`, which is git-ignored.
 
 2. Run PHREEQC 3.8 on the generated file. Each file's header names the
-   database it needs, `databases/coreclath_CH4coupled.dat` or
-   `databases/coreclath_CH4uncoupled.dat`:
+   database it needs, `databases/coreclath_CH4coupled.dat`,
+   `databases/coreclath_CH4uncoupled.dat` or `databases/coreclath_C4only.dat`
+   (chosen by `carbon_mode`; see `databases/README.md`):
 
    ```
    phreeqc phreeqc_inputs/<file>.pqi phreeqc_inputs/<file>.pqi.out databases/coreclath_CH4coupled.dat
@@ -69,6 +70,11 @@ organics. Two arguments change that:
 - `initial_ocean` (tidal_kinetic, tidal_equil): `"pure_water"` (default) or a
   named list of element totals in mol/kgw for the ocean SOLUTION 2 only, e.g.
   `list(C = ..., N = ...)`.
+- `charge_balance` (tidal_kinetic, tidal_equil): charge-balance the ocean
+  SOLUTION 2 on `"pH"` or on one of the `initial_ocean` elements (PHREEQC
+  adjusts its total). Default `NULL`: no charge balance, as before. A
+  `trace_C_molal` seed enters as unbalanced HCO3-; `"pH"` balances it in the
+  ocean (pH 4.8 at 1e-3), not in the porewater SOLUTION 1.
 
 Both are stamped in the `.pqi` header, and restarts stamp their parent's values
 as `# parent trace_C_molal:` / `# parent initial_ocean:`.
@@ -84,9 +90,10 @@ Rscript tests/iom_selftest.R        # IOM module calibration checks
 Rscript tests/rock_table_check.R    # ROCK_MOL_PER_KG vs reconstruction/rock_mol_per_kg.csv
 Rscript tests/db_load_check.R       # every databases/*.dat loads in PHREEQC with 0 errors
 Rscript tests/carbon_rebin_check.R  # carbon by actual oxidation state, on the N1 leak test output
+Rscript tests/c4only_db_check.R     # coreclath_C4only.dat: C(+4)-only carbon; restrict_to_database()
 ```
 
-Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` needs PHREEQC; set
+Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` and `c4only_db_check.R` need PHREEQC; set
 `PHREEQC_EXE` if it isn't at the default Windows install path or on the `PATH`
 (see `phreeqc_tools.R`).
 
