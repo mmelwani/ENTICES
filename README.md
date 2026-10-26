@@ -84,9 +84,10 @@ Rscript tests/iom_selftest.R        # IOM module calibration checks
 Rscript tests/rock_table_check.R    # ROCK_MOL_PER_KG vs reconstruction/rock_mol_per_kg.csv
 Rscript tests/db_load_check.R       # every databases/*.dat loads in PHREEQC with 0 errors
 Rscript tests/carbon_rebin_check.R  # carbon by actual oxidation state, on the N1 leak test output
+Rscript tests/c4only_db_check.R     # coreclath_C4only.dat: C(+4)-only carbon; restrict_to_database()
 ```
 
-Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` needs PHREEQC; set
+Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` and `c4only_db_check.R` need PHREEQC; set
 `PHREEQC_EXE` if it isn't at the default Windows install path or on the `PATH`
 (see `phreeqc_tools.R`).
 
