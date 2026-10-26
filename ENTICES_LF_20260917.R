@@ -2662,7 +2662,8 @@ SELECTED_OUTPUT
                                                                                  mode             = c("hydrosphere", "porewater"),
                                                                                  water_rock_ratio = NULL,
                                                                                  water_temp       = "ocean",
-                                                                                 suffix = "") {
+                                                                                 suffix = "",
+                                                                                 CH4_redox_override = NULL) {
                                      mode <- match.arg(mode)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -2719,17 +2720,27 @@ SELECTED_OUTPUT
                                        stop('water_temp must be a number (°C), "profile", or "ocean"')
                                      }
 
+                                     # CH4 (redox-coupled) vs Mtg (decoupled) and the database — see
+                                     # resolve_ch4_mode(); water_temp_C plays the role of porewater T.
+                                     ch4_mode <- self$resolve_ch4_mode(water_temp_C, CH4_redox_override)
+                                     ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
+                                     ch4_db_note_line <- sprintf(
+                                       "# Recommended database: %s (CH4 %s; water T = %.1f C%s)",
+                                       ch4_mode$database,
+                                       if (ch4_mode$decoupled) "decoupled -> aqueous/gas species are Mtg/Mtg(g)" else "coupled -> aqueous/gas species are CH4/CH4(g)",
+                                       water_temp_C, ch4_override_note
+                                     )
+
                                      # Temperature-gated secondary minerals, as in bulk_kinetic (single
                                      # solution, so water_temp_C gates the whole block), plus the clathrate
                                      # phases stable at the solution's temperature and pressure, gated as in
-                                     # bulk_kinetic. Names are the coupled ones (CH4_hydrate): this generator
-                                     # always uses databases/coreclath_CH4coupled.dat.
+                                     # bulk_kinetic.
                                      # Reaction pressure: porewater mode reacts porewater only, so it uses the
                                      # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
                                      .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
                                      extra_gated_minerals <- c(self$temp_gated_minerals(water_temp_C),
                                                                self$stable_clathrate_phases(water_temp_C, .solution_pressure_atm,
-                                                                                            self$resolve_ch4_mode(water_temp_C, "coupled")))
+                                                                                            ch4_mode))
                                      clathrate_note_lines <- self$clathrate_stability_note(water_temp_C, .solution_pressure_atm, location = "Solution")
                                      extra_gated_lines <- if (length(extra_gated_minerals) > 0)
                                        paste0("   ", extra_gated_minerals, " 0 0", collapse = "\n") else ""
@@ -2791,6 +2802,7 @@ SELECTED_OUTPUT
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
+{ch4_db_note_line}
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
@@ -2962,8 +2974,7 @@ USER_PUNCH
 END
 ')
 
-                                     # Equilibrium generators have no CH4 decoupling: always the coupled database.
-                                     content <- self$stamp_pqi_header(content, "databases/coreclath_CH4coupled.dat")
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
