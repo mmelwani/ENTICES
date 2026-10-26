@@ -2162,16 +2162,17 @@ SELECTED_OUTPUT
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic. The
-                                     # ocean block also gets the clathrate phases stable at the ocean's own
-                                     # conditions, gated as in tidal_kinetic (stable_clathrate_phases()); the
-                                     # porewater block gets none (ocean side only).
-                                     extra_pw_minerals    <- self$temp_gated_minerals(porewater_temp_C)
+                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic. Each
+                                     # block also gets the clathrate phases stable at its reservoir's own
+                                     # conditions, gated as in tidal_kinetic (stable_clathrate_phases()).
+                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C),
+                                                               self$stable_clathrate_phases(porewater_temp_C, pore_pressure_atm, ch4_mode))
                                      extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
                                                                self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
                                      clathrate_note_lines <- paste0(
                                        self$clathrate_stability_note(ocean_temp_C, ocean_pressure_atm, location = "Ocean"),
-                                       "\n# Porewater: no clathrate phases added (ocean side only).")
+                                       "\n\n",
+                                       self$clathrate_stability_note(porewater_temp_C, pore_pressure_atm, location = "Porewater"))
                                      extra_pw_lines    <- if (length(extra_pw_minerals) > 0)
                                        paste0("   ", extra_pw_minerals, " 0 0", collapse = "\n") else ""
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
