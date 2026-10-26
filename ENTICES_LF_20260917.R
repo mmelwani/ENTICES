@@ -716,9 +716,24 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    simulator = NULL,
                                    phreeqc_params = NULL,
                                    organic_wt_percent = 0,
+                                   # organic wt% the mineral mass is scaled for; NULL = organic_wt_percent
+                                   mineral_basis_wt_percent = NULL,
                                    iom_pools = NULL,
                                    profile_file = "EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
                                    
+                                   # Factor applied to every primary mineral's moles (the rock minus its organics).
+                                   mineral_scale_factor = function() {
+                                     basis <- if (is.null(self$mineral_basis_wt_percent)) self$organic_wt_percent else self$mineral_basis_wt_percent
+                                     (100 - basis) / 100
+                                   },
+                                   # "" by default; a header line when mineral_basis_wt_percent is set.
+                                   mineral_basis_header_line = function() {
+                                     if (is.null(self$mineral_basis_wt_percent)) return("")
+                                     sprintf("\n# Mineral basis: minerals scaled by (100 - %g)/100 = %.6g, as for a %g wt%% organic run (organic_wt_percent = %g)",
+                                             self$mineral_basis_wt_percent, self$mineral_scale_factor(),
+                                             self$mineral_basis_wt_percent, self$organic_wt_percent)
+                                   },
+
                                    initialize = function(simulator) {
                                      if (!inherits(simulator, "HydrothermalSimulator")) {
                                        stop("Must provide HydrothermalSimulator instance")
@@ -728,7 +743,14 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    },
                                    
                                    # Add organic_wt_percent parameter to the PhreeqcIntegrator
-                                   calculate_phreeqc_parameters = function(organic_wt_percent = 0) {
+                                   # mineral_basis_wt_percent: scale the minerals by (100 - this)/100 instead of
+                                   # (100 - organic_wt_percent)/100. pair_organic_run() sets it to the organic
+                                   # run's value for an organics-absent blank with the same mineral inventory.
+                                   calculate_phreeqc_parameters = function(organic_wt_percent = 0, mineral_basis_wt_percent = NULL) {
+                                     if (!is.null(mineral_basis_wt_percent) &&
+                                         !(is.numeric(mineral_basis_wt_percent) && length(mineral_basis_wt_percent) == 1 &&
+                                           isTRUE(mineral_basis_wt_percent >= 0 && mineral_basis_wt_percent < 100)))
+                                       stop("mineral_basis_wt_percent must be NULL or one number in [0, 100)")
                                      if (is.null(self$simulator$results)) {
                                        stop("Must run simulation before calculating PHREEQC parameters")
                                      }
@@ -808,6 +830,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # Store parameters
                                      self$organic_wt_percent <- organic_wt_percent
+                                     self$mineral_basis_wt_percent <- mineral_basis_wt_percent
                                      # Porewater mass: physical mass of water filling the permeable layer pore space
                                      r_core <- self$simulator$config$core_radius
                                      layer_thick <- self$simulator$params$layer_thickness
@@ -1253,7 +1276,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      extra_eq_so_line  <- paste(union(extra_pw_minerals, extra_ocean_minerals), collapse = " ")
 
                                      # Calculate scaling factor for minerals (reduced by organic content)
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      
                                      # Calculate total mineral amounts (moles) based on permeable layer fraction.
                                      # Coefficients: ROCK_MOL_PER_KG (top of file). 9 kinetic primaries
@@ -1338,7 +1361,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation
-{trace_C_header_line(trace_C_molal)}
+{trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean)}
 {ch4_db_note_line}
 {clathrate_note_lines}
@@ -2142,7 +2165,7 @@ SELECTED_OUTPUT
                                      # capacity relative to the kinetic ones. Options (PI decision): add the
                                      # Fe3P elements as an instantaneous REACTION (full dissolution), or add a
                                      # Schreibersite phase with a sourced log K.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
@@ -2165,7 +2188,7 @@ SELECTED_OUTPUT
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
-{EQUIL_INORGANIC_NOTE}
+{EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean)}
 
 KNOBS
@@ -2685,7 +2708,7 @@ SELECTED_OUTPUT
                                      # SCHREIBERSITE IS NOT INCLUDED here: no Fe3P phase/log K in either
                                      # database, so it can't be an equilibrium primary. See the matching
                                      # note in generate_phreeqc_input_tidal_equil.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
@@ -2739,7 +2762,7 @@ SELECTED_OUTPUT
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
-{EQUIL_INORGANIC_NOTE}
+{EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
 KNOBS
    -logfile true
@@ -3009,7 +3032,7 @@ END
                                      # (top of file). 9 kinetic primaries (incl. Schreibersite, placeholder
                                      # rate) + 3 equilibrium primaries (Fe, Ni, Lawrencite). Magnetite is no
                                      # longer primary — ordinary secondary phase only.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
@@ -3323,7 +3346,7 @@ END
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
-{trace_C_header_line(trace_C_molal)}
+{trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {ch4_db_note_line}
 {clathrate_note_lines}
 

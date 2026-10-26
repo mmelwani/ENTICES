@@ -4,9 +4,9 @@
 # and an otherwise identical one at organic_wt_percent = 0, runs both with run_phreeqc(), and
 # returns organic_contribution() of the two CSVs.
 #
-# The blank is a plain organic_wt_percent = 0 run. Every generator scales the primary minerals by
-# (100 - organic_wt_percent)/100, so the blank also has more rock (1/0.85 as much at 15 wt%); the
-# difference includes that, not only the IOM.
+# The blank has the same mineral inventory as the organic run, with the organics simply absent: it
+# is built with mineral_basis_wt_percent = the run's organic_wt_percent, so its minerals are scaled
+# by the same (100 - organic_wt_percent)/100 rather than rescaled up to a full rock.
 #
 # "Ocean" is the last SOLUTION 2 row for the tidal generators (the updated ocean of the final
 # cycle) and the last SOLUTION 1 row for the bulk generators, which have a single solution.
@@ -54,7 +54,8 @@ pair_organic_run <- function(ph, generator, ..., output_dir) {
   if (!isTRUE(ph$organic_wt_percent > 0))
     stop("ph has organic_wt_percent = 0: there is nothing to pair it with")
   blank <- ph$clone(deep = TRUE)
-  invisible(capture.output(blank$calculate_phreeqc_parameters(organic_wt_percent = 0)))
+  basis <- if (is.null(ph$mineral_basis_wt_percent)) ph$organic_wt_percent else ph$mineral_basis_wt_percent
+  invisible(capture.output(blank$calculate_phreeqc_parameters(organic_wt_percent = 0, mineral_basis_wt_percent = basis)))
   run_one <- function(obj, sub) {
     f <- obj[[paste0("generate_phreeqc_input_", generator)]](output_dir = file.path(output_dir, sub), ...)
     db <- trimws(sub("^# Database:", "", grep("^# Database:", readLines(f, n = 20), value = TRUE)[1]))
@@ -66,5 +67,5 @@ pair_organic_run <- function(ph, generator, ..., output_dir) {
   }
   run <- run_one(ph, "run"); org0 <- run_one(blank, "org0")
   list(contribution = organic_contribution(run$csv, org0$csv), run = run, blank = org0,
-       organic_wt_percent = ph$organic_wt_percent)
+       organic_wt_percent = ph$organic_wt_percent, mineral_basis_wt_percent = basis)
 }
