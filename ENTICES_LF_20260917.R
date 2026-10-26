@@ -130,6 +130,22 @@ trace_C_header_line <- function(trace_C_molal) {
     sprintf("%.6e mol/kgw C added to every initial SOLUTION", trace_C_molal))
 }
 
+# A restart's record of its parent's initial fluid: the trace_C_molal and initial_ocean header lines
+# of the parent .pqi (prev_csv with .csv -> .pqi), re-emitted as "# parent <key>: <value>". A parent
+# that is itself a restart carries "# parent <key>:", so the original value passes down a chain.
+parent_fluid_header_lines <- function(prev_csv) {
+  keys <- c("trace_C_molal", "initial_ocean")
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  h <- if (file.exists(pqi)) readLines(pqi, n = 200, warn = FALSE) else character(0)
+  vals <- vapply(keys, function(k) {
+    l <- grep(sprintf("^# (parent )?%s: ", k), h, value = TRUE)
+    if (!file.exists(pqi)) sprintf("unknown (parent input not found: %s)", pqi)
+    else if (!length(l)) "not stamped in the parent header"
+    else sub(sprintf("^# (parent )?%s: ", k), "", l[1])
+  }, character(1))
+  paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
+}
+
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
@@ -4003,6 +4019,7 @@ KNOBS
 {.thick_line}
 # Mode: {.mode_comment}
 # prev_csv: {prev_csv}
+{parent_fluid_header_lines(prev_csv)}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4666,6 +4683,7 @@ KNOBS
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
 # prev_csv: {prev_csv}
+{parent_fluid_header_lines(prev_csv)}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
