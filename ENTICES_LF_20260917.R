@@ -2162,10 +2162,16 @@ SELECTED_OUTPUT
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic
-                                     # (clathrate phases are not added here).
+                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic. The
+                                     # ocean block also gets the clathrate phases stable at the ocean's own
+                                     # conditions, gated as in tidal_kinetic (stable_clathrate_phases()); the
+                                     # porewater block gets none (ocean side only).
                                      extra_pw_minerals    <- self$temp_gated_minerals(porewater_temp_C)
-                                     extra_ocean_minerals <- self$temp_gated_minerals(ocean_temp_C)
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
+                                                               self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
+                                     clathrate_note_lines <- paste0(
+                                       self$clathrate_stability_note(ocean_temp_C, ocean_pressure_atm, location = "Ocean"),
+                                       "\n# Porewater: no clathrate phases added (ocean side only).")
                                      extra_pw_lines    <- if (length(extra_pw_minerals) > 0)
                                        paste0("   ", extra_pw_minerals, " 0 0", collapse = "\n") else ""
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
@@ -2204,6 +2210,7 @@ SELECTED_OUTPUT
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
+{clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean)}
 
@@ -2712,8 +2719,17 @@ SELECTED_OUTPUT
                                      }
 
                                      # Temperature-gated secondary minerals, as in bulk_kinetic (single
-                                     # solution, so water_temp_C gates the whole block).
-                                     extra_gated_minerals <- self$temp_gated_minerals(water_temp_C)
+                                     # solution, so water_temp_C gates the whole block), plus the clathrate
+                                     # phases stable at the solution's temperature and pressure, gated as in
+                                     # bulk_kinetic. Names are the coupled ones (CH4_hydrate): this generator
+                                     # always uses databases/coreclath_CH4coupled.dat.
+                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
+                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     extra_gated_minerals <- c(self$temp_gated_minerals(water_temp_C),
+                                                               self$stable_clathrate_phases(water_temp_C, .solution_pressure_atm,
+                                                                                            self$resolve_ch4_mode(water_temp_C, "coupled")))
+                                     clathrate_note_lines <- self$clathrate_stability_note(water_temp_C, .solution_pressure_atm, location = "Solution")
                                      extra_gated_lines <- if (length(extra_gated_minerals) > 0)
                                        paste0("   ", extra_gated_minerals, " 0 0", collapse = "\n") else ""
                                      extra_gated_so_line <- paste(extra_gated_minerals, collapse = " ")
@@ -2743,10 +2759,6 @@ SELECTED_OUTPUT
                                        diopside_moles, anorthite_moles, kfeldspar_moles, tephroite_moles,
                                        fe_moles, ni_moles, lawrencite_moles
                                      )
-
-                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
-                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
-                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
 
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater equilibrium" else
@@ -2778,6 +2790,7 @@ SELECTED_OUTPUT
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
+{clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
 KNOBS
