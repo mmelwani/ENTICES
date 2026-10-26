@@ -723,3 +723,18 @@ One commit per item; each commit message has its pass check.
   porewater block gets none.
 - **README** recommends `trace_C_molal = 1e-14` (tidal_kinetic and its restart
   both run at 25 C).
+
+### ch4-mode-iom branch: IOM carbon formulas follow the database, carbon re-binning (2026-10-26)
+
+One commit per item; each commit message has its pass check.
+
+- **IOM config tied to the CH4 mode:** `resolve_iom_pools(ch4_mode)` in
+  tidal_kinetic, bulk_kinetic and both restarts. With
+  `coreclath_CH4uncoupled.dat` (below 150 C) IOM_CH4 is `Mtg 1 H 0.435`
+  (redox_mode C decoupled, N and S coupled) and `Mtg` is punched in `-totals`;
+  otherwise all coupled and inputs are byte-identical to before. Restarts carry
+  and punch the parent's Mtg. A caller-set `iom_pools` is kept.
+- **`carbon_by_oxidation_state()`** in `phreeqc_tools.R`: carbon from a PHREEQC
+  output or selected-output file re-binned by the actual C oxidation state
+  (PHREEQC files formate, acetate, methanol etc. under C(4)). Test:
+  `tests/carbon_rebin_check.R` on the N1 leak test output.
