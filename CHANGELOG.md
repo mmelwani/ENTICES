@@ -778,3 +778,7 @@ One commit per item; each commit message has its pass check.
   `coreclath_CH4uncoupled.dat`; `tests/c4only_db_check.R` checks the committed
   file matches it. The database header now names the script (otherwise
   unchanged).
+- **Natrolite and Mesolite** (Na zeolites) added to the secondary minerals of
+  every generator (porewater and ocean EP blocks, SELECTED_OUTPUT lists, both
+  restarts), ungated like Analcime. At 100 °C both were supersaturated in the
+  orbit-2 porewater (corrected SI +1.08, +1.30) without being listed.

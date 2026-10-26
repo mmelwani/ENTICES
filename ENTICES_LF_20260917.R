@@ -1810,6 +1810,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -1825,6 +1826,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -1945,6 +1947,7 @@ EQUILIBRIUM_PHASES 2
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -1960,6 +1963,7 @@ EQUILIBRIUM_PHASES 2
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -2043,9 +2047,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -2468,6 +2472,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -2483,6 +2488,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -2601,6 +2607,7 @@ EQUILIBRIUM_PHASES 2
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -2616,6 +2623,7 @@ EQUILIBRIUM_PHASES 2
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -2694,9 +2702,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -3007,6 +3015,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
    MgSO4 0 0
    Minnesotaite 0 0
    Mirabilite 0 0
@@ -3014,6 +3023,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
    NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
@@ -3066,8 +3076,8 @@ SELECTED_OUTPUT
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4 Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite Lizardite Magnetite
-                         Melanterite MgSO4 Minnesotaite Mirabilite
-                         Montmor-Ca Montmor-Mg Montmor-Na N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
+                         Montmor-Ca Montmor-Mg Montmor-Na N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -3602,6 +3612,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
    MgSO4 0 0
    Minnesotaite 0 0
    Mirabilite 0 0
@@ -3609,6 +3620,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
    NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
@@ -3664,9 +3676,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -3928,9 +3940,9 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
@@ -4503,9 +4515,9 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
