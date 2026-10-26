@@ -69,6 +69,11 @@ organics. Two arguments change that:
 - `initial_ocean` (tidal_kinetic, tidal_equil): `"pure_water"` (default) or a
   named list of element totals in mol/kgw for the ocean SOLUTION 2 only, e.g.
   `list(C = ..., N = ...)`.
+- `charge_balance` (tidal_kinetic, tidal_equil): charge-balance the ocean
+  SOLUTION 2 on `"pH"` or on one of the `initial_ocean` elements (PHREEQC
+  adjusts its total). Default `NULL`: no charge balance, as before. A
+  `trace_C_molal` seed enters as unbalanced HCO3-; `"pH"` balances it in the
+  ocean (pH 4.8 at 1e-3), not in the porewater SOLUTION 1.
 
 Both are stamped in the `.pqi` header, and restarts stamp their parent's values
 as `# parent trace_C_molal:` / `# parent initial_ocean:`.

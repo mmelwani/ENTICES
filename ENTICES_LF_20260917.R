@@ -149,8 +149,11 @@ parent_fluid_header_lines <- function(prev_csv) {
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
+# charge_balance: NULL (default, no charge balance), "pH", or one of the initial_ocean names, whose
+# total PHREEQC then adjusts to balance SOLUTION 2's charge.
 # Returns the SOLUTION lines, each with its leading newline ("" for "pure_water").
-initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL) {
+initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL, charge_balance = NULL) {
+  check_ocean_charge_balance(initial_ocean, charge_balance)
   if (identical(initial_ocean, "pure_water")) return("")
   nm <- names(initial_ocean)
   if (!is.list(initial_ocean) || length(initial_ocean) == 0 || is.null(nm) || any(!nzchar(nm)) || anyDuplicated(nm))
@@ -161,12 +164,23 @@ initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL) {
   if (!all(ok)) stop("initial_ocean: each total must be one positive number (mol/kgw): ", paste(nm[!ok], collapse = ", "))
   if (!is.null(trace_C_molal) && any(grepl("^C(\\(|$)", nm)))
     stop("trace_C_molal and initial_ocean both set the ocean's C; give only one")
-  paste0(sprintf("\n    %-9s %.6e", nm, unlist(initial_ocean)), collapse = "")
+  paste0(sprintf("\n    %-9s %.6e%s", nm, unlist(initial_ocean),
+                 ifelse(nm %in% charge_balance, " charge", "")), collapse = "")
 }
-initial_ocean_header_line <- function(initial_ocean) {
-  if (identical(initial_ocean, "pure_water")) return("# initial_ocean: pure_water")
-  sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only",
-          paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "))
+check_ocean_charge_balance <- function(initial_ocean, charge_balance) {
+  if (is.null(charge_balance) || identical(charge_balance, "pH")) return(invisible(TRUE))
+  ok <- is.character(charge_balance) && length(charge_balance) == 1 && is.list(initial_ocean) &&
+    charge_balance %in% names(initial_ocean)
+  if (!ok) stop('charge_balance must be NULL, "pH", or the name of one of the initial_ocean totals')
+  invisible(TRUE)
+}
+# " charge" for SOLUTION 2's pH line when charge_balance = "pH", else "".
+ocean_pH_charge <- function(charge_balance) if (identical(charge_balance, "pH")) " charge" else ""
+initial_ocean_header_line <- function(initial_ocean, charge_balance = NULL) {
+  cb <- if (is.null(charge_balance)) "" else sprintf("; charge balance on %s", charge_balance)
+  if (identical(initial_ocean, "pure_water")) return(paste0("# initial_ocean: pure_water", cb))
+  sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only%s",
+          paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "), cb)
 }
 
 # Header note written into every tidal_equil / bulk_equil input.
@@ -1116,7 +1130,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
-                                                                     initial_ocean = "pure_water") {
+                                                                     initial_ocean = "pure_water", charge_balance = NULL) {
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -1189,7 +1203,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # Generate input file content
                                      content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
-                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean)
+                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean, charge_balance = charge_balance)
 
                                      # Write to file
                                      writeLines(content, filename)
@@ -1197,9 +1211,9 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      return(filename)
                                    },
                                    
-                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water") {
+                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL) {
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
-                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal))
+                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics <- self$simulator$get_summary_metrics()
 
                                      # Calculate adjusted cycles
@@ -1437,7 +1451,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation
 {trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
-{initial_ocean_header_line(initial_ocean)}
+{initial_ocean_header_line(initial_ocean, charge_balance)}
 {ch4_db_note_line}
 {clathrate_note_lines}
 
@@ -1475,7 +1489,7 @@ SOLUTION 1 Enceladus porewater
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
-    pH        7
+    pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
     units     mol/kgw
@@ -2137,7 +2151,7 @@ SELECTED_OUTPUT
                                                                            porewater_temp = "ocean",
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
-                                                                           initial_ocean = "pure_water") {
+                                                                           initial_ocean = "pure_water", charge_balance = NULL) {
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -2150,7 +2164,7 @@ SELECTED_OUTPUT
                                      ))
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles, porewater_temp = porewater_temp,
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
-                                                                                         initial_ocean = initial_ocean)
+                                                                                         initial_ocean = initial_ocean, charge_balance = charge_balance)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -2158,8 +2172,8 @@ SELECTED_OUTPUT
                                    create_phreeqc_template_tidal_equil = function(filename, n_orbital_cycles, porewater_temp = "ocean",
                                                                                   CH4_redox_override = NULL,
                                                                                   carbon_mode = NULL, ch4_cutoff_C = 150,
-                                                                                  initial_ocean = "pure_water") {
-                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean)
+                                                                                  initial_ocean = "pure_water", charge_balance = NULL) {
+                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean, charge_balance = charge_balance)
                                      metrics         <- self$simulator$get_summary_metrics()
                                      orbital_period  <- self$simulator$config$orbital_period
                                      time_step_years <- orbital_period / (365.25 * 24 * 3600)
@@ -2274,7 +2288,7 @@ TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
-{initial_ocean_header_line(initial_ocean)}
+{initial_ocean_header_line(initial_ocean, charge_balance)}
 
 KNOBS
    -logfile true
@@ -2308,7 +2322,7 @@ SOLUTION 1 Enceladus porewater
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
-    pH        7
+    pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
     units     mol/kgw
