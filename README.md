@@ -83,6 +83,7 @@ the organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
 Rscript tests/iom_selftest.R        # IOM module calibration checks
 Rscript tests/rock_table_check.R    # ROCK_MOL_PER_KG vs reconstruction/rock_mol_per_kg.csv
 Rscript tests/db_load_check.R       # every databases/*.dat loads in PHREEQC with 0 errors
+Rscript tests/carbon_rebin_check.R  # carbon by actual oxidation state, on the N1 leak test output
 ```
 
 Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` needs PHREEQC; set
