@@ -705,3 +705,21 @@ One commit per item; each commit message has its pass check.
 - **pair_organic_run()** (new `organic_contribution.R`): a run and its
   `organic_wt_percent = 0` blank, and the organics' contribution to ocean DIC,
   CH4, NH4+ and H2 by difference. The blank has 1/0.85 the minerals at 15 wt%.
+
+### Pairing branch: same-rock blank, restart headers, equilibrium clathrates, seed (2026-10-26)
+
+One commit per item; each commit message has its pass check.
+
+- **mineral_basis_wt_percent** (`calculate_phreeqc_parameters()`, default NULL =
+  unchanged): minerals scaled by (100 - basis)/100 instead of
+  (100 - organic_wt_percent)/100; stamped in the header when set.
+  `pair_organic_run()` now uses it, so its blank has the run's mineral inventory
+  with the organics simply absent.
+- **Restart headers** stamp the parent's `trace_C_molal` and `initial_ocean`
+  (`# parent ...:`), read from the parent `.pqi`; values pass down restart chains.
+- **Equilibrium clathrates:** tidal_equil's ocean block and bulk_equil's single
+  solution get the clathrate phases stable at their conditions, gated by
+  `stable_clathrate_phases()` as in the kinetic generators. tidal_equil's
+  porewater block gets none.
+- **README** recommends `trace_C_molal = 1e-14` (tidal_kinetic and its restart
+  both run at 25 C).

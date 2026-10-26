@@ -130,6 +130,22 @@ trace_C_header_line <- function(trace_C_molal) {
     sprintf("%.6e mol/kgw C added to every initial SOLUTION", trace_C_molal))
 }
 
+# A restart's record of its parent's initial fluid: the trace_C_molal and initial_ocean header lines
+# of the parent .pqi (prev_csv with .csv -> .pqi), re-emitted as "# parent <key>: <value>". A parent
+# that is itself a restart carries "# parent <key>:", so the original value passes down a chain.
+parent_fluid_header_lines <- function(prev_csv) {
+  keys <- c("trace_C_molal", "initial_ocean")
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  h <- if (file.exists(pqi)) readLines(pqi, n = 200, warn = FALSE) else character(0)
+  vals <- vapply(keys, function(k) {
+    l <- grep(sprintf("^# (parent )?%s: ", k), h, value = TRUE)
+    if (!file.exists(pqi)) sprintf("unknown (parent input not found: %s)", pqi)
+    else if (!length(l)) "not stamped in the parent header"
+    else sub(sprintf("^# (parent )?%s: ", k), "", l[1])
+  }, character(1))
+  paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
+}
+
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
@@ -716,9 +732,24 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    simulator = NULL,
                                    phreeqc_params = NULL,
                                    organic_wt_percent = 0,
+                                   # organic wt% the mineral mass is scaled for; NULL = organic_wt_percent
+                                   mineral_basis_wt_percent = NULL,
                                    iom_pools = NULL,
                                    profile_file = "EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
                                    
+                                   # Factor applied to every primary mineral's moles (the rock minus its organics).
+                                   mineral_scale_factor = function() {
+                                     basis <- if (is.null(self$mineral_basis_wt_percent)) self$organic_wt_percent else self$mineral_basis_wt_percent
+                                     (100 - basis) / 100
+                                   },
+                                   # "" by default; a header line when mineral_basis_wt_percent is set.
+                                   mineral_basis_header_line = function() {
+                                     if (is.null(self$mineral_basis_wt_percent)) return("")
+                                     sprintf("\n# Mineral basis: minerals scaled by (100 - %g)/100 = %.6g, as for a %g wt%% organic run (organic_wt_percent = %g)",
+                                             self$mineral_basis_wt_percent, self$mineral_scale_factor(),
+                                             self$mineral_basis_wt_percent, self$organic_wt_percent)
+                                   },
+
                                    initialize = function(simulator) {
                                      if (!inherits(simulator, "HydrothermalSimulator")) {
                                        stop("Must provide HydrothermalSimulator instance")
@@ -728,7 +759,14 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    },
                                    
                                    # Add organic_wt_percent parameter to the PhreeqcIntegrator
-                                   calculate_phreeqc_parameters = function(organic_wt_percent = 0) {
+                                   # mineral_basis_wt_percent: scale the minerals by (100 - this)/100 instead of
+                                   # (100 - organic_wt_percent)/100. pair_organic_run() sets it to the organic
+                                   # run's value for an organics-absent blank with the same mineral inventory.
+                                   calculate_phreeqc_parameters = function(organic_wt_percent = 0, mineral_basis_wt_percent = NULL) {
+                                     if (!is.null(mineral_basis_wt_percent) &&
+                                         !(is.numeric(mineral_basis_wt_percent) && length(mineral_basis_wt_percent) == 1 &&
+                                           isTRUE(mineral_basis_wt_percent >= 0 && mineral_basis_wt_percent < 100)))
+                                       stop("mineral_basis_wt_percent must be NULL or one number in [0, 100)")
                                      if (is.null(self$simulator$results)) {
                                        stop("Must run simulation before calculating PHREEQC parameters")
                                      }
@@ -808,6 +846,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # Store parameters
                                      self$organic_wt_percent <- organic_wt_percent
+                                     self$mineral_basis_wt_percent <- mineral_basis_wt_percent
                                      # Porewater mass: physical mass of water filling the permeable layer pore space
                                      r_core <- self$simulator$config$core_radius
                                      layer_thick <- self$simulator$params$layer_thickness
@@ -1253,7 +1292,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      extra_eq_so_line  <- paste(union(extra_pw_minerals, extra_ocean_minerals), collapse = " ")
 
                                      # Calculate scaling factor for minerals (reduced by organic content)
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      
                                      # Calculate total mineral amounts (moles) based on permeable layer fraction.
                                      # Coefficients: ROCK_MOL_PER_KG (top of file). 9 kinetic primaries
@@ -1338,7 +1377,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation
-{trace_C_header_line(trace_C_molal)}
+{trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean)}
 {ch4_db_note_line}
 {clathrate_note_lines}
@@ -2123,10 +2162,16 @@ SELECTED_OUTPUT
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic
-                                     # (clathrate phases are not added here).
+                                     # Temperature-gated secondary minerals per block, as in tidal_kinetic. The
+                                     # ocean block also gets the clathrate phases stable at the ocean's own
+                                     # conditions, gated as in tidal_kinetic (stable_clathrate_phases()); the
+                                     # porewater block gets none (ocean side only).
                                      extra_pw_minerals    <- self$temp_gated_minerals(porewater_temp_C)
-                                     extra_ocean_minerals <- self$temp_gated_minerals(ocean_temp_C)
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
+                                                               self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
+                                     clathrate_note_lines <- paste0(
+                                       self$clathrate_stability_note(ocean_temp_C, ocean_pressure_atm, location = "Ocean"),
+                                       "\n# Porewater: no clathrate phases added (ocean side only).")
                                      extra_pw_lines    <- if (length(extra_pw_minerals) > 0)
                                        paste0("   ", extra_pw_minerals, " 0 0", collapse = "\n") else ""
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
@@ -2142,7 +2187,7 @@ SELECTED_OUTPUT
                                      # capacity relative to the kinetic ones. Options (PI decision): add the
                                      # Fe3P elements as an instantaneous REACTION (full dissolution), or add a
                                      # Schreibersite phase with a sourced log K.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * self$phreeqc_params$total_rock * mineral_scale_factor
@@ -2165,7 +2210,8 @@ SELECTED_OUTPUT
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
-{EQUIL_INORGANIC_NOTE}
+{clathrate_note_lines}
+{EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean)}
 
 KNOBS
@@ -2673,8 +2719,17 @@ SELECTED_OUTPUT
                                      }
 
                                      # Temperature-gated secondary minerals, as in bulk_kinetic (single
-                                     # solution, so water_temp_C gates the whole block).
-                                     extra_gated_minerals <- self$temp_gated_minerals(water_temp_C)
+                                     # solution, so water_temp_C gates the whole block), plus the clathrate
+                                     # phases stable at the solution's temperature and pressure, gated as in
+                                     # bulk_kinetic. Names are the coupled ones (CH4_hydrate): this generator
+                                     # always uses databases/coreclath_CH4coupled.dat.
+                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
+                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     extra_gated_minerals <- c(self$temp_gated_minerals(water_temp_C),
+                                                               self$stable_clathrate_phases(water_temp_C, .solution_pressure_atm,
+                                                                                            self$resolve_ch4_mode(water_temp_C, "coupled")))
+                                     clathrate_note_lines <- self$clathrate_stability_note(water_temp_C, .solution_pressure_atm, location = "Solution")
                                      extra_gated_lines <- if (length(extra_gated_minerals) > 0)
                                        paste0("   ", extra_gated_minerals, " 0 0", collapse = "\n") else ""
                                      extra_gated_so_line <- paste(extra_gated_minerals, collapse = " ")
@@ -2685,7 +2740,7 @@ SELECTED_OUTPUT
                                      # SCHREIBERSITE IS NOT INCLUDED here: no Fe3P phase/log K in either
                                      # database, so it can't be an equilibrium primary. See the matching
                                      # note in generate_phreeqc_input_tidal_equil.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
@@ -2704,10 +2759,6 @@ SELECTED_OUTPUT
                                        diopside_moles, anorthite_moles, kfeldspar_moles, tephroite_moles,
                                        fe_moles, ni_moles, lawrencite_moles
                                      )
-
-                                     # Reaction pressure: porewater mode reacts porewater only, so it uses the
-                                     # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
-                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
 
                                      # ---- mode-specific labels and header ----
                                      .pqi_title  <- if (mode == "porewater") "Enceladus porewater equilibrium" else
@@ -2739,7 +2790,8 @@ SELECTED_OUTPUT
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
-{EQUIL_INORGANIC_NOTE}
+{clathrate_note_lines}
+{EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
 KNOBS
    -logfile true
@@ -3009,7 +3061,7 @@ END
                                      # (top of file). 9 kinetic primaries (incl. Schreibersite, placeholder
                                      # rate) + 3 equilibrium primaries (Fe, Ni, Lawrencite). Magnetite is no
                                      # longer primary — ordinary secondary phase only.
-                                     mineral_scale_factor <- (100 - self$organic_wt_percent) / 100
+                                     mineral_scale_factor <- self$mineral_scale_factor()
                                      enstatite_moles  <- ROCK_MOL_PER_KG[["enstatite"]] * .rock_kg * mineral_scale_factor
                                      forsterite_moles <- ROCK_MOL_PER_KG[["forsterite"]] * .rock_kg * mineral_scale_factor
                                      troilite_moles   <- ROCK_MOL_PER_KG[["troilite"]] * .rock_kg * mineral_scale_factor
@@ -3323,7 +3375,7 @@ END
 
                                      content <- glue::glue('
 TITLE {.pqi_title}
-{trace_C_header_line(trace_C_molal)}
+{trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {ch4_db_note_line}
 {clathrate_note_lines}
 
@@ -3980,6 +4032,7 @@ KNOBS
 {.thick_line}
 # Mode: {.mode_comment}
 # prev_csv: {prev_csv}
+{parent_fluid_header_lines(prev_csv)}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4643,6 +4696,7 @@ KNOBS
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
 # prev_csv: {prev_csv}
+{parent_fluid_header_lines(prev_csv)}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
