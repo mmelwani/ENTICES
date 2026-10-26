@@ -738,3 +738,23 @@ One commit per item; each commit message has its pass check.
   output or selected-output file re-binned by the actual C oxidation state
   (PHREEQC files formate, acetate, methanol etc. under C(4)). Test:
   `tests/carbon_rebin_check.R` on the N1 leak test output.
+
+### carbon-d branch: C(+4)-only database, carbon_mode, ocean charge balance (2026-10-26)
+
+One commit per item; each commit message has its pass check.
+
+- **`databases/coreclath_C4only.dat`:** `coreclath_CH4uncoupled.dat` with every
+  coupled carbon species, phase and master species that is not C(+4) commented
+  out (70 species, 16 phases, C(-3)/C(-2)/C(+2); listed in its header). Mtg and
+  every C(+4) entry kept; SCN- and urea kept (their C is +4).
+  `database_names()` and `restrict_to_database()` in `phreeqc_tools.R`. Test:
+  `tests/c4only_db_check.R`.
+- **`carbon_mode`** = NULL | `"coupled"` | `"ch4_uncoupled"` | `"c4_only"` and
+  **`ch4_cutoff_C`** = 150 on all six generators. NULL is the old temperature
+  rule (inputs byte-identical); `CH4_redox_override` still works. `c4_only`
+  selects the C4only database, drops the names it lacks from the input, and
+  sets IOM_CHn to `Mtg 1 H -2.2` (a 2.2 e- reduction imposed by hand; see
+  `iom_module.R`).
+- **`charge_balance`** = NULL | `"pH"` | an `initial_ocean` element, for the
+  ocean SOLUTION 2 of tidal_kinetic and tidal_equil. NULL (default) is
+  unchanged.

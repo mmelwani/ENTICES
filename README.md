@@ -47,8 +47,9 @@ Run everything from the repo root.
    Generated files go to `phreeqc_inputs/`, which is git-ignored.
 
 2. Run PHREEQC 3.8 on the generated file. Each file's header names the
-   database it needs, `databases/coreclath_CH4coupled.dat` or
-   `databases/coreclath_CH4uncoupled.dat`:
+   database it needs, `databases/coreclath_CH4coupled.dat`,
+   `databases/coreclath_CH4uncoupled.dat` or `databases/coreclath_C4only.dat`
+   (chosen by `carbon_mode`; see `databases/README.md`):
 
    ```
    phreeqc phreeqc_inputs/<file>.pqi phreeqc_inputs/<file>.pqi.out databases/coreclath_CH4coupled.dat
