@@ -70,6 +70,11 @@ Run everything from the repo root.
 - `"temperature"`: the default before 2026-10-26, `"ch4_uncoupled"` below
   `ch4_cutoff_C` (150 °C) and `"coupled"` at or above it.
 
+Restarts read the parent's mode from the database named in its `.pqi` header and
+refuse to run in a different one unless `carbon_mode` (or `CH4_redox_override`)
+is given, in which case they warn. The restart header records it as
+`# parent carbon_mode:`.
+
 ## Initial fluid
 
 The initial fluid is pure water by default, so all ocean carbon comes from the

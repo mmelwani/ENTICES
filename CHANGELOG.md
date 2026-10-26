@@ -769,3 +769,8 @@ One commit per item; each commit message has its pass check.
   selectable; the old temperature rule is `carbon_mode = "temperature"` (with
   `ch4_cutoff_C`), and `CH4_redox_override` still works. Inputs generated with
   the default before this change are reproduced by `carbon_mode = "temperature"`.
+- **Restarts check the parent's carbon mode** (`parent_carbon_mode()`: the
+  database on the parent `.pqi`'s `# Database:` line, else its
+  `# Recommended database:` line). A mismatch is an error unless the mode is
+  given explicitly, then a warning; an unreadable parent mode is a warning.
+  Header line `# parent carbon_mode:`.

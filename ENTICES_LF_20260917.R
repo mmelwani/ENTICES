@@ -146,6 +146,39 @@ parent_fluid_header_lines <- function(prev_csv) {
   paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
 }
 
+# A parent run's carbon mode, from the database its .pqi header names ("# Database:", else
+# "# Recommended database:"). NA when there is no parent .pqi or it names none of these.
+CARBON_MODE_DATABASES <- c(coupled = "coreclath_CH4coupled.dat", ch4_uncoupled = "coreclath_CH4uncoupled.dat",
+                           c4_only = "coreclath_C4only.dat")
+parent_carbon_mode <- function(prev_csv) {
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  if (!file.exists(pqi)) return(NA_character_)
+  h <- readLines(pqi, n = 200, warn = FALSE)
+  for (l in c(grep("^# Database: ", h, value = TRUE), grep("^# Recommended database: ", h, value = TRUE))) {
+    hit <- names(CARBON_MODE_DATABASES)[vapply(CARBON_MODE_DATABASES, grepl, logical(1), x = l, fixed = TRUE)]
+    if (length(hit)) return(hit[1])
+  }
+  NA_character_
+}
+# A restart's carbon mode against its parent's. A mismatch is an error unless the caller chose the
+# mode (carbon_mode or CH4_redox_override given: ch4_mode$explicit), and then a warning. A parent
+# whose mode can't be read is a warning. Returns the "# parent carbon_mode:" header line.
+check_restart_carbon_mode <- function(prev_csv, ch4_mode) {
+  parent <- parent_carbon_mode(prev_csv)
+  if (is.na(parent)) {
+    warning("restart: the parent's carbon mode is unknown (no parent .pqi naming a known database: ",
+            sub("\\.csv$", ".pqi", prev_csv), "); not checked")
+    return("# parent carbon_mode: unknown (not checked)")
+  }
+  if (parent == ch4_mode$carbon_mode) return(sprintf("# parent carbon_mode: %s", parent))
+  msg <- sprintf('restart: the parent ran carbon_mode "%s", this restart would run "%s"', parent, ch4_mode$carbon_mode)
+  if (!ch4_mode$explicit)
+    stop(msg, sprintf('. Give carbon_mode = "%s" to continue the parent, or carbon_mode = "%s" to switch.',
+                      parent, ch4_mode$carbon_mode))
+  warning(msg, "; the parent's solutions are re-speciated in the restart's mode")
+  sprintf("# parent carbon_mode: %s (this restart switches to %s)", parent, ch4_mode$carbon_mode)
+}
+
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
@@ -3746,6 +3779,7 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
@@ -4140,6 +4174,7 @@ KNOBS
 # Mode: {.mode_comment}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
+{parent_mode_line}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4350,6 +4385,7 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
@@ -4810,6 +4846,7 @@ KNOBS
 # Mode: tidal kinetic restart from previous CSV state
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
+{parent_mode_line}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
