@@ -918,6 +918,22 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      )
                                    },
 
+                                   # IOM channel config matching the CH4 mode's database. With the uncoupled
+                                   # database (no coupled CH4), IOM_CH4 releases its carbon as Mtg
+                                   # (redox_mode C = "decoupled": "Mtg 1 H 0.435"); otherwise everything is
+                                   # coupled. N and S stay coupled. Rebuilt on every call so a config from
+                                   # one temperature is never reused at another; a config the caller set
+                                   # in self$iom_pools (without the "auto_ch4_mode" attribute) is kept.
+                                   resolve_iom_pools = function(ch4_mode) {
+                                     if (!is.null(self$iom_pools) && !isTRUE(attr(self$iom_pools, "auto_ch4_mode")))
+                                       return(invisible(self$iom_pools))
+                                     cfg <- iom_default_config(redox_mode = c(C = if (ch4_mode$decoupled) "decoupled" else "coupled",
+                                                                              N = "coupled", S = "coupled"))
+                                     attr(cfg, "auto_ch4_mode") <- TRUE
+                                     self$iom_pools <- cfg
+                                     invisible(cfg)
+                                   },
+
                                    # Rewrites literal CH4/CH4(g) tokens to Mtg/Mtg(g) in already-rendered
                                    # PHREEQC input text, for decoupled-mode files. Applied once to the final
                                    # assembled text so every block (static text and vector-built lists alike)
@@ -1261,6 +1277,9 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
+                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
+                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -1344,9 +1363,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                         # not hardcoded to 4 channels -- verified no PUNCH line-number collision
                                         # with the mineral PUNCH statements elsewhere in this template (those
                                         # top out at line 110; IOM_ punch lines start at 210).
-                                        if (is.null(self$iom_pools)) {
-                                          self$iom_pools <- iom_default_config()
-                                        }
+                                        self$resolve_iom_pools(ch4_mode)
 
                                         iom_rates_block <- paste0(apply(self$iom_pools, 1, function(p) {
                                           sprintf(paste0(
@@ -1900,7 +1917,7 @@ SELECTED_OUTPUT
     -water                true
     -totals              Al C Ca Fe H #K 
                          Mg #Mn 
-                         N Na O P S Si #Cl
+                         N Na O P S Si{mtg_totals} #Cl
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2 
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2 #K+ 
                          Mg+2 #Mn+2 Mn+3 
@@ -3036,6 +3053,9 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
+                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
+                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -3295,9 +3315,7 @@ END
                                      if (self$organic_wt_percent > 0) {
                                        iom_mass_kg_scaled <- (self$organic_wt_percent / 100) * .rock_kg
                                        iom_total_moles    <- iom_mass_kg_scaled * 1.0   # 1 mol per kg by construction
-                                       if (is.null(self$iom_pools)) {
-                                         self$iom_pools <- iom_default_config()
-                                       }
+                                       self$resolve_iom_pools(ch4_mode)
 
                                        iom_rates_block <- paste0(apply(self$iom_pools, 1, function(p) {
                                          sprintf(paste0(
@@ -3518,7 +3536,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -3619,6 +3637,8 @@ END
                                      }
 
                                      elements  <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
+                                     # Mtg (decoupled methane) when the parent punched it.
+                                     if ("Mtg" %in% names(last_row)) elements <- c(elements, "Mtg")
                                      elem_vals <- sapply(elements, function(el) {
                                        val <- suppressWarnings(as.numeric(last_row[[el]]))
                                        if (!is.na(val) && val > 0) val else NA_real_
@@ -3652,6 +3672,9 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
+                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
+                                     mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
                                      ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -3731,9 +3754,7 @@ END
                                      if (self$organic_wt_percent > 0) {
                                        # See the main-path comment (iom_default_config()) for why this is no
                                        # longer a hardcoded table -- WIRING CHANGE 2026-09-26.
-                                       if (is.null(self$iom_pools)) {
-                                         self$iom_pools <- iom_default_config()
-                                       }
+                                       self$resolve_iom_pools(ch4_mode)
 
                                        # Guard: IOM_*_mol columns must exist — written by PATCH D1.
                                        # Silently restarting with zero organics is the failure mode most
@@ -4082,7 +4103,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -4253,6 +4274,9 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override)
+                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
+                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
+                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override) else ""
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -4333,6 +4357,9 @@ END
 
                                      # ---- Solution chemistry ----
                                      elements <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
+                                     # Mtg (decoupled methane) when the parent punched it.
+                                     if ("Mtg" %in% names(row_mix1)) elements <- c(elements, "Mtg")
+                                     if ("Mtg" %in% elements) mtg_totals <- " Mtg"   # punch what is carried, whatever the database
 
                                      make_soln_lines <- function(row) {
                                        vals <- get_chem(row, elements)
@@ -4501,9 +4528,7 @@ END
                                      if (self$organic_wt_percent > 0) {
                                        # See the main-path comment (iom_default_config()) for why this is no
                                        # longer a hardcoded table -- WIRING CHANGE 2026-09-26.
-                                       if (is.null(self$iom_pools)) {
-                                         self$iom_pools <- iom_default_config()
-                                       }
+                                       self$resolve_iom_pools(ch4_mode)
 
                                        # Guard: IOM_*_mol columns must be present — written by PATCH D1.
                                        iom_mol_cols <- paste0(self$iom_pools$name, "_mol")
@@ -4764,7 +4789,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
