@@ -4,7 +4,7 @@ Living document: the current state. History lives in git and in `docs/reviews/`.
 
 **Last updated: 2026-10-26.** This revision folds in the review exchanges of
 2026-09-30 → 2026-10-26 (all in `docs/reviews/`) and the merged branches
-`fixes`, `consistency` and `pairing`; `eq-parity` is open. It **overturns**
+`fixes`, `consistency`, `pairing` and `eq-parity` (merged as `255981f`). It **overturns**
 three conclusions of the 2026-09-20 version:
 
 - `Hdg` carbon decoupling is **not** working in production. It works in the
@@ -863,10 +863,10 @@ difference. Simple bookkeeping fails once carbon enters carbonates or gas.
 
 # PART 9 — CODE STATE (NEW)
 
-**Branch state.** `main` @ `4c962bc` (PRs #1–#8 merged: IOM module, Lucas
+**Branch state.** `main` @ `255981f` (PRs #1–#9 merged: IOM module, Lucas
 integration, rock composition, fluorine, cleanup, fixes, consistency,
-pairing). `eq-parity` is open (clathrates in `tidal_equil` porewater, and
-`bulk_equil` CH₄ mode).
+pairing, eq-parity). `eq-parity` (clathrates in `tidal_equil` porewater, and
+`bulk_equil` CH₄ mode) merged as `255981f`.
 
 **Layout:**
 
