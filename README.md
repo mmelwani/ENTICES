@@ -54,6 +54,29 @@ Run everything from the repo root.
    phreeqc phreeqc_inputs/<file>.pqi phreeqc_inputs/<file>.pqi.out databases/coreclath_CH4coupled.dat
    ```
 
+## Initial fluid
+
+The initial fluid is pure water by default, so all ocean carbon comes from the
+organics. Two arguments change that:
+
+- `trace_C_molal` (tidal_kinetic, bulk_kinetic): a C seed in every initial
+  SOLUTION. Pure water with no C at all fails at 25 °C ("C has not converged")
+  once the organics release their first trace of C. **Recommended production
+  value: `trace_C_molal = 1e-14`**, the smallest value tested with both
+  tidal_kinetic and its restart at 25 °C (2 orbits each, 0 errors). Keep it
+  small: at 25 °C the organics release far less C than any seed, so ocean C is
+  the seed.
+- `initial_ocean` (tidal_kinetic, tidal_equil): `"pure_water"` (default) or a
+  named list of element totals in mol/kgw for the ocean SOLUTION 2 only, e.g.
+  `list(C = ..., N = ...)`.
+
+Both are stamped in the `.pqi` header, and restarts stamp their parent's values
+as `# parent trace_C_molal:` / `# parent initial_ocean:`.
+
+`pair_organic_run()` (`organic_contribution.R`) runs a model and an otherwise
+identical blank with the organics absent (same mineral inventory), and returns
+the organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
+
 ## Self-tests
 
 ```
