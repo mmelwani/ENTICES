@@ -319,17 +319,34 @@ pass("decoupled S leaves every other channel's formula untouched",
 cfg_dC <- iom_default_config(c(C = "decoupled", N = "coupled", S = "coupled"))
 pass("decoupled C switches IOM_CH4 sub-pools to 'Mtg 1 H 0.435'",
      all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CH4")] == "Mtg 1 H 0.435"))
-# IOM_CO2/IOM_CHn deliberately keep their coupled formulas: their decoupling
-# is the caller entering H2 as Hdg in the solution, which no -formula can
-# express. Verified in PHREEQC (carbon reduction suppressed ~26,000x).
-pass("decoupled C leaves IOM_CO2 and IOM_CHn formulas unchanged (Hdg is solution-level)",
+# Under C = "decoupled" (ch4_uncoupled) IOM_CO2/IOM_CHn keep their coupled
+# formulas; their carbon speciates by equilibrium in the uncoupled database.
+pass("decoupled C leaves IOM_CO2 and IOM_CHn formulas unchanged",
      all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CO2")] ==
          cfg$formula[startsWith(cfg$name, "IOM_CO2")]) &&
      all(cfg_dC$formula[startsWith(cfg_dC$name, "IOM_CHn")] ==
          cfg$formula[startsWith(cfg$name, "IOM_CHn")]))
-pass("decoupled C attaches the Hdg reminder attribute",
+pass("decoupled C's note says IOM_CO2/IOM_CHn stay coupled and points to c4_only",
      !is.na(attr(cfg_dC, "carbon_decoupling_note")) &&
-     grepl("Hdg", attr(cfg_dC, "carbon_decoupling_note")))
+     grepl("IOM_CO2 and IOM_CHn carbon is coupled", attr(cfg_dC, "carbon_decoupling_note")) &&
+     grepl("c4_only", attr(cfg_dC, "carbon_decoupling_note")))
+
+# C = "c4_only" (the ENTICES default carbon_mode): IOM_CH4 and IOM_CHn release Mtg.
+cfg_c4 <- iom_default_config(c(C = "c4_only", N = "coupled", S = "coupled"))
+pass("c4_only C switches IOM_CH4 sub-pools to 'Mtg 1 H 0.435'",
+     all(cfg_c4$formula[startsWith(cfg_c4$name, "IOM_CH4")] == "Mtg 1 H 0.435"))
+pass("c4_only C switches IOM_CHn sub-pools to 'Mtg 1 H -2.2'",
+     all(cfg_c4$formula[startsWith(cfg_c4$name, "IOM_CHn")] == "Mtg 1 H -2.2"))
+pass("c4_only C leaves IOM_CO2, IOM_N and IOM_S formulas unchanged",
+     all(cfg_c4$formula[!grepl("^IOM_(CH4|CHn)", cfg_c4$name)] == cfg$formula[!grepl("^IOM_(CH4|CHn)", cfg$name)]))
+pass("c4_only C's note describes C(+4)-only carbon and the hand-imposed 2.2 e- reduction",
+     grepl("C\\(\\+4\\) only", attr(cfg_c4, "carbon_decoupling_note")) &&
+     grepl("2.2 e-", attr(cfg_c4, "carbon_decoupling_note")))
+pass("no carbon note tells the caller to enter H2 as Hdg",
+     !any(grepl("Hdg", c(attr(cfg_dC, "carbon_decoupling_note"), attr(cfg_c4, "carbon_decoupling_note")))))
+pass("c4_only is accepted for C only",
+     tryCatch({ iom_default_config(c(C = "coupled", N = "coupled", S = "c4_only")); FALSE },
+              error = function(e) TRUE))
 
 # Decoupling N is a decision made AGAINST, not an unimplemented gap.
 pass("requesting decoupled N is refused, with the reason",
