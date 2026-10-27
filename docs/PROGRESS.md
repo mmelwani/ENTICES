@@ -2,10 +2,16 @@
 
 Living document: the current state. History lives in git and in `docs/reviews/`.
 
-**Last updated: 2026-10-26.** This revision folds in the review exchanges of
-2026-09-30 → 2026-10-26 (all in `docs/reviews/`) and the merged branches
-`fixes`, `consistency`, `pairing` and `eq-parity` (merged as `255981f`). It **overturns**
-three conclusions of the 2026-09-20 version:
+**Last updated: 2026-10-27.** This revision folds in the review exchanges of
+2026-09-30 → 2026-10-27 (all in `docs/reviews/`) and the merged branches
+`fixes`, `consistency`, `pairing`, `eq-parity`, `docs-progress`,
+`ch4-mode-iom`, `carbon-d` and `carbon-default` (merged as `c33a77f`).
+
+**The carbon treatment is now decided** (Part 3). Coupled carbon is C(+4)
+only, by default and at every temperature (`carbon_mode = "c4_only"`). Methane
+exists only as decoupled `Mtg`, and H₂ stays coupled.
+
+This revision **overturns** three conclusions of the 2026-09-20 version:
 
 - `Hdg` carbon decoupling is **not** working in production. It works in the
   tests but acts on nothing in a real run (Part 3).
@@ -67,6 +73,17 @@ Companion documents (paths on `main`):
 | The legacy `legacy/ENTICES_v3.R` `REACTION` dosing was off by a factor of `iom_C_moles` (35.6× under-dose in the redox-diagnostic case) | All v3 organic results unreliable; the redox diagnostic is legacy | 6 |
 | Pure-water start kept on purpose (attribution). Trace C seed 1e-14 mol/kgw for 25 °C numerics. Paired runs with a same-rock blank give the organics' contribution | Attribution method in place | 8 |
 | PHREEQC version matters for minor species (Mn 130× between 3.5.0 and 3.8.6) | Standardised on 3.8.6; stamped in every `.pqi` | 6 |
+
+**Added 2026-10-26/27:**
+
+| Finding | Effect | Part |
+|---|---|---|
+| Below 150 °C, `IOM_CH4` still entered as coupled `C 1 H 4.435`, though the uncoupled database has no coupled CH₄. So the IOM methane channel produced **no methane**; its carbon went to ethane, methanol or carbonate | Fixed in `ch4-mode-iom`: IOM formulas follow the database. All earlier sub-150 °C runs carry this error | 3 |
+| PHREEQC's valence totals file formate, acetate, methanol, propane and others under C(4) | Leak checks must re-bin by actual oxidation state (`carbon_by_oxidation_state()`) | 6 |
+| At realistic C (1e-3 mol/kgw) the uncoupled database leaks badly: 25 °C porewater carbon ≈100% ethane; ~1% reduced at 100 °C. C₂ species scale with [C]², so trace-C tests hide them | The partial design (d) is not a carbon treatment | 3 |
+| `coreclath_C4only.dat`: every coupled non-C(+4) carbon entry removed. Leak check passes (100.000000% C(+4) in all blocks) | **D3 decided:** `c4_only` is the default at all temperatures | 3 |
+| The 25 °C porewater becomes a ~2.5 molal NaOH brine (pH 14, I 2.4) as albite dissolves with no Na sink. It flushes over ~3×10⁴ orbits (~100 yr) | A transient; outside the activity model while it lasts | 5 |
+| PHREEQC's *printed* SI tables are offset by 0.143 × the H₂O in each phase's reaction (25 °C brine). CSV SIs are correct | Don't read SIs from `.out` tables | 6 |
 
 **Corrections to statements in this file's 09-20 version:**
 - "`Hdg` carbon decoupling — CONFIRMED". That holds for the mechanism, but
@@ -337,55 +354,99 @@ is measured:
 figures came from a 2-mineral toy. B3 was Fe-limited: pyrite took all
 1.000e-05 mol Fe in both modes, so it can't size the effect.
 
-## Design (d): remove coupled reduced carbon, keep H₂ coupled
+## Design (d): remove coupled reduced carbon, keep H₂ coupled — ADOPTED 2026-10-27
 
 **The idea.** CO₂ can't be reduced if the coupled C element has no reduced
 species. Carbonates are unaffected (C(+4) stays coupled), H₂ stays coupled,
-sulfide stays stable, and methane exists only as `Mtg`.
+sulfide stays stable, and methane exists only as decoupled `Mtg`.
 
-**It's partly built already.** `coreclath_CH4uncoupled.dat`, the default below
-150 °C, already has no coupled CH₄, no `C(-4)` master and no `CH4(g)`, and its
-methane clathrate is `Mtg_hydrate`. But the other reduced-carbon species
-remain (Claude Code's 10-23 section diff):
-- the masters `C(-3)`, `C(-2)` and `C(+2)`;
-- C₂H₆, C₂H₄, CO, formate, acetate (48 lines including complexes), CH₃OH and
-  others.
+### The partial version leaked (measured 10-26)
 
-So coupled CO₂ may simply be reducing to ethane or acetate instead of methane
-below 150 °C. **This is untested and is the cheapest high-value test
-available** (Part 10).
+`coreclath_CH4uncoupled.dat`, the old default below 150 °C, had no coupled CH₄
+but kept every other reduced carbon species. Leak test on generated
+`tidal_kinetic` inputs with production metal corrosion, re-binned by *actual*
+oxidation state:
 
-**The full scope** (09-30 count, on the coupled file):
-- ~73 aqueous reactions;
-- 4 secondary master species;
-- 8 phases in the production lists: CH₄(g), C₂H₄(g), C₂H₆(g), C₃H₈(g),
-  CO(g), Glycine, Citric_Acid and CH4_hydrate.
+| Total C | Case | Where the coupled carbon went |
+|---|---|---|
+| 1e-3 mol/kgw | 25 °C porewater | **≈100% ethane** (both orbits) |
+| 1e-3 mol/kgw | 100 °C porewater | carbonate 99.0%; ethane 0.65%, acetate 0.16%, propane 0.15%, formate 0.07% |
+| trace C | 25 °C | looked clean (99.95% carbonate in orbit 2) |
+| either | ocean | ≥99.99% carbonate |
 
-**Costs and choices:**
-- **Glycine, citric acid and the light hydrocarbons** look like deliberate
-  organic products, so removing them is a modelling choice.
-- **Formate** equilibrates with CO₂ + H₂ far faster than methanation, so it is
-  a candidate to re-admit as a sensitivity case.
-- **`IOM_CHn` (`C 1 H 1.8`)** needs a home: `Mtg 1 H -2.2`, drop the channel,
-  or a decoupled C₂⁺ pseudo-species.
-- **Required check: a leak check.** After any edit, every C valence state other
-  than C(+4) must total 0.
+The trace-C result was an artefact. Ethane holds two carbons
+(2 HCO₃⁻ → C₂H₆), and [C₂H₆]/[carbonate]² was identical at both carbon levels.
+So **C₂ species grow as [C]²**, and trace-C tests hide them. That's the same
+artefact as methane through a different species.
+
+**Two traps this exposed:**
+- **PHREEQC's valence totals can't be used for a leak check.** Formate,
+  acetate, methanol, propane and others are filed under C(4). Use
+  `carbon_by_oxidation_state()` (Part 6).
+- **The IOM methane channel made no methane below 150 °C** (fixed in
+  `ch4-mode-iom`, PR #11). The database was chosen by temperature, but the IOM
+  config stayed coupled. `IOM_CH4` entered `C 1 H 4.435`, with no coupled CH₄
+  to become, so ~30% of released IOM carbon was forced into ethane, methanol
+  or carbonate. Now the IOM formulas follow the database (`resolve_iom_pools()`),
+  and Mtg is punched and carried across restarts.
+
+### The full version: `coreclath_C4only.dat` (PR #12)
+
+**What's removed:** every coupled carbon entry whose carbon isn't +4:
+- 70 species, including 45 acetate complexes, all organics and the
+  cyanides;
+- 16 phases: Glycine, Alanine, Citric_Acid, the C₂–C₃ and CO gases,
+  graphite, 5 kerogens, pyridine, TiC, UC;
+- the masters C(−3), C(−2) and C(+2).
+
+SCN⁻ and urea are kept (carbon +4).
+
+**Leak check passes:** coupled carbon is **100.000000% C(+4) in all 10
+blocks** at 25 and 100 °C with 1e-3 C, and C + Mtg closes to ≤1.4e-5.
+
+**Against the uncoupled database:**
+
+| Quantity | Change under `c4_only` |
+|---|---|
+| Porewater | almost unchanged (H₂ is held by the trapped H₂(g)) |
+| Ocean H₂ | 33–41× higher: reducing carbonate had been consuming it |
+| 25 °C porewater carbon | goes briefly to dolomite instead of ethane |
+
+**IOM under `c4_only`:**
+- `IOM_CH4` → `Mtg 1 H 0.435`;
+- `IOM_CHn` → `Mtg 1 H -2.2`, which imposes a 2.2 e⁻ reduction by hand
+  (C −1.8 → −4), documented in `iom_module.R`;
+- `IOM_N` and `IOM_S` are coupled.
+
+**Formate sensitivity** (re-admitted, 100 °C, 1e-3 C): 0.07% of porewater C.
+It still cuts ocean H₂ ~5×, through H₂ + HCO₃⁻ → HCOO⁻.
+
+### Decision (D3–D5, 2026-10-27)
+
+- **`carbon_mode = "c4_only"` is the default at every temperature.**
+- **Coupled carbon** (`"coupled"`, or the old `"temperature"` rule with
+  `ch4_cutoff_C`) is reported as an **upper bound** on abiotic methanation. At
+  150 °C it gave CH₄/CO₂ ≈ 10⁹ in Lucas's run. Methanation is kinetically slow
+  at 150–200 °C unless catalysed, and the rock's Fe–Ni metal is a possible
+  catalyst.
+- **Formate** is a sensitivity case.
 
 ## What this means for `IOM_S`
 
-- **If carbon is handled by (d):** H₂ stays coupled, pe stays low and sulfide
-  stays sulfide. Then `IOM_S` can be **coupled**, which gives IOM sulfide its
-  mineral sink (pyrite/troilite).
-- **If `Hdg` is used:** keep `IOM_S` as `Sg 1 H 1`. The consistent version then
-  needs a fully S-decoupled database, with all reduced S (including kinetic
-  Troilite) written in `HSg⁻`. Pyrite (S −1, written with SO₄²⁻) needs a
-  rebuilt log K.
+**Decided: coupled.** Under `c4_only`, H₂ stays coupled, pe stays low and
+sulfide stays sulfide, so IOM sulfide keeps its mineral sink
+(pyrite/troilite).
+- The `Sg 1 H 1` formula stays in `iom_module.R` for any future
+  `Hdg`/oxidising scenario.
+- The S-decoupled-database route (all reduced S in `HSg⁻`, a rebuilt pyrite
+  log K) is **not needed**.
 
 ## Owed code fix
 
 `iom_module.R` still instructs the caller to "enter H2 as Hdg" (docstring and
-`carbon_decoupling_note`, lines ~211–348). That instruction is a no-op in
-production. Rewrite it once decision D3 (Part 10) is made.
+`carbon_decoupling_note`). Its `redox_mode` bullet was corrected in
+`ch4-mode-iom`. The rest is a no-op in production. Rewrite it for `c4_only`
+(N3; unblocked now that D3 is decided).
 
 ---
 # PART 4 — IOM CALIBRATION STATE (REVISED 2026-10-26)
@@ -682,6 +743,34 @@ agrees within ~5% on bulk chemistry. Minor phases differ by about as much as
 the PHREEQC version does. The speed-up was 1.7× on Lucas's machine and
 slower on ours.
 
+## Na sink and the early porewater brine
+
+**Na zeolites.** Natrolite and Mesolite were added to every generator's
+secondary lists (`carbon-default`). At 100 °C they replace Analcime as the Na
+sink (tidal_kinetic, 2 orbits: Natrolite 0.096 mol, Mesolite 0.058 mol).
+
+**At 25 °C no Na phase is saturated** while albite dissolves; corrected SIs
+are Saponite-Fe-Na −1.64 and Analcime −1.74. The Al–Si assemblage
+(chamosite, greenalite, lizardite, tobermorite) holds Al and Si too low
+*(inferred)*. So Na⁺ and OH⁻ accumulate. 10 orbits at 25 °C, `c4_only`:
+
+| Orbit | Porewater I (molal) | pH | Porewater Na (molal) | Ocean Na (molal) | Ocean pH |
+|---|---|---|---|---|---|
+| 2 | 1.47 | 13.9 | 1.56 | 1.6e-5 | 10.0 |
+| 3 | 2.20 | 14.1 | 2.52 (albite exhausted at orbit 4) | 4.0e-5 | 10.4 |
+| 10 | 2.40 | 14.1 | 2.55 | 2.1e-4 | 11.1 |
+
+**It's a transient.** Only 3.3×10⁻⁵ of the porewater is exchanged per orbit,
+so it flushes over ~3×10⁴ orbits (~100 yr). Grouped mode compounds the
+exchange (x_step = 1 − (1 − x_tide)^G), so long runs flush it. While it
+lasts, ionic strength exceeds the B-dot model's ~1 molal range: treat that
+window's activities and pH as qualitative.
+
+**Open (N9):** the ocean reaches pH 11.1 with only 2×10⁻⁴ molal Na, more
+alkaline than that much NaOH explains (~pH 10.3). Check the ocean's charge
+balance and what carries the alkalinity. A pure-water ocean is unbuffered, so
+its pH is hypersensitive. Don't read it as an Enceladus pH.
+
 ---
 
 # PART 6 — DATABASES AND NUMERICS (NEW)
@@ -703,6 +792,40 @@ in every generator, including the equilibrium ones since `eq-parity`.
 
 **What differs.** The uncoupled file has no `C(-4)`, coupled CH₄ or `CH4(g)`,
 and has `Mtg_hydrate` (Part 3).
+
+**`coreclath_C4only.dat`** (the default since `carbon-default`) is the
+uncoupled file with every coupled carbon entry that isn't C(+4) commented out
+(`#c4only#`, listed in its header). That's 70 species, 16 phases, and the
+masters C(−3), C(−2) and C(+2).
+- **Kept:** SCN⁻ and urea, whose carbon is +4.
+- **Regenerated by** `scripts/make_c4only.py`; `tests/c4only_db_check.R`
+  checks the committed file matches it.
+- **Generated inputs** drop the removed phase names automatically
+  (`restrict_to_database()`).
+
+**Carbon modes** (`carbon_mode` on all six generators):
+
+| Mode | Database | Use |
+|---|---|---|
+| `"c4_only"` | `coreclath_C4only.dat` | **default at every temperature** |
+| `"temperature"` | the old rule: coupled ≥ `ch4_cutoff_C` (150 °C), uncoupled below | reproduces old defaults byte for byte |
+| `"coupled"` | `coreclath_CH4coupled.dat` | an **upper bound on abiotic methanation** (Fe–Ni metal could catalyse it at higher T) |
+| `"ch4_uncoupled"` | `coreclath_CH4uncoupled.dat` | leaks (Part 3); diagnostic only |
+
+**Restarts** read the parent's carbon mode from its `.pqi` header. They refuse
+a mismatch unless `carbon_mode` is given explicitly, and then they warn,
+because the parent's solutions would be re-speciated.
+
+**Carbon accounting.** `carbon_by_oxidation_state()` (`phreeqc_tools.R`)
+re-bins carbon by its actual oxidation state, counting `Mtg` as C(−4),
+decoupled. PHREEQC's own valence totals file formate, acetate, methanol,
+propane, amino acids and cyanides under C(4), so **never use them for a leak
+check**. Test: `tests/carbon_rebin_check.R`.
+
+**Printed SI tables.** In `.out` files they are offset by 0.143 × the H₂O in
+each phase's reaction (measured on the 25 °C brine; present phases print
+above 0). The CSV SIs are correct, and those are what ENTICES reads. The cause
+hasn't been found; it may be worth a reproducible example to USGS.
 
 **Other database changes:**
 - `Core11_idealgas_mod_v4.dat` is retired to `legacy/`; tests A4/B2
@@ -859,21 +982,34 @@ in the difference.
 **Attributing with a CO₂-bearing initial ocean** also uses the paired
 difference. Simple bookkeeping fails once carbon enters carbonates or gas.
 
+**Charge balance.** `charge_balance` (`"pH"`, an element listed in
+`initial_ocean`, or NULL = unchanged) balances the ocean SOLUTION 2. Use it
+for any cometary composition: an unbalanced 1e-3 C ocean is off by ~4e-4 eq.
+At the production seed (1e-14) the imbalance is negligible, and the porewater
+seed is left unbalanced.
+
+**The pure-water ocean is unbuffered,** so its pH swings far on tiny inputs
+(Part 5). That's acceptable for attribution, but it isn't an Enceladus pH.
+
 ---
 
 # PART 9 — CODE STATE (NEW)
 
-**Branch state.** `main` @ `255981f` (PRs #1–#9 merged: IOM module, Lucas
+**Branch state.** `main` @ `c33a77f` (PRs #1–#13 merged: IOM module, Lucas
 integration, rock composition, fluorine, cleanup, fixes, consistency,
-pairing, eq-parity). `eq-parity` (clathrates in `tidal_equil` porewater, and
-`bulk_equil` CH₄ mode) merged as `255981f`.
+pairing, eq-parity, docs-progress, ch4-mode-iom, carbon-d, carbon-default).
+`carbon-default` (`c4_only` default, restart mode check, `make_c4only.py`, the
+Na zeolites) merged as `c33a77f`.
+
+**Tests (five self-tests):** `iom_selftest.R`, `rock_table_check.R`,
+`db_load_check.R`, `c4only_db_check.R` and `carbon_rebin_check.R`.
 
 **Layout:**
 
 | Path | Contents |
 |---|---|
 | top level | `ENTICES_LF_20260917.R` (main program), `iom_module.R`, `mineral_dissolution_constants.r`, `phreeqc_tools.R`, `organic_contribution.R`, `parameter_sweep.R`, `ENTICES_runs.Rmd` (a sandbox run in chunks; depends on local plot scripts) |
-| `databases/` | the two `.dat` files |
+| `databases/` | the three `.dat` files |
 | `reconstruction/` | the rock module |
 | `tests/` | the tests |
 | `examples/` | example runs |
@@ -881,8 +1017,8 @@ pairing, eq-parity). `eq-parity` (clathrates in `tidal_equil` porewater, and
 | `legacy/` | retired files |
 | `scripts/` | standalone scripts |
 
-**Tests:** `tests/iom_selftest.R`, `tests/rock_table_check.R` and
-`tests/db_load_check.R`, plus PHREEQC test inputs A4/B2/B3. All pass.
+**Tests:** the five self-tests above, plus PHREEQC test inputs A4/B2/B3. All
+pass.
 
 **Generators:** `tidal_kinetic`, `tidal_equil`, `bulk_equil`, `bulk_kinetic`,
 `bulk_kinetic_restart` and `tidal_kinetic_restart`. They are now consistent in:
@@ -919,9 +1055,9 @@ rate, rock table and `rec_eqb` default have all changed since.
 |---|---|---|---|
 | D1 | **Gas handling**: fixed-pressure GAS_PHASE; what happens to the porewater bubble (stay, move to ocean, vent); whether ocean-side gas is removed as plume loss | Part 7 | **Gates every H₂ result.** Run the bracket: bubble stays vs bubble moves to the ocean. Remove ocean-side gas each orbit if it is meant as plume loss |
 | D2 | **Porewater pressure**: profile (261 atm) or 66.7 atm, uniformly across generators | Part 6; 300 °C fails at 66.7 atm | Profile pressure everywhere; it sets the bubble threshold once D1 is in |
-| D3 | **Carbon decoupling mechanism**: `Hdg` (no-op as specified), design (d), or the existing partial (d) in the uncoupled database | Part 3 | Run the leak test (N1) first; it may show the partial (d) needs only a few more species removed |
-| D4 | `IOM_S` coupled or `Sg 1 H 1` | Part 3 | Follows D3: coupled if (d) |
-| D5 | `IOM_CHn` routing and formate, if (d) | Part 3 | Decide after N1 |
+| D3 | ~~Carbon decoupling mechanism~~ | Part 3 | **Decided 10-27:** `c4_only` at every temperature; coupled runs are the methanation upper bound |
+| D4 | ~~`IOM_S` coupled or `Sg 1 H 1`~~ | Part 3 | **Decided:** coupled (H₂ stays coupled, so sulfide is stable) |
+| D5 | ~~`IOM_CHn` routing and formate~~ | Part 3 | **Decided:** CHn as `Mtg 1 H -2.2` (a 2.2 e⁻ reduction imposed by hand, documented); formate as a sensitivity case only |
 | D6 | **Metal corrosion**: keep `dissolve_only` (H₂ pulse at t = 0) or add a rate | Part 5 | Needed before any H₂-vs-time claim; the rate is unsourced |
 | D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
 | D8 | **Cometary-ice initial ocean**: composition (CO₂/H₂O ratio, NH₃, from which comets) | Part 8 | — |
@@ -931,24 +1067,30 @@ rate, rock table and `rec_eqb` default have all changed since.
 
 ## Next actions (code and tests), in order
 
-- **N1. Leak test of `coreclath_CH4uncoupled.dat`.** At 25 and 100 °C, with
-  coupled H₂ from metal corrosion, does coupled C reduce to C₂H₆, C₂H₄,
-  acetate, formate or CO?
-  - Report every C valence total other than C(+4).
-  - Cheap, and it decides how far D3 is from done.
-- **N2. B4: Option 3 on a real production input.**
-  - (1) As-is.
-  - (2) `IOM_CH4` → Mtg and `IOM_S` → Sg, with no metal rewrite. Expect
-    carbon still to reduce wherever coupled reduced C exists.
-  - (3) Design (d) with the leak check.
-- **N3.** Rewrite the `iom_module.R` `Hdg` instructions per D3.
+- ~~N1. Leak test~~ **Done 10-26** (Part 3).
+- ~~N2. B4~~ **Superseded:** `Hdg` is dropped, and the leak check on
+  production-style inputs replaces B4.
+- **N3.** Rewrite the `iom_module.R` `Hdg` instructions and the
+  `carbon_decoupling_note` for `c4_only`. That's now unblocked.
 - **N4.** Implement D1/D2, then rerun the paired 160 °C case and the 25 °C
   seeded case.
-- **N5.** Regenerate production runs on current `main` (PHREEQC 3.8.6, stamped).
-- **N6.** Sensitivities: CHn m0 (Burnham's coal value of 2% of C), the
-  Vitrimat Ea *width* (centres are fit to Murchison; widths are vitrinite's),
-  surface areas (D7).
+- **N5.** Regenerate production runs on current `main` (PHREEQC 3.8.6,
+  `c4_only`, stamped). **Every earlier run is affected** by at least one of:
+  - the IOM_CH4 bug below 150 °C;
+  - the coupled-carbon artefact above it;
+  - the gas artefact.
+- **N6.** Sensitivities:
+  - CHn m0 (Burnham's coal value of 2% of C);
+  - the Vitrimat Ea *width*;
+  - surface areas (D7);
+  - formate re-admitted (cuts ocean H₂ ~5× at 100 °C via H₂ + HCO₃⁻ →
+    HCOO⁻);
+  - `carbon_mode = "coupled"` as the methanation bound.
 - **N7.** Spin-up and the King et al. comparison (D9).
+- **N8.** Confirm in a long grouped run that the 25 °C porewater brine flushes
+  as expected (Part 5).
+- **N9.** Find what drives the pure-water ocean to pH 11 with only 2e-4 molal
+  Na (Part 5).
 
 ## Still open (science), unchanged from 09-20
 
