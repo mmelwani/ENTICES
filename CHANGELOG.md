@@ -792,3 +792,25 @@ One commit per item; each commit message has its pass check.
   tests kept as history. `attr(cfg, "carbon_decoupling_note")` describes
   `c4_only` and `ch4_uncoupled` (NA when all coupled). `iom_selftest.R`
   checks the `c4_only` formulas and notes.
+
+### gas-ice-docs branch: profile pressure (2026-10-27)
+
+- **Pressures come from the profile in all six generators.** The porewater
+  SOLUTION (and a bulk `porewater`-mode solution) is at the profile's mean
+  pressure over the permeable layer, 261.2 atm for the Enceladus profile; the
+  ocean SOLUTION (and a bulk `hydrosphere`-mode solution) is at the ocean-floor
+  pressure, 66.7 atm. Before, five generators wrote 66.7 atm into the
+  porewater (`pressure 66.7#261.2` in the tidal ones); only `bulk_equil` used
+  the layer pressure.
+- **No fallback pressure.** `profile_conditions()` stops if `profile_file`
+  does not exist (the generators used to fall back to 70 atm). The Enceladus
+  profile is now in `profiles/`, and is the default `profile_file`.
+- **`REACTION_PRESSURE 1/2`** in the tidal generators, used by each step
+  beside `REACTION_TEMPERATURE` (MIX averages pressure by mass, so the
+  porewater would otherwise drift towards the ocean pressure).
+- **Header stamps** `# Porewater pressure:` and `# Ocean pressure:`, beside the
+  version and database stamps. **Restarts** compare them with the parent's
+  (`check_restart_pressures()`): a mismatch is an error, or a warning with
+  `allow_pressure_change = TRUE`; an unstamped parent is a warning. Header line
+  `# parent pressures:`.
+- `tests/pressure_check.R` checks all of the above (inputs only).

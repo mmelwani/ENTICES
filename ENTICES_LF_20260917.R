@@ -344,6 +344,63 @@ ocean_floor_pressure_MPa <- function(profile_file) {
   rock$P_MPa[which.max(rock$r_m)]
 }
 
+# Porewater and ocean conditions from the PlanetProfile profile, used by every generator. There is
+# no fallback: without a profile there is no defensible pressure. (Before 2026-10-27 the generators
+# fell back to 70 atm, and five of the six wrote the ocean-floor pressure, 66.7 atm for the
+# Enceladus profile, into the porewater SOLUTION.)
+#   pore_temp_C        -- mean temperature of the permeable layer (porewater_temp = "profile")
+#   pore_pressure_atm  -- mean pressure of the permeable layer: the porewater SOLUTION, and the
+#                         reaction pressure of every porewater step
+#   ocean_pressure_atm -- pressure at the ocean floor (top of phase 50): the ocean SOLUTION
+MPA_PER_ATM <- 0.101325
+profile_conditions <- function(profile_file, layer_thickness) {
+  if (is.null(profile_file) || !nzchar(profile_file) || !file.exists(profile_file))
+    stop(sprintf(paste0("profile_file not found: '%s'. Set PhreeqcIntegrator$profile_file to a PlanetProfile ",
+                        "*Profile*.txt (the Enceladus profile is in profiles/). Pressures come only from ",
+                        "the profile; there is no default."),
+                 if (is.null(profile_file)) "NULL" else profile_file))
+  list(pore_temp_C        = mean_layer_temp_C(profile_file, layer_thickness),
+       pore_pressure_atm  = mean_layer_pressure_MPa(profile_file, layer_thickness) / MPA_PER_ATM,
+       ocean_pressure_atm = ocean_floor_pressure_MPa(profile_file) / MPA_PER_ATM)
+}
+
+# The two pressure lines stamp_pqi_header() writes, and parent_pressures_atm() reads back.
+pressure_header_lines <- function(pore_pressure_atm, ocean_pressure_atm) {
+  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the permeable layer)", pore_pressure_atm),
+    sprintf("# Ocean pressure: %.1f atm (profile, ocean floor)", ocean_pressure_atm))
+}
+# A parent run's pressures (atm), from its .pqi header. NA where there is no parent .pqi or no
+# stamp (inputs generated before 2026-10-27).
+parent_pressures_atm <- function(prev_csv) {
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  h <- if (file.exists(pqi)) readLines(pqi, n = 200, warn = FALSE) else character(0)
+  get <- function(rx) {
+    l <- grep(rx, h, value = TRUE)
+    if (length(l)) as.numeric(sub(".*pressure: ([0-9.eE+-]+) atm.*", "\\1", l[1])) else NA_real_
+  }
+  c(pore = get("^# (parent )?Porewater pressure: "), ocean = get("^# (parent )?Ocean pressure: "))
+}
+# A restart's pressures against its parent's, compared at the 0.1 atm written into the inputs. Like
+# check_restart_carbon_mode(): a mismatch is an error, or a warning with allow_pressure_change =
+# TRUE; a parent whose pressures can't be read is a warning. Returns the "# parent pressures:" line.
+check_restart_pressures <- function(prev_csv, pore_pressure_atm, ocean_pressure_atm, allow_pressure_change = FALSE) {
+  parent <- parent_pressures_atm(prev_csv)
+  if (anyNA(parent)) {
+    warning("restart: the parent's pressures are not stamped in ", sub("\\.csv$", ".pqi", prev_csv),
+            " (inputs generated before 2026-10-27, or no parent .pqi); not checked")
+    return("# parent pressures: unknown (not checked)")
+  }
+  line <- sprintf("# parent pressures: porewater %.1f atm, ocean %.1f atm", parent[["pore"]], parent[["ocean"]])
+  same <- sprintf("%.1f", parent) == sprintf("%.1f", c(pore_pressure_atm, ocean_pressure_atm))
+  if (all(same)) return(line)
+  msg <- sprintf("restart: the parent ran at porewater %.1f / ocean %.1f atm, this restart would run at %.1f / %.1f atm (from profile_file)",
+                 parent[["pore"]], parent[["ocean"]], pore_pressure_atm, ocean_pressure_atm)
+  if (!allow_pressure_change)
+    stop(msg, ". Set profile_file to the parent's profile, or give allow_pressure_change = TRUE to switch.")
+  warning(msg, "; continuing (allow_pressure_change = TRUE)")
+  paste0(line, sprintf(" (this restart switches to %.1f / %.1f atm)", pore_pressure_atm, ocean_pressure_atm))
+}
+
 #===============================================================================
 # Configuration Class for Enceladus Parameters
 #===============================================================================
@@ -782,7 +839,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # organic wt% the mineral mass is scaled for; NULL = organic_wt_percent
                                    mineral_basis_wt_percent = NULL,
                                    iom_pools = NULL,
-                                   profile_file = "EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
+                                   profile_file = "profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
                                    
                                    # Factor applied to every primary mineral's moles (the rock minus its organics).
                                    mineral_scale_factor = function() {
@@ -934,11 +991,14 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # the PHREEQC version these inputs are written for, and the database
                                    # they need. run_phreeqc() (phreeqc_tools.R) reads the version line back
                                    # and warns if the executable reports a different one.
-                                   stamp_pqi_header = function(content, database) {
+                                   # With pressures = list(pore =, ocean =) (atm), also the two pressure lines
+                                   # that a restart checks against (check_restart_pressures()).
+                                   stamp_pqi_header = function(content, database, pressures = NULL) {
                                      lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
                                      dropped <- attr(content, "dropped")
                                      stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
                                                 sprintf("# Database: %s", database),
+                                                if (!is.null(pressures)) pressure_header_lines(pressures$pore, pressures$ocean),
                                                 if (length(dropped)) sprintf("# Not defined in %s, so removed from this input: %s",
                                                                              basename(database), paste(dropped, collapse = " ")))
                                      at <- if (length(lines) && startsWith(lines[1], "TITLE")) 1 else 0
@@ -1343,27 +1403,13 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # Get base filename without extension for output
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
-                                     # Temperatures and pressures for SOLUTION blocks
+                                     # Temperatures and pressures for SOLUTION blocks. The ocean temperature is fixed.
                                      ocean_temp_C <- 274.6 - 273.15  # ~1.45 °C (ocean-rock interface)
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C          <- mean_layer_temp_C(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       )
-                                       pore_pressure_atm    <- mean_layer_pressure_MPa(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       ) / 0.101325
-                                       ocean_pressure_atm   <- ocean_floor_pressure_MPa(
-                                         self$profile_file
-                                       ) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) {
@@ -1530,7 +1576,7 @@ SOLUTION 1 Enceladus porewater
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}{trace_C_line}
+    pressure  {round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
@@ -1547,6 +1593,15 @@ REACTION_TEMPERATURE 1
 
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
+
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
 
 # Define rate equations for each mineral
 RATES
@@ -2109,6 +2164,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
@@ -2135,6 +2191,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
                                           sprintf("  1  %.6e\n", x_step),
                                           "  2  1.0\n",
@@ -2148,6 +2205,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
                                           sprintf("  1  %.6e\n", 1 - x_step),
                                           sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
@@ -2181,7 +2239,7 @@ SELECTED_OUTPUT
                                      }), collapse = "\n")
 
                                      return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                  ch4_mode$database))
+                                                                  ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm)))
                                    },
 
                                    # ---------------------------------------------------------------
@@ -2245,25 +2303,11 @@ SELECTED_OUTPUT
 
                                      # Temperatures and pressures
                                      ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       )
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       ) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(
-                                         self$profile_file
-                                       ) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp as in create_phreeqc_template_tidal_kinetic()
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) {
@@ -2367,7 +2411,7 @@ SOLUTION 1 Enceladus porewater
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}
+    pressure  {round(pore_pressure_atm, 1)}
 
 SOLUTION 2 Enceladus ocean
     temp      {round(ocean_temp_C, 2)}
@@ -2384,6 +2428,15 @@ REACTION_TEMPERATURE 1
 
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
+
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium each cycle) ---
@@ -2727,6 +2780,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
@@ -2750,6 +2804,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
                                          sprintf("  1  %.6e\n", f_fluid / f_pore),
                                          "  2  1.0\n",
@@ -2761,6 +2816,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
                                          sprintf("  1  %.6e\n", (f_pore - f_fluid) / f_pore),
                                          sprintf("  4  %.6e\n", f_fluid / (f_ocean + f_fluid)),
@@ -2778,7 +2834,7 @@ SELECTED_OUTPUT
                                      }), collapse = "\n")
 
                                      return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                  ch4_mode$database))
+                                                                  ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm)))
                                    },
 
                                    # Single-step bulk equilibrium: entire hydrosphere (ocean + porewater)
@@ -2824,17 +2880,11 @@ SELECTED_OUTPUT
                                      # Temperature and pressure (ocean floor, or profile-averaged over the
                                      # layer if water_temp = "profile")
                                      ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve water_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -3104,7 +3154,8 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -3147,19 +3198,13 @@ END
                                        ))
                                      }
 
-                                     # Temperature and pressure (ocean floor)
+                                     # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -3179,18 +3224,19 @@ END
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Clathrate stability at porewater conditions — see resolve_clathrate_stability().
-                                     # Single combined solution here uses ocean_pressure_atm as its reaction
-                                     # pressure (pore_pressure_atm is computed above but not otherwise used
-                                     # in this function), so the stability check matches that.
-                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, ocean_pressure_atm)
+                                     # Reaction pressure of the single solution, as in bulk_equil: porewater mode
+                                     # reacts porewater only, so it uses the layer-mean porewater pressure;
+                                     # hydrosphere mode (ocean + porewater combined) keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     # Clathrate stability at that temperature and pressure — see resolve_clathrate_stability().
+                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, .solution_pressure_atm)
 
                                      # Temperature-gated secondary minerals (single solution, so a single
                                      # temperature — porewater_temp_C — gates the whole block). Stable
-                                     # clathrate phases (checked against ocean_pressure_atm, matching this
-                                     # function's own reaction pressure) are appended the same way.
+                                     # clathrate phases (checked against .solution_pressure_atm) are
+                                     # appended the same way.
                                      extra_ocean_minerals <- c(self$temp_gated_minerals(porewater_temp_C),
-                                                               self$stable_clathrate_phases(porewater_temp_C, ocean_pressure_atm, ch4_mode))
+                                                               self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
                                        paste0("   ", extra_ocean_minerals, " 0 0", collapse = "\n") else ""
                                      extra_eq_so_line <- paste(extra_ocean_minerals, collapse = " ")
@@ -3538,7 +3584,7 @@ SOLUTION 1 {.soln_label}
     units     mol/kgw
     density   1
     water     {.water_mass}
-    pressure  {round(ocean_pressure_atm, 1)}{trace_C_line}
+    pressure  {round(.solution_pressure_atm, 1)}{trace_C_line}
 
 INCREMENTAL_REACTIONS true
 
@@ -3699,7 +3745,8 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -3715,7 +3762,8 @@ END
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
-                                     ch4_cutoff_C        = 150
+                                     ch4_cutoff_C        = 150,
+                                     allow_pressure_change = FALSE
                                    ) {
                                      mode <- match.arg(mode)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -3770,19 +3818,13 @@ END
                                        collapse = "\n"
                                      )
 
-                                     # Temperature and pressure (ocean floor)
+                                     # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' - using default 70 atm.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -3792,6 +3834,8 @@ END
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
+                                     parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
+                                                                                     allow_pressure_change)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
@@ -3803,11 +3847,11 @@ END
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Clathrate stability at porewater conditions — see resolve_clathrate_stability().
-                                     # Single combined solution here uses ocean_pressure_atm as its reaction
-                                     # pressure (pore_pressure_atm is computed above but not otherwise used
-                                     # in this function), so the stability check matches that.
-                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, ocean_pressure_atm)
+                                     # Reaction pressure of the single solution, as in bulk_kinetic: the layer-mean
+                                     # porewater pressure in porewater mode, the ocean-floor value in hydrosphere mode.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     # Clathrate stability at that temperature and pressure — see resolve_clathrate_stability().
+                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, .solution_pressure_atm)
 
                                      # Primary mineral classification. Fe/Ni/Lawrencite are handled
                                      # separately below (always_equil_primary) — always equilibrium,
@@ -3949,10 +3993,10 @@ END
                                        "Sepiolite", "SiO2(am)", "SO2(g)", "Thenardite", "Tobermorite-11A"
                                      )
                                      # Single solution (porewater_temp_C) gates the whole assemblage here.
-                                     # Clathrate phases stable against ocean_pressure_atm (this function's own
-                                     # reaction pressure) are appended the same way.
+                                     # Clathrate phases stable against .solution_pressure_atm (this function's
+                                     # own reaction pressure) are appended the same way.
                                      secondary_minerals <- c(secondary_minerals, self$temp_gated_minerals(porewater_temp_C),
-                                                             self$stable_clathrate_phases(porewater_temp_C, ocean_pressure_atm, ch4_mode))
+                                                             self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
 
                                      get_equil_moles <- function(mineral) {
                                        col <- ep_column(mineral, names(last_row))
@@ -4187,6 +4231,7 @@ KNOBS
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}
+{parent_pressure_line}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4201,7 +4246,7 @@ SOLUTION 1 {.soln_label}
     units     mol/kgw
     density   1
     water     {sprintf("%.6f", water_kg)}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(.solution_pressure_atm, 1)}
 {elem_lines}
 
 INCREMENTAL_REACTIONS true
@@ -4252,7 +4297,8 @@ USER_PUNCH
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -4278,7 +4324,8 @@ END
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
-                                     ch4_cutoff_C        = 150
+                                     ch4_cutoff_C        = 150,
+                                     allow_pressure_change = FALSE
                                    ) {
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
@@ -4383,21 +4430,19 @@ END
 
                                      # ---- Temperature / pressure ----
                                      ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) porewater_temp else
                                        if (porewater_temp == "profile") pore_temp_C else ocean_temp_C
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
+                                     parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
+                                                                                     allow_pressure_change)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
@@ -4859,6 +4904,7 @@ KNOBS
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}
+{parent_pressure_line}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
@@ -4874,7 +4920,7 @@ SOLUTION 1 Enceladus porewater (restarted)
     units     mol/kgw
     density   1
     water     {sprintf("%.6f", soln1_h2o)}
-    pressure  {round(ocean_pressure_atm, 1)}
+    pressure  {round(pore_pressure_atm, 1)}
 {soln1_elem_lines}
 
 SOLUTION 2 Enceladus ocean (restarted)
@@ -4893,6 +4939,15 @@ REACTION_TEMPERATURE 1
 
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
+
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
 
 {rates_block}
 
@@ -4945,6 +5000,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
@@ -4963,6 +5019,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
                                          sprintf("  1  %.6e\n", x_step),
                                          "  2  1.0\n",
@@ -4973,6 +5030,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
                                          sprintf("  1  %.6e\n", 1 - x_step),
                                          sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
@@ -4999,7 +5057,7 @@ SELECTED_OUTPUT
                                      }), collapse = "\n")
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                      ch4_mode$database)
+                                                                      ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
                                      writeLines(content, filename)
                                      return(filename)
                                    }
