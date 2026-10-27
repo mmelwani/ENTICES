@@ -814,3 +814,13 @@ One commit per item; each commit message has its pass check.
   `allow_pressure_change = TRUE`; an unstamped parent is a warning. Header line
   `# parent pressures:`.
 - `tests/pressure_check.R` checks all of the above (inputs only).
+- **Initial fluids at 25 C.** The initial porewater and ocean SOLUTIONs are
+  defined at 25 C with pe 4 (no oxidant or reductant) and brought to the run
+  temperature by REACTION_TEMPERATURE (added to `bulk_kinetic` and
+  `bulk_equil`, which had none). Defined at the run temperature, pe 4 put
+  O(0) into the porewater: 1.1e-22 molal at 100 C, 9.0e-12 at 160 C, 4.9 at
+  250 C (0.77 mol O in the 0.157 kg porewater), and did not converge at
+  300 C at any pressure. Restarts are unchanged (they start from the parent's
+  reacted state). `tests/initial_fluid_check.R` runs each generator's initial
+  porewater at 25, 160 and 300 C.
+- `profiles/README.md`: provenance of the Enceladus profile (PlanetProfile).

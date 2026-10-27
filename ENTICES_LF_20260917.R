@@ -1568,8 +1568,11 @@ KNOBS
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 Enceladus porewater
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
@@ -1579,7 +1582,7 @@ SOLUTION 1 Enceladus porewater
     pressure  {round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
-    temp      {round(ocean_temp_C, 2)}
+    temp      25
     pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
@@ -2403,8 +2406,11 @@ KNOBS
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 Enceladus porewater
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
@@ -2414,7 +2420,7 @@ SOLUTION 1 Enceladus porewater
     pressure  {round(pore_pressure_atm, 1)}
 
 SOLUTION 2 Enceladus ocean
-    temp      {round(ocean_temp_C, 2)}
+    temp      25
     pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
@@ -2989,8 +2995,11 @@ KNOBS
 
 {.header_lines}
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 {.soln_label}
-    temp      {round(water_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
@@ -2998,6 +3007,9 @@ SOLUTION 1 {.soln_label}
     density   1
     water     {.water_mass}
     pressure  {round(.solution_pressure_atm, 1)}
+
+REACTION_TEMPERATURE 1
+    {round(water_temp_C, 2)}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium) ---
@@ -3576,8 +3588,11 @@ KNOBS
 {.header_lines}
 {rec_eqb_note}
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 {.soln_label}
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
@@ -3585,6 +3600,9 @@ SOLUTION 1 {.soln_label}
     density   1
     water     {.water_mass}
     pressure  {round(.solution_pressure_atm, 1)}{trace_C_line}
+
+REACTION_TEMPERATURE 1
+    {round(porewater_temp_C, 2)}
 
 INCREMENTAL_REACTIONS true
 
