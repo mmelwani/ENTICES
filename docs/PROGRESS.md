@@ -441,12 +441,11 @@ sulfide stays sulfide, so IOM sulfide keeps its mineral sink
 - The S-decoupled-database route (all reduced S in `HSg⁻`, a rebuilt pyrite
   log K) is **not needed**.
 
-## Owed code fix
+## Owed code fix — done 10-27
 
-`iom_module.R` still instructs the caller to "enter H2 as Hdg" (docstring and
-`carbon_decoupling_note`). Its `redox_mode` bullet was corrected in
-`ch4-mode-iom`. The rest is a no-op in production. Rewrite it for `c4_only`
-(N3; unblocked now that D3 is decided).
+`iom_module.R` no longer tells the caller to "enter H2 as Hdg". The docstring
+and comments describe `c4_only`, keeping the `Hdg` tests as history, and
+`carbon_decoupling_note` now says what each carbon mode does (N3, `docs-1027`).
 
 ---
 # PART 4 — IOM CALIBRATION STATE (REVISED 2026-10-26)
@@ -1070,8 +1069,8 @@ rate, rock table and `rec_eqb` default have all changed since.
 - ~~N1. Leak test~~ **Done 10-26** (Part 3).
 - ~~N2. B4~~ **Superseded:** `Hdg` is dropped, and the leak check on
   production-style inputs replaces B4.
-- **N3.** Rewrite the `iom_module.R` `Hdg` instructions and the
-  `carbon_decoupling_note` for `c4_only`. That's now unblocked.
+- ~~N3. Rewrite the `iom_module.R` `Hdg` instructions and the
+  `carbon_decoupling_note` for `c4_only`.~~ **Done 10-27** (`docs-1027`).
 - **N4.** Implement D1/D2, then rerun the paired 160 °C case and the 25 °C
   seeded case.
 - **N5.** Regenerate production runs on current `main` (PHREEQC 3.8.6,

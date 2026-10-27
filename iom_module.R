@@ -183,12 +183,19 @@ iom_bulk_formula <- function() {
 #'     bound, not merged in.
 #'   - CHn's m0 (2% of C, from coal) and its borrowed shift are unconstrained
 #'     by any IOM-specific measurement.
-#'   - Option 3 (coupled/decoupled redox at low temperature): design settled
-#'     in OPTION3_decision.md, formulas TESTED IN PHREEQC 2026-09-20
-#'     (PHREEQC_TEST_RESULTS_2026-09-20.md). Only IOM_CH4 and IOM_S swap
-#'     formula; IOM_N deliberately stays coupled; IOM_CO2/IOM_CHn decouple
-#'     via Hdg at the solution level. See DECOUPLED_FORMULAS below for the
-#'     measured numbers and the Mtg-vs-Sg asymmetry that makes their two
+#'   - Carbon redox (Option 3), DECIDED 2026-10-27 (docs/PROGRESS.md Part 3,
+#'     D3-D5): carbon_mode "c4_only" is the ENTICES default at every
+#'     temperature. Its database (coreclath_C4only.dat) has no coupled
+#'     reduced carbon, so coupled carbon can only be C(+4); IOM_CH4 and
+#'     IOM_CHn release their carbon as decoupled methane (Mtg, redox_mode
+#'     C = "c4_only"), IOM_CO2's carbon ends up as carbonate, and H2 stays
+#'     coupled. The earlier plan to decouple IOM_CO2/IOM_CHn by entering H2 as
+#'     Hdg is DROPPED: production enters no H2 (it all comes from coupled metal
+#'     corrosion), so Hdg acted on nothing in a real run. IOM_N and IOM_S stay
+#'     coupled (IOM_S's "Sg 1 H 1" is kept for an oxidising scenario). The
+#'     Mtg and Sg formulas were TESTED IN PHREEQC 2026-09-20
+#'     (PHREEQC_TEST_RESULTS_2026-09-20.md); see DECOUPLED_FORMULAS below for
+#'     the measured numbers and the Mtg-vs-Sg asymmetry that makes their two
 #'     formulas follow opposite rules.
 #'     KNOWN LIMITATION, unchanged: iom_validate_config() cannot validate a
 #'     decoupled config -- its element-balance check tokenizes -formula
@@ -207,21 +214,23 @@ iom_bulk_formula <- function() {
 #'     S="decoupled"  -> IOM_S switches to "Sg 1 H 1".
 #'     C="decoupled"  -> IOM_CH4 switches to "Mtg 1 H 0.435"; IOM_CO2 and
 #'                       IOM_CHn keep their coupled formulas, so their carbon
-#'                       is coupled C and speciates by equilibrium. ENTICES's
-#'                       kinetic generators and restarts pick this mode
-#'                       automatically whenever they select
-#'                       coreclath_CH4uncoupled.dat (carbon_mode
-#'                       "ch4_uncoupled", or "temperature" below the cutoff),
-#'                       and all coupled with the coupled database
-#'                       (PhreeqcIntegrator$resolve_iom_pools()).
-#'                       ENTICES enters no Hdg, so the H2-as-Hdg route that
-#'                       attr(cfg, "carbon_decoupling_note") describes is not
-#'                       used (see docs/PROGRESS.md Part 3).
-#'     C="c4_only"    -> for coreclath_C4only.dat (carbon_mode "c4_only"),
-#'                       where coupled carbon can only be C(+4): IOM_CH4 is
-#'                       "Mtg 1 H 0.435" as above, and IOM_CHn is
-#'                       "Mtg 1 H -2.2". IOM_CO2 keeps its coupled formula
-#'                       (its carbon ends up C(+4)). See C4ONLY_FORMULAS.
+#'                       is coupled C and speciates by equilibrium. This is
+#'                       carbon_mode "ch4_uncoupled" (coreclath_CH4uncoupled.dat,
+#'                       or "temperature" below the cutoff): that database
+#'                       still has coupled reduced carbon, and at realistic C
+#'                       equilibrium turns much of it into ethane, acetate
+#'                       and formate (the 2026-10-26 leak test). Not the
+#'                       default.
+#'     C="c4_only"    -> the ENTICES default (carbon_mode "c4_only",
+#'                       coreclath_C4only.dat), where coupled carbon can only
+#'                       be C(+4): IOM_CH4 is "Mtg 1 H 0.435" as above, and
+#'                       IOM_CHn is "Mtg 1 H -2.2". IOM_CO2 keeps its coupled
+#'                       formula (its carbon ends up C(+4)). See
+#'                       C4ONLY_FORMULAS.
+#'     The generators and restarts pick C from the carbon mode's database
+#'     (PhreeqcIntegrator$resolve_iom_pools()); attr(cfg,
+#'     "carbon_decoupling_note") says what the chosen C mode does with each
+#'     carbon channel.
 #'     N="decoupled"  -> refused with an error. Not a gap: NH3/NH4+ is
 #'                       already the stable N species at Enceladus pore
 #'                       conditions, and the only decoupled N species in the
@@ -283,19 +292,22 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   #     anyway. There is no artefact to fix, and the only decoupled N species
   #     available (Ntg = N2) is the WRONG end of the ladder. See
   #     OPTION3_decision.md sec 1.
-  #   IOM_CO2 / IOM_CHn -- keep their coupled formulas. Carbon decoupling is
-  #     achieved at the SOLUTION/DATABASE level by entering H2 as Hdg, not by
-  #     a carbon species (there is no decoupled oxidised-carbon species, and
-  #     adding one would silently break carbonate-mineral equilibria).
-  #     Tested and confirmed: with Hdg, carbon reduction drops ~26,000x
-  #     (10.8% -> 0.0004% of C converted to methane) while pe stays sensibly
-  #     set by the mineral assemblage (-8.26) and calcite still precipitates
-  #     normally. Because this is a solution-level switch it is NOT expressed
-  #     in any -formula here -- ENTICES must enter its H2 inventory as Hdg.
-  #     CAVEAT, measured: decoupling H2 is not redox-neutral for the rest of
-  #     the system -- magnetite precipitation ~2.9x and pyrrhotite dissolution
-  #     ~3.6x higher than the coupled case. Report the mineral assemblage
-  #     alongside any coupled/decoupled carbon comparison.
+  #   IOM_CO2 -- keeps its coupled formula in every mode (there is no
+  #     decoupled oxidised-carbon species, and adding one would break the
+  #     carbonate-mineral equilibria). What stops its carbon being reduced is
+  #     the DATABASE: under redox_mode C = "c4_only" (coreclath_C4only.dat,
+  #     the default) coupled carbon can only be C(+4), so it ends up as
+  #     carbonate. Under C = "decoupled" (coreclath_CH4uncoupled.dat) it can
+  #     still be reduced to ethane, acetate, formate etc.
+  #   IOM_CHn -- coupled under C = "decoupled"; "Mtg 1 H -2.2" under
+  #     C = "c4_only" (C4ONLY_FORMULAS below).
+  #   HISTORY, not an instruction: the 2026-09-18 design decoupled carbon by
+  #     entering the H2 inventory as Hdg. In toy tests it worked (carbon
+  #     reduction down ~26,000x; magnetite ~2.9x and pyrrhotite ~3.6x higher
+  #     than coupled), but ENTICES enters no H2 -- all of it comes from coupled
+  #     metal corrosion, which must stay coupled (reconstruction §4 [D]) -- so
+  #     in production it acted on nothing. Dropped 2026-10-27 for c4_only
+  #     (docs/PROGRESS.md Part 3).
   DECOUPLED_FORMULAS <- list(
     IOM_CH4 = "Mtg 1 H 0.435",
     IOM_S   = "Sg 1 H 1"
@@ -360,12 +372,14 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
          "pore conditions, so coupled equilibrium gives the right answer; the ",
          "only decoupled N species available (Ntg = N2) would oxidise the ",
          "released nitrogen away from it. See OPTION3_decision.md sec 1.")
-  # A row keeps its coupled formula unless a decoupled one is defined for it.
+  # A row keeps its coupled formula unless its mode defines another one.
   # That fallback is intentional, not a gap:
-  #   IOM_CO2 / IOM_CHn -- decoupled via Hdg at the solution level (the
-  #     caller must enter H2 as Hdg); no -formula change is involved.
-  #   IOM_N             -- deliberately stays coupled (rejected above).
-  # Only IOM_CH4 (Mtg) and IOM_S (Sg) actually swap formula.
+  #   IOM_CO2 -- coupled in every mode; the database decides what its carbon
+  #     can become (C(+4) only under "c4_only").
+  #   IOM_CHn -- coupled except under C = "c4_only" (Mtg, below).
+  #   IOM_N   -- deliberately stays coupled (rejected above).
+  # C = "decoupled" swaps IOM_CH4 (Mtg) and S = "decoupled" swaps IOM_S (Sg);
+  # C = "c4_only" swaps IOM_CH4 and IOM_CHn (both Mtg).
   use_decoupled <- redox_mode[cfg$family] == "decoupled" & !is.na(cfg$formula_decoupled)
   cfg$formula <- ifelse(use_decoupled, cfg$formula_decoupled, cfg$formula_coupled)
   if (identical(redox_mode[["C"]], "c4_only")) {
@@ -375,10 +389,16 @@ iom_default_config <- function(redox_mode = c(C = "coupled", N = "coupled", S = 
   }
   attr(cfg, "redox_mode") <- redox_mode
   attr(cfg, "carbon_decoupling_note") <-
-    if (identical(redox_mode[["C"]], "decoupled"))
-      paste("Carbon decoupling is a SOLUTION-level switch: the caller must enter",
-            "the H2 inventory as Hdg. No -formula in this config encodes it.",
-            "IOM_CH4 has switched to Mtg; IOM_CO2/IOM_CHn keep coupled formulas.")
+    if (identical(redox_mode[["C"]], "c4_only"))
+      paste("c4_only (coreclath_C4only.dat): coupled carbon is C(+4) only.",
+            "IOM_CH4 and IOM_CHn release Mtg; IOM_CHn's 'Mtg 1 H -2.2' imposes a",
+            "2.2 e- reduction by hand. IOM_CO2 stays coupled and ends up as",
+            "carbonate. H2 stays coupled.")
+    else if (identical(redox_mode[["C"]], "decoupled"))
+      paste("ch4_uncoupled (coreclath_CH4uncoupled.dat): only IOM_CH4 releases Mtg.",
+            "IOM_CO2 and IOM_CHn carbon is coupled, and that database can reduce it",
+            "to ethane, acetate, formate etc.; use C = 'c4_only' (the default",
+            "carbon_mode) to prevent that.")
     else NA_character_
   cfg
 }

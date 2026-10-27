@@ -782,3 +782,13 @@ One commit per item; each commit message has its pass check.
   every generator (porewater and ocean EP blocks, SELECTED_OUTPUT lists, both
   restarts), ungated like Analcime. At 100 °C both were supersaturated in the
   orbit-2 porewater (corrected SI +1.08, +1.30) without being listed.
+
+### docs-1027 branch: PROGRESS 2026-10-27, iom_module.R carbon notes (2026-10-27)
+
+- `docs/PROGRESS.md` replaced with the 2026-10-27 revision (cited paths
+  checked; merge state corrected).
+- **N3:** `iom_module.R` no longer instructs entering H2 as `Hdg`. The
+  docstring and comments describe `c4_only` (the default), with the `Hdg`
+  tests kept as history. `attr(cfg, "carbon_decoupling_note")` describes
+  `c4_only` and `ch4_uncoupled` (NA when all coupled). `iom_selftest.R`
+  checks the `c4_only` formulas and notes.
