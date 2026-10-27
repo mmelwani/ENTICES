@@ -146,6 +146,39 @@ parent_fluid_header_lines <- function(prev_csv) {
   paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
 }
 
+# A parent run's carbon mode, from the database its .pqi header names ("# Database:", else
+# "# Recommended database:"). NA when there is no parent .pqi or it names none of these.
+CARBON_MODE_DATABASES <- c(coupled = "coreclath_CH4coupled.dat", ch4_uncoupled = "coreclath_CH4uncoupled.dat",
+                           c4_only = "coreclath_C4only.dat")
+parent_carbon_mode <- function(prev_csv) {
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  if (!file.exists(pqi)) return(NA_character_)
+  h <- readLines(pqi, n = 200, warn = FALSE)
+  for (l in c(grep("^# Database: ", h, value = TRUE), grep("^# Recommended database: ", h, value = TRUE))) {
+    hit <- names(CARBON_MODE_DATABASES)[vapply(CARBON_MODE_DATABASES, grepl, logical(1), x = l, fixed = TRUE)]
+    if (length(hit)) return(hit[1])
+  }
+  NA_character_
+}
+# A restart's carbon mode against its parent's. A mismatch is an error unless the caller chose the
+# mode (carbon_mode or CH4_redox_override given: ch4_mode$explicit), and then a warning. A parent
+# whose mode can't be read is a warning. Returns the "# parent carbon_mode:" header line.
+check_restart_carbon_mode <- function(prev_csv, ch4_mode) {
+  parent <- parent_carbon_mode(prev_csv)
+  if (is.na(parent)) {
+    warning("restart: the parent's carbon mode is unknown (no parent .pqi naming a known database: ",
+            sub("\\.csv$", ".pqi", prev_csv), "); not checked")
+    return("# parent carbon_mode: unknown (not checked)")
+  }
+  if (parent == ch4_mode$carbon_mode) return(sprintf("# parent carbon_mode: %s", parent))
+  msg <- sprintf('restart: the parent ran carbon_mode "%s", this restart would run "%s"', parent, ch4_mode$carbon_mode)
+  if (!ch4_mode$explicit)
+    stop(msg, sprintf('. Give carbon_mode = "%s" to continue the parent, or carbon_mode = "%s" to switch.',
+                      parent, ch4_mode$carbon_mode))
+  warning(msg, "; the parent's solutions are re-speciated in the restart's mode")
+  sprintf("# parent carbon_mode: %s (this restart switches to %s)", parent, ch4_mode$carbon_mode)
+}
+
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
@@ -918,33 +951,45 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    #                      other reduced carbon (C2H6, acetate, formate, ...) coupled.
                                    #   "c4_only"       -- coreclath_C4only.dat; methane is Mtg, and coupled carbon is
                                    #                      C(+4) only (the database comments out the rest).
-                                   # Default (carbon_mode = NULL): "ch4_uncoupled" below ch4_cutoff_C (150 C),
-                                   # "coupled" at/above. CH4_redox_override = "coupled"/"decoupled" is the older
-                                   # spelling of carbon_mode = "coupled"/"ch4_uncoupled"; give one or the other.
-                                   # `decoupled` (methane is Mtg) is TRUE for both "ch4_uncoupled" and "c4_only".
+                                   #   "temperature"   -- the rule that was the default before 2026-10-26:
+                                   #                      "ch4_uncoupled" below ch4_cutoff_C (150 C), "coupled" at/above.
+                                   # Default (carbon_mode = NULL): "c4_only" at every temperature. Coupled runs
+                                   # let equilibrium reduce carbonate with H2, so they are an upper bound on
+                                   # abiotic methanation, not the expected case. CH4_redox_override =
+                                   # "coupled"/"decoupled" is the older spelling of carbon_mode =
+                                   # "coupled"/"ch4_uncoupled"; give one or the other. ch4_cutoff_C is used only
+                                   # by "temperature". `decoupled` (methane is Mtg) is TRUE for both
+                                   # "ch4_uncoupled" and "c4_only"; `explicit` is TRUE when the caller chose the
+                                   # mode (carbon_mode or CH4_redox_override given).
                                    resolve_ch4_mode = function(porewater_temp_C, CH4_redox_override = NULL, carbon_mode = NULL,
                                                                ch4_cutoff_C = 150) {
                                      if (!is.null(CH4_redox_override) && !CH4_redox_override %in% c("coupled", "decoupled")) {
                                        stop('CH4_redox_override must be NULL, "coupled", or "decoupled"')
                                      }
-                                     if (!is.null(carbon_mode) && !carbon_mode %in% c("coupled", "ch4_uncoupled", "c4_only")) {
-                                       stop('carbon_mode must be NULL, "coupled", "ch4_uncoupled", or "c4_only"')
+                                     if (!is.null(carbon_mode) && !carbon_mode %in% c("coupled", "ch4_uncoupled", "c4_only", "temperature")) {
+                                       stop('carbon_mode must be NULL, "coupled", "ch4_uncoupled", "c4_only", or "temperature"')
                                      }
                                      if (!is.null(carbon_mode) && !is.null(CH4_redox_override)) {
                                        stop("give carbon_mode or CH4_redox_override, not both")
                                      }
+                                     explicit <- !is.null(carbon_mode) || !is.null(CH4_redox_override)
+                                     # The header note: "temperature" writes what the old default wrote, so its
+                                     # inputs match those generated before the default changed.
                                      note <- if (!is.null(CH4_redox_override)) sprintf(", override=%s", CH4_redox_override)
-                                             else if (!is.null(carbon_mode)) sprintf(", carbon_mode=%s", carbon_mode)
-                                             else if (ch4_cutoff_C != 150) sprintf(", cutoff=%g C", ch4_cutoff_C)
-                                             else ""
-                                     if (is.null(carbon_mode)) {
-                                       carbon_mode <- if (!is.null(CH4_redox_override)) {
-                                         if (CH4_redox_override == "decoupled") "ch4_uncoupled" else "coupled"
-                                       } else if (porewater_temp_C < ch4_cutoff_C) "ch4_uncoupled" else "coupled"
-                                     }
+                                             else if (identical(carbon_mode, "temperature")) {
+                                               if (ch4_cutoff_C != 150) sprintf(", cutoff=%g C", ch4_cutoff_C) else ""
+                                             }
+                                             else sprintf(", carbon_mode=%s", if (is.null(carbon_mode)) "c4_only" else carbon_mode)
+                                     carbon_mode <- if (!is.null(CH4_redox_override)) {
+                                       if (CH4_redox_override == "decoupled") "ch4_uncoupled" else "coupled"
+                                     } else if (is.null(carbon_mode)) "c4_only"
+                                     else if (carbon_mode == "temperature") {
+                                       if (porewater_temp_C < ch4_cutoff_C) "ch4_uncoupled" else "coupled"
+                                     } else carbon_mode
                                      decoupled <- carbon_mode != "coupled"
                                      list(
                                        carbon_mode   = carbon_mode,
+                                       explicit      = explicit,
                                        decoupled     = decoupled,
                                        ch4_aq        = if (decoupled) "Mtg"    else "CH4",
                                        ch4_gas       = if (decoupled) "Mtg(g)" else "CH4(g)",
@@ -1765,6 +1810,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -1780,6 +1826,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -1900,6 +1947,7 @@ EQUILIBRIUM_PHASES 2
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -1915,6 +1963,7 @@ EQUILIBRIUM_PHASES 2
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -1998,9 +2047,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -2423,6 +2472,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -2438,6 +2488,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -2556,6 +2607,7 @@ EQUILIBRIUM_PHASES 2
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
 #   MgOHCl 0 0
    MgSO4 0 0
    Minnesotaite 0 0
@@ -2571,6 +2623,7 @@ EQUILIBRIUM_PHASES 2
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
@@ -2649,9 +2702,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -2962,6 +3015,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
    MgSO4 0 0
    Minnesotaite 0 0
    Mirabilite 0 0
@@ -2969,6 +3023,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
    NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
@@ -3021,8 +3076,8 @@ SELECTED_OUTPUT
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4 Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite Lizardite Magnetite
-                         Melanterite MgSO4 Minnesotaite Mirabilite
-                         Montmor-Ca Montmor-Mg Montmor-Na N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
+                         Montmor-Ca Montmor-Mg Montmor-Na N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -3557,6 +3612,7 @@ EQUILIBRIUM_PHASES 1
    Lizardite 0 0
    Magnetite 0 0
    Melanterite 0 0
+   Mesolite 0 0
    MgSO4 0 0
    Minnesotaite 0 0
    Mirabilite 0 0
@@ -3564,6 +3620,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Mg 0 0
    Montmor-Na 0 0
    N2(g) 0 0
+   Natrolite 0 0
    NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
@@ -3619,9 +3676,9 @@ SELECTED_OUTPUT
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
                          H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
-                         Lizardite Magnetite Melanterite MgSO4 Minnesotaite Mirabilite
+                         Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
@@ -3734,6 +3791,7 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
@@ -3882,9 +3940,9 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
@@ -4128,6 +4186,7 @@ KNOBS
 # Mode: {.mode_comment}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
+{parent_mode_line}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4338,6 +4397,7 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
+                                     parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
                                      # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
                                      mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
@@ -4455,9 +4515,9 @@ END
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
                                        "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
-                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "MgSO4", "Minnesotaite", "Mirabilite",
+                                       "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
@@ -4798,6 +4858,7 @@ KNOBS
 # Mode: tidal kinetic restart from previous CSV state
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
+{parent_mode_line}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}

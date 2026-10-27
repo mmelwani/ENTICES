@@ -85,5 +85,21 @@ check(run_phreeqc(inp, db, warn_version = FALSE)$errors == 0, "restricted synthe
 inp0 <- tempfile(fileext = ".pqi"); writeLines(syn, inp0)
 check(run_phreeqc(inp0, db, warn_version = FALSE)$errors > 0, "unrestricted synthetic input fails with the C4only database")
 
+# 5. scripts/make_c4only.py regenerates the committed database exactly (CR characters
+#    ignored: git may check the file out with either line ending).
+rd_lf <- function(f) gsub("\r", "", rawToChar(readBin(f, "raw", file.size(f))), fixed = TRUE)
+regen <- NA
+for (py in unique(Sys.which(c("python3", "python", "py")))) {
+  if (!nzchar(py)) next
+  tmp <- tempfile(fileext = ".dat")
+  suppressWarnings(system2(py, c("scripts/make_c4only.py", src, tmp), stdout = FALSE, stderr = FALSE))
+  if (file.exists(tmp)) { regen <- tmp; break }
+}
+if (is.na(regen)) {
+  cat("[SKIP] no working python on the PATH: regeneration of coreclath_C4only.dat not checked\n")
+} else {
+  check(identical(rd_lf(regen), rd_lf(db)), "scripts/make_c4only.py regenerates databases/coreclath_C4only.dat exactly")
+}
+
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))
 if (failures > 0) quit(status = 1)

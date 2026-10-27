@@ -758,3 +758,27 @@ One commit per item; each commit message has its pass check.
 - **`charge_balance`** = NULL | `"pH"` | an `initial_ocean` element, for the
   ocean SOLUTION 2 of tidal_kinetic and tidal_equil. NULL (default) is
   unchanged.
+
+### carbon-default branch: c4_only default, restart mode check, Na zeolites (2026-10-26)
+
+One commit per item; each commit message has its pass check.
+
+- **`carbon_mode = "c4_only"` is the default at every temperature.** Coupled
+  runs (`"coupled"`) are an upper bound on abiotic methanation: equilibrium
+  reduces carbonate with H2 there. `"coupled"` and `"ch4_uncoupled"` stay
+  selectable; the old temperature rule is `carbon_mode = "temperature"` (with
+  `ch4_cutoff_C`), and `CH4_redox_override` still works. Inputs generated with
+  the default before this change are reproduced by `carbon_mode = "temperature"`.
+- **Restarts check the parent's carbon mode** (`parent_carbon_mode()`: the
+  database on the parent `.pqi`'s `# Database:` line, else its
+  `# Recommended database:` line). A mismatch is an error unless the mode is
+  given explicitly, then a warning; an unreadable parent mode is a warning.
+  Header line `# parent carbon_mode:`.
+- **`scripts/make_c4only.py`** regenerates `coreclath_C4only.dat` from
+  `coreclath_CH4uncoupled.dat`; `tests/c4only_db_check.R` checks the committed
+  file matches it. The database header now names the script (otherwise
+  unchanged).
+- **Natrolite and Mesolite** (Na zeolites) added to the secondary minerals of
+  every generator (porewater and ocean EP blocks, SELECTED_OUTPUT lists, both
+  restarts), ungated like Analcime. At 100 °C both were supersaturated in the
+  orbit-2 porewater (corrected SI +1.08, +1.30) without being listed.

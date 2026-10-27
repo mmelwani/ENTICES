@@ -1,6 +1,7 @@
 # ============================================================================
 # coreclath_C4only.dat -- carbon_mode = "c4_only" (ENTICES)
-# Derived 2026-10-26 from coreclath_CH4uncoupled.dat (sha1 6552675c5f2f).
+# Derived 2026-10-26 from coreclath_CH4uncoupled.dat (sha1 de0456283f9a, LF line endings)
+# by scripts/make_c4only.py; regenerate it with that script, do not edit by hand.
 #
 # Coupled carbon is C(+4) only. Every coupled carbon species, phase and master
 # species whose carbon is not +4 by actual oxidation state (H +1, O -2, N -3,
@@ -101,7 +102,7 @@
 #   species Zn(CH3COO)2      acetate complex              C(0)      line 2942: 2 CH3COOH + Zn+2 = Zn(CH3COO)2 + 2 H+
 #   species Zn(CH3COO)3-     acetate complex              C(0)      line 2953: 3 CH3COOH + Zn+2 = Zn(CH3COO)3- + 3 H+
 #   species ZnCH3COO+        acetate complex              C(0)      line 2964: Zn+2 + CH3COOH = ZnCH3COO+ + H+
-# Kept carbon species/phases (46): 
+# Kept carbon species/phases (46):
 #   HCO3-, Mtg, SCN-, NaCO3-, NH4CO3-, CO2, CO3-2, CO(NH2)2, CaCO3, EuCO3+
 #   EuHCO3+2, GdCO3+, GdHCO3+2, MgCO3, NaHCO3, SmCO3+, SmHCO3+2, Mtg_hydrate
 #   CO2_hydrate, Aragonite, Artinite, Azurite, Calcite, Dawsonite, Dolomite
