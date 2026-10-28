@@ -265,7 +265,7 @@ restrict_to_database <- function(text, database, base = NULL) {
 #               capped at 1: a bubble larger than the pores (pore_gas_fate = "retain") is not physical.
 
 MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
-# Density of the remaining IOM (g/cm3). UNSOURCED, see README (Model choices: rock density):
+# Density of the remaining IOM (g/cm3). UNSOURCED, see README section 7 (Rock density):
 # a measured density for chondritic IOM or kerogen is needed. 1.4 g/cm3 is a placeholder.
 IOM_DENSITY_G_CM3 <- 1.4
 

@@ -932,3 +932,12 @@ One commit per item; each commit message has its pass check.
 - `tidal_equil` gains `trace_C_molal` (default NULL): with a cometary ocean and no seed every case
   failed ("Cl has not converged"); with 1e-14 they run, except `to_ocean` + `c4_only`, which crashes
   PHREEQC (segmentation fault in the ocean step).
+
+### gas-ice-docs branch, Stage 6: tests and the generator matrix (2026-10-28)
+
+- All 14 self-tests pass (`tests/README.md`), including the long `restart_closure_check.R` and
+  `gas_mass_balance_check.R`, on the final code.
+- `docs/MATRIX_2026-10-28.md`: 102 runs (every generator x carbon mode x pore_gas_fate x initial
+  ocean x 25/100/160 C, 1 orbit, plus restarts): 87 converge; the failures are the unseeded cometary
+  `tidal_equil` cases (rerun with the seed: converge) and `tidal_equil` + `to_ocean` + cometary +
+  `c4_only`, which crashes PHREEQC 3.8.6.
