@@ -20,6 +20,8 @@ exchanging fluid with the ocean each orbit. You run those inputs with PHREEQC.
 | `parameter_sweep.R` | Parameter sweep helper used by `ENTICES_runs.Rmd`. |
 | `CHANGELOG.md` | Change log for the main file. |
 | `databases/` | PHREEQC thermodynamic databases. See `databases/README.md` for which to use when. |
+| `profiles/` | The PlanetProfile interior profile that sets temperatures and pressures (`profiles/README.md`). |
+| `data/` | `mineral_molar_volumes.csv`: molar volumes for rock density (`data/README.md`). |
 | `reconstruction/` | Primordial CI chondrite mineralogy reconstruction: the source of the rock composition. |
 | `tests/` | Self-tests and the PHREEQC test inputs, with their outputs in `tests/output/`. |
 | `examples/` | Example production run (`from_lucas_20260924/`) and the redox budget diagnostic inputs. |
@@ -103,6 +105,42 @@ as `# parent trace_C_molal:` / `# parent initial_ocean:`.
 identical blank with the organics absent (same mineral inventory), and returns
 the organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
 
+## Interpreting outputs
+
+### Rock density
+
+PHREEQC reports no solid volumes, so rock density is computed in R from a run's selected output:
+
+```r
+source("phreeqc_tools.R")
+d <- bulk_density("phreeqc_inputs/<file>.csv", porosity = sim$params$porosity)
+d$summary     # per REACT step (and t = 0 from the .pqi): rho_solid, rho_fluid, rho_bulk
+d$breakdown   # per phase: mass and volume, and their fractions
+```
+
+- `rho_solid` = Σ nᵢMᵢ / Σ nᵢVᵢ over every mineral with nonzero moles (equilibrium phases, kinetic
+  primaries, schreibersite, Fe/Ni metal, clathrates) and the remaining IOM. Molar volumes come from
+  `data/mineral_molar_volumes.csv` (sources in `data/README.md`), at 25 °C and 1 bar. Leaving out
+  thermal expansion and compression costs about 1% for silicates at 160 °C and 26 MPa, less than the
+  porosity and IOM-density uncertainty.
+- Remaining IOM mass = initial IOM − Σ (m0ᵢ − nᵢ) × M(formulaᵢ) over the IOM channels (each
+  channel's `-formula` is what the solid loses). Its density, `IOM_DENSITY_G_CM3` = 1.4 g/cm³, is
+  **UNSOURCED** [citation needed: a measured density of chondritic IOM or kerogen].
+- `rho_bulk` = (1 − φ) ρ_solid + φ ρ_fluid, with φ the model's porosity (`Simulator$params$porosity`,
+  0.32) and ρ_fluid PHREEQC's solution density (`Rho_soln` column). Under the LLNL aqueous model
+  PHREEQC does not compute water's density from T and P, so `Rho_soln` is about 1 g/cm³ at any
+  temperature; give `fluid_density =` to override.
+
+For Lucas's 160 °C production case (12 orbits, 15 wt% IOM, φ = 0.32, ρ_fluid = 1): ρ_solid
+2.985 g/cm³ and ρ_bulk 2.349 g/cm³ at t = 0; 2.795 and 2.221 after 12 orbits, mostly from lizardite
+(26% of the solid volume by orbit 12) taking up water. The profile itself gives a silicate-layer
+density of 2353 kg/m³ (`rhoSil_kgm3` in its header).
+
+**Comparing with Enceladus.** A published core density is a bulk density (porosity and pore fluid
+included), so compare it with `rho_bulk`, not `rho_solid`. The usual reference is Iess et al. (2014)
+[citation needed: the core density and its uncertainty, to be taken from the paper; the PDF was not
+available here].
+
 ## Self-tests
 
 ```
@@ -111,6 +149,9 @@ Rscript tests/rock_table_check.R    # ROCK_MOL_PER_KG vs reconstruction/rock_mol
 Rscript tests/db_load_check.R       # every databases/*.dat loads in PHREEQC with 0 errors
 Rscript tests/carbon_rebin_check.R  # carbon by actual oxidation state, on the N1 leak test output
 Rscript tests/c4only_db_check.R     # coreclath_C4only.dat: C(+4)-only carbon; restrict_to_database()
+Rscript tests/pressure_check.R      # profile pressures in every generator; restart pressure check
+Rscript tests/initial_fluid_check.R # initial porewater from 25 C to 25/160/300 C: converges, no O2
+Rscript tests/bulk_density_check.R  # molar volumes, bulk_density(), t = 0 vs the reconstruction
 ```
 
 Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` and `c4only_db_check.R` need PHREEQC; set

@@ -110,11 +110,13 @@ schreibersite_kinetics_entry <- function(m0) {
   sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.6e\n      -step_divide 1", m0)
 }
 
-# Fe metal is punched as Fe_metal / d_Fe_metal rather than listed in -equilibrium_phases, where its
-# column was headed "Fe", the same as the -totals Fe (dissolved iron) column. The phase is still
-# called Fe in the databases and in EQUILIBRIUM_PHASES blocks.
-FE_METAL_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal"
-FE_METAL_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n'
+# USER_PUNCH columns every generator ends with. Fe metal is punched as Fe_metal / d_Fe_metal rather
+# than listed in -equilibrium_phases, where its column was headed "Fe", the same as the -totals Fe
+# (dissolved iron) column. The phase is still called Fe in the databases and in EQUILIBRIUM_PHASES
+# blocks. Rho_soln is the solution density PHREEQC reports (RHO, g/cm3), the fluid term of
+# bulk_density() (phreeqc_tools.R).
+SHARED_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal Rho_soln"
+SHARED_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n   920 PUNCH RHO\n'
 # Optional trace carbon in the initial SOLUTIONs of the kinetic generators (trace_C_molal, mol/kgw;
 # NULL = pure water). A numerical seed, not a composition: the science case is pure water, so that
 # all ocean carbon can be attributed to the organics. Returns the SOLUTION line, with its leading
@@ -2172,7 +2174,7 @@ SELECTED_OUTPUT
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings, FE_METAL_PUNCH_HEADINGS, "\n",
+                                         iom_punch_headings, SHARED_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          "   20 PUNCH KIN(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH KIN(\"Forsterite\") * 140.6715\n",
@@ -2186,7 +2188,7 @@ SELECTED_OUTPUT
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
                                          iom_punch_lines,
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
@@ -2790,7 +2792,7 @@ SELECTED_OUTPUT
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
-                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", FE_METAL_PUNCH_HEADINGS, "\n",
+                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", SHARED_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f\n", cumulative_time),
                                          "   20 PUNCH EQUI(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH EQUI(\"Forsterite\") * 140.6715\n",
@@ -2802,7 +2804,7 @@ SELECTED_OUTPUT
                                          "   85 PUNCH EQUI(\"Tephroite\") * 201.96\n",
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
@@ -3150,7 +3152,7 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{SHARED_PUNCH_HEADINGS}
    10 PUNCH 0.0
    20 PUNCH EQUI("Enstatite") * 100.3725
    30 PUNCH EQUI("Forsterite") * 140.6715
@@ -3162,7 +3164,7 @@ USER_PUNCH
    85 PUNCH EQUI("Tephroite") * 201.96
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}
 END
 ')
 
@@ -3752,14 +3754,14 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}{SHARED_PUNCH_HEADINGS}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    95 PUNCH KIN("Schreibersite") * 198.509
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
 {iom_punch_lines}
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}
 END
 ')
 
@@ -4305,13 +4307,13 @@ SELECTED_OUTPUT
                          NH3(g) NO(g) NO2(g) O2(g) SO2(g)
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}{SHARED_PUNCH_HEADINGS}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    {10 + (length(all_primary) + 1) * 10} total_initial = {total_initial_expr}
    {10 + (length(all_primary) + 2) * 10} PUNCH total_initial
 {iom_punch_lines_restart}
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}
 END
 ')
 
@@ -5023,7 +5025,7 @@ SELECTED_OUTPUT
                                          "SAVE equilibrium_phases 1\n",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings_tidal, FE_METAL_PUNCH_HEADINGS, "\n",
+                                         iom_punch_headings_tidal, SHARED_PUNCH_HEADINGS, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          paste(sapply(seq_along(all_primary), function(j) {
                                            make_punch_line(10 + j * 10, all_primary[j])
@@ -5031,7 +5033,7 @@ SELECTED_OUTPUT
                                          sprintf("   %d total_initial = %s\n", 10 + (length(all_primary) + 1) * 10, total_initial_expr),
                                          sprintf("   %d PUNCH total_initial\n", 10 + (length(all_primary) + 2) * 10),
                                          iom_punch_lines_tidal,
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES,
                                          "END\n\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases 2\n",

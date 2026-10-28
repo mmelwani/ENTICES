@@ -11,6 +11,7 @@ Run everything from the repo root.
 | `c4only_db_check.R` | `Rscript tests/c4only_db_check.R` | `databases/coreclath_C4only.dat` (header, C(+4)-only speciation) and `restrict_to_database()` (`phreeqc_tools.R`) on `N1_leak_T100.pqi`; `scripts/make_c4only.py` regenerates the database exactly (needs Python, else skipped). |
 | `pressure_check.R` | `Rscript tests/pressure_check.R` | Profile pressures in every generator's input, the header stamps, the missing-profile error and the restart pressure check (generates inputs only). |
 | `initial_fluid_check.R` | `Rscript tests/initial_fluid_check.R` | Each generator's initial porewater brought from 25 C to 25, 160 and 300 C: converges, at the profile pressure, with negligible O(0) and H(0). |
+| `bulk_density_check.R` | `Rscript tests/bulk_density_check.R` | `data/mineral_molar_volumes.csv` covers every production phase; `solid_density()` closes mass and volume on a hand-built case; the Scenario R rock matches the reconstruction's phase library. |
 | `test_A4_formulas.pqi` | `phreeqc tests/test_A4_formulas.pqi out.txt databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B2_Hdg_carbon.pqi` | same pattern, coupled coreclath | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B3_real_assemblage.pqi` | same pattern, `databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_B3_real_assemblage_2026-09-27.md` |

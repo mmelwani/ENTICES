@@ -824,3 +824,10 @@ One commit per item; each commit message has its pass check.
   reacted state). `tests/initial_fluid_check.R` runs each generator's initial
   porewater at 25, 160 and 300 C.
 - `profiles/README.md`: provenance of the Enceladus profile (PlanetProfile).
+- **Mineral molar volumes and rock density.** `scripts/export_mineral_volumes.py` writes
+  `data/mineral_molar_volumes.csv`: a volume for every non-gas phase of the coreclath databases plus
+  Schreibersite, by the PI's source priority (Core11, then Green et al. 2025 ds636, then Perple_X
+  hp636, then PI-supplied values). Every production phase is covered; Fluorite and Fluorapatite are
+  unfilled. `bulk_density()` (`phreeqc_tools.R`) gives rho_solid, rho_bulk and a per-phase breakdown
+  through a run; the IOM density (1.4 g/cm3) is UNSOURCED. Every generator now punches `Rho_soln`
+  (PHREEQC's RHO); `FE_METAL_PUNCH_*` are renamed `SHARED_PUNCH_*`. `tests/bulk_density_check.R`.

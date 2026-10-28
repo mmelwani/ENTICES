@@ -3,6 +3,8 @@
 # actual oxidation state of C in each species (see the section at the end).
 # And database_names() / restrict_to_database(): the PHASES and species a
 # database defines, and an input text cut down to them (see the database section).
+# And bulk_density(): rock and bulk density through a run, from the mineral and
+# IOM moles in its selected output (see the rock density section at the end).
 #
 # ENTICES targets PHREEQC 3.8.6 (PHREEQC_EXPECTED_VERSION). Results from other
 # versions can differ in minor phases and trace species (see
@@ -241,4 +243,130 @@ restrict_to_database <- function(text, database, base = NULL) {
   attr(out, "dropped") <- unique(dropped)
   attr(out, "dropped_nonzero") <- nonzero
   out
+}
+
+# ---- Rock density ------------------------------------------------------------
+#
+# PHREEQC uses a mineral's -Vm only to correct log K for pressure; it reports no solid volumes or
+# densities (RHO is the solution's). bulk_density() computes them in R from the mineral and IOM
+# moles in a run's SELECTED_OUTPUT, with the molar volumes in data/mineral_molar_volumes.csv
+# (written by scripts/export_mineral_volumes.py; 25 C, 1 bar values, no thermal or compressibility
+# correction: leaving it out costs ~1% for silicates at 160 C and 26 MPa, less than the porosity
+# and IOM-density uncertainty).
+#
+#   rho_solid = sum(n_i M_i) / sum(n_i V_i) over every mineral with nonzero moles (equilibrium
+#               phases, kinetic primaries, schreibersite, Fe/Ni metal, clathrates) plus the
+#               remaining IOM at IOM_DENSITY_G_CM3
+#   rho_bulk  = (1 - porosity) rho_solid + porosity rho_fluid
+
+MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
+# Density of the remaining IOM (g/cm3). UNSOURCED, see README (Model choices: rock density):
+# a measured density for chondritic IOM or kerogen is needed. 1.4 g/cm3 is a placeholder.
+IOM_DENSITY_G_CM3 <- 1.4
+
+# The volumes table: phase, formula, molar mass (g/mol), Vm (cm3/mol).
+read_mineral_volumes <- function(file = MINERAL_VOLUMES_CSV) {
+  v <- utils::read.csv(file, stringsAsFactors = FALSE, check.names = FALSE)
+  v[!is.na(v$Vm_cm3_mol), c("phase", "formula", "molar_mass_g_mol", "Vm_cm3_mol")]
+}
+
+# Element gram formula weights from a database's SOLUTION_MASTER_SPECIES (element rows only),
+# pseudo-elements (Mtg, Hdg, ...) included.
+element_gfw <- function(database) {
+  l <- sub("#.*", "", readLines(database, warn = FALSE, encoding = "UTF-8"))
+  i <- which(trimws(l) == "SOLUTION_MASTER_SPECIES"); j <- which(trimws(l) == "SOLUTION_SPECIES")[1]
+  t <- strsplit(trimws(l[(i + 1):(j - 1)]), "\\s+")
+  t <- t[vapply(t, function(x) length(x) >= 5 && !grepl("\\(", x[1]), logical(1))]
+  stats::setNames(as.numeric(vapply(t, `[`, "", 5)), vapply(t, `[`, "", 1))
+}
+# Mass (g/mol) of a KINETICS -formula ("C 1 H 1 O 1.3115", "Mtg 1 H -2.2").
+kinetics_formula_mass <- function(formula, gfw) {
+  t <- strsplit(trimws(formula), "\\s+")[[1]]
+  el <- t[c(TRUE, FALSE)]; n <- as.numeric(t[c(FALSE, TRUE)])
+  if (any(!el %in% names(gfw))) stop("no gram formula weight for: ", paste(setdiff(el, names(gfw)), collapse = ", "))
+  sum(gfw[el] * n)
+}
+
+# Solid density from phase moles (named numeric, mol) and a mass of IOM (g). Returns
+# list(rho_solid, mass_g, volume_cm3, breakdown: phase, mol, mass_g, volume_cm3, mass_frac, vol_frac).
+# A phase with moles but no molar volume is an error (so nothing is silently dropped).
+solid_density <- function(moles, iom_g = 0, iom_density = IOM_DENSITY_G_CM3, volumes = read_mineral_volumes()) {
+  moles <- moles[!is.na(moles) & moles > 0]
+  miss <- setdiff(names(moles), volumes$phase)
+  if (length(miss)) stop("no molar volume in ", MINERAL_VOLUMES_CSV, " for: ", paste(miss, collapse = ", "))
+  k <- match(names(moles), volumes$phase)
+  b <- data.frame(phase = names(moles), mol = unname(moles),
+                  mass_g = unname(moles) * volumes$molar_mass_g_mol[k],
+                  volume_cm3 = unname(moles) * volumes$Vm_cm3_mol[k], stringsAsFactors = FALSE)
+  if (iom_g > 0) b <- rbind(b, data.frame(phase = "IOM", mol = NA_real_, mass_g = iom_g, volume_cm3 = iom_g / iom_density))
+  m <- sum(b$mass_g); v <- sum(b$volume_cm3)
+  b$mass_frac <- b$mass_g / m; b$vol_frac <- b$volume_cm3 / v
+  list(rho_solid = m / v, mass_g = m, volume_cm3 = v, breakdown = b[order(-b$vol_frac), ])
+}
+
+# The solids a generated .pqi starts with: KINETICS 1 -m0 (minerals; IOM channels with their
+# -formula) and EQUILIBRIUM_PHASES 1 initial amounts, and the initial IOM mass from the
+# "# Organic content: X wt.%" header (per kg of rock; 0 if absent).
+pqi_initial_solids <- function(pqi) {
+  l <- readLines(pqi, warn = FALSE)
+  blk <- function(kw) { i <- grep(paste0("^", kw, "$"), l)[1]; if (is.na(i)) return(character(0))
+    j <- i + 1; while (j <= length(l) && !grepl("^[A-Z_]+( |$)", l[j])) j <- j + 1; l[(i + 1):(j - 1)] }
+  kin <- blk("KINETICS 1"); ep <- blk("EQUILIBRIUM_PHASES 1")
+  nm <- character(0); m0 <- numeric(0); fo <- character(0)
+  for (s in kin) {
+    if (grepl("^   [A-Za-z]", s) && !grepl("^\\s+-", s)) { nm <- c(nm, trimws(s)); m0 <- c(m0, NA); fo <- c(fo, NA) }
+    else if (grepl("^\\s+-m0\\s", s)) m0[length(m0)] <- as.numeric(sub("^\\s+-m0\\s+", "", s))
+    else if (grepl("^\\s+-formula\\s", s)) fo[length(fo)] <- trimws(sub("^\\s+-formula\\s+", "", s))
+  }
+  epl <- grep("^\\s+[A-Za-z]", sub("#.*", "", ep), value = TRUE)
+  ept <- strsplit(trimws(epl), "\\s+")
+  epm <- stats::setNames(vapply(ept, function(t) as.numeric(t[3]), 0), vapply(ept, `[`, "", 1))
+  org <- suppressWarnings(as.numeric(sub(".*: ([0-9.]+) wt.*", "\\1", grep("^# Organic content: ", l, value = TRUE)[1])))
+  iom <- grepl("^IOM_", nm)
+  list(minerals = c(stats::setNames(m0[!iom], nm[!iom]), epm[epm > 0]),
+       iom = data.frame(name = nm[iom], m0 = m0[iom], formula = fo[iom], stringsAsFactors = FALSE),
+       iom_mass0_g = if (is.na(org)) 0 else org / 100 * 1000,
+       database = sub("^# Database: ", "", grep("^# Database: ", l, value = TRUE)[1]))
+}
+
+# Rock and bulk density through a run. csv: a SELECTED_OUTPUT file; its .pqi (same name) must be
+# beside it, for the IOM formulas and initial amounts. porosity: the model's porosity
+# (Simulator$params$porosity, 0.32 by default). Rows: t = 0 (from the .pqi) and every porewater
+# row that holds the rock (solution 1 with nonzero solids: each REACT step). fluid_density: NULL
+# uses the run's Rho_soln column (PHREEQC's RHO; under the LLNL aqueous model this is ~1 g/cm3 for
+# water at any T and P, see README), else a number in g/cm3. Returns list(summary, breakdown).
+bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_density = IOM_DENSITY_G_CM3,
+                         fluid_density = NULL, volumes = read_mineral_volumes()) {
+  if (missing(porosity) || !is.numeric(porosity) || porosity < 0 || porosity >= 1)
+    stop("porosity: give the model's porosity (Simulator$params$porosity)")
+  init <- pqi_initial_solids(pqi)
+  gfw <- element_gfw(init$database)
+  iom_M <- vapply(init$iom$formula, kinetics_formula_mass, 0, gfw = gfw)
+  x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  x$state <- trimws(x$state)
+  totals <- c("Al", "C", "Ca", "Fe", "H", "K", "Mg", "Mn", "N", "Na", "O", "P", "S", "Si", "Cl", "Mtg", "Ntg", "Hdg", "Sg", "Oxg")
+  ep_cols <- setdiff(intersect(names(x), volumes$phase), totals)
+  kin_cols <- grep("^k_", names(x), value = TRUE)
+  kin_min <- intersect(sub("^k_", "", kin_cols), volumes$phase)
+  rows <- list(); bd <- list()
+  add <- function(label, time, moles, iom_g, rho_f) {
+    s <- solid_density(moles, iom_g, iom_density, volumes)
+    rows[[length(rows) + 1]] <<- data.frame(row = label, Time_Years = time, rho_solid = s$rho_solid,
+                                             rho_fluid = rho_f, rho_bulk = (1 - porosity) * s$rho_solid + porosity * rho_f,
+                                             solid_mass_g = s$mass_g, solid_volume_cm3 = s$volume_cm3, iom_g = iom_g)
+    bd[[length(bd) + 1]] <<- cbind(row = label, s$breakdown)
+  }
+  rho_col <- if ("Rho_soln" %in% names(x)) "Rho_soln" else NULL
+  add("t0", 0, init$minerals, init$iom_mass0_g, if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  for (r in which(x$state == "react" & trimws(x$soln) == "1")) {
+    mol <- c(stats::setNames(as.numeric(x[r, paste0("k_", kin_min)]), kin_min),
+             stats::setNames(as.numeric(x[r, ep_cols]), ep_cols),
+             if ("Fe_metal" %in% names(x)) c(Fe = as.numeric(x$Fe_metal[r])))
+    if (sum(mol[mol > 0], na.rm = TRUE) == 0) next          # a MIX row: no solids
+    n_iom <- if (nrow(init$iom)) as.numeric(x[r, paste0("k_", init$iom$name)]) else numeric(0)
+    iom_g <- max(0, init$iom_mass0_g - sum((init$iom$m0 - n_iom) * iom_M))
+    rho_f <- if (!is.null(fluid_density)) fluid_density else if (!is.null(rho_col)) as.numeric(x[[rho_col]][r]) else 1.0
+    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, rho_f)
+  }
+  list(summary = do.call(rbind, rows), breakdown = do.call(rbind, bd))
 }
