@@ -153,6 +153,8 @@ Rscript tests/pressure_check.R      # profile pressures in every generator; rest
 Rscript tests/initial_fluid_check.R # initial porewater from 25 C to 25/160/300 C: converges, no O2
 Rscript tests/bulk_density_check.R  # molar volumes, bulk_density(), t = 0 vs the reconstruction
 Rscript tests/restart_closure_check.R # restarts conserve every element (runs PHREEQC, ~6 min)
+Rscript tests/gas_eos_check.R        # Peng-Robinson constants; H2 PR vs ideal
+Rscript tests/gas_mass_balance_check.R # gas phases conserve mass, both pore_gas_fate options (~15 min)
 ```
 
 Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` and `c4only_db_check.R` need PHREEQC; set

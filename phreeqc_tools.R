@@ -258,7 +258,11 @@ restrict_to_database <- function(text, database, base = NULL) {
 #   rho_solid = sum(n_i M_i) / sum(n_i V_i) over every mineral with nonzero moles (equilibrium
 #               phases, kinetic primaries, schreibersite, Fe/Ni metal, clathrates) plus the
 #               remaining IOM at IOM_DENSITY_G_CM3
-#   rho_bulk  = (1 - porosity) rho_solid + porosity rho_fluid
+#   rho_bulk  = (1 - porosity) rho_solid + porosity rho_pore, where the pores hold the fluid and, since
+#               the gas phases of 2026-10-28, the pore gas bubble: rho_pore = (1 - s_g) rho_fluid +
+#               s_g rho_gas, with gas saturation s_g = min(Vgas / Vpore, 1) (Vgas_Vpore column) and
+#               rho_gas the bubble's mass (sum of its g_ moles x molar mass) over its volume. s_g is
+#               capped at 1: a bubble larger than the pores (pore_gas_fate = "retain") is not physical.
 
 MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
 # Density of the remaining IOM (g/cm3). UNSOURCED, see README (Model choices: rock density):
@@ -359,10 +363,12 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   kin_cols <- grep("^k_", names(x), value = TRUE)
   kin_min <- intersect(sub("^k_", "", kin_cols), volumes$phase)
   rows <- list(); bd <- list()
-  add <- function(label, time, moles, iom_g, rho_f) {
+  add <- function(label, time, moles, iom_g, rho_f, s_g = 0, rho_g = 0) {
     s <- solid_density(moles, iom_g, iom_density, volumes)
+    rho_p <- (1 - s_g) * rho_f + s_g * rho_g
     rows[[length(rows) + 1]] <<- data.frame(row = label, Time_Years = time, rho_solid = s$rho_solid,
-                                             rho_fluid = rho_f, rho_bulk = (1 - porosity) * s$rho_solid + porosity * rho_f,
+                                             rho_fluid = rho_f, gas_saturation = s_g, rho_gas = rho_g,
+                                             rho_bulk = (1 - porosity) * s$rho_solid + porosity * rho_p,
                                              solid_mass_g = s$mass_g, solid_volume_cm3 = s$volume_cm3, iom_g = iom_g)
     bd[[length(bd) + 1]] <<- cbind(row = label, s$breakdown)
   }
@@ -376,7 +382,14 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
     n_iom <- if (nrow(init$iom)) as.numeric(x[r, paste0("k_", init$iom$name)]) else numeric(0)
     iom_g <- max(0, init$iom_mass0_g - sum((init$iom$m0 - n_iom) * iom_M))
     rho_f <- if (!is.null(fluid_density)) fluid_density else if (!is.null(rho_col)) as.numeric(x[[rho_col]][r]) else 1.0
-    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, rho_f)
+    # the pore gas bubble (gas phase in use on this REACT row)
+    vg <- if ("Vgas_L" %in% names(x)) as.numeric(x$Vgas_L[r]) else 0
+    s_g <- if (vg > 0 && "Vgas_Vpore" %in% names(x)) min(as.numeric(x$Vgas_Vpore[r]), 1) else 0
+    mg <- sum(vapply(grep("^g_", names(x), value = TRUE), function(k) {
+      fe <- formula_elements(sub("\\(g\\)$", "", sub("^g_", "", k)))
+      as.numeric(x[r, k]) * sum(gfw[names(fe)] * fe) }, 0))  # g
+    rho_g <- if (vg > 0) mg / (vg * 1000) else 0           # g / cm3
+    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, rho_f, s_g, rho_g)
   }
   list(summary = do.call(rbind, rows), breakdown = do.call(rbind, bd))
 }
@@ -425,11 +438,13 @@ formula_elements <- function(f) {
 
 # Element totals (mol) of row i of a selected-output data frame x (read with check.names = FALSE).
 # elements: the -totals elements (pqi_initial_solids(pqi)$totals); iom: pqi_initial_solids(pqi)$iom.
-# The -totals H and O exclude water, so water (mass_H2O / 18.01528 g/mol) is added to both.
+# H and O: the H_total_mol / O_total_mol columns (water included) where the run punches them; else
+# the -totals H and O (which leave out water) plus water as mass_H2O / 18.01528 g/mol (approximate).
 system_totals <- function(x, i, elements, iom = NULL, volumes = utils::read.csv(MINERAL_VOLUMES_CSV, stringsAsFactors = FALSE)) {
   nm <- names(x); w <- as.numeric(x$mass_H2O[i])
   tot <- stats::setNames(vapply(elements, function(e) as.numeric(x[i, match(e, nm)]) * w, 0), elements)
-  tot[c("H", "O")] <- tot[c("H", "O")] + c(2, 1) * w / 0.01801528
+  if (all(c("H_total_mol", "O_total_mol") %in% nm)) tot[c("H", "O")] <- c(as.numeric(x$H_total_mol[i]), as.numeric(x$O_total_mol[i]))
+  else tot[c("H", "O")] <- tot[c("H", "O")] + c(2, 1) * w / 0.01801528
   addf <- function(n, f) { if (is.na(n) || n == 0) return(); fe <- formula_elements(f)
     for (e in names(fe)) tot[e] <<- (if (is.na(tot[e])) 0 else tot[e]) + n * fe[[e]] }
   form <- stats::setNames(volumes$formula, volumes$phase)

@@ -13,6 +13,8 @@ Run everything from the repo root.
 | `initial_fluid_check.R` | `Rscript tests/initial_fluid_check.R` | Each generator's initial porewater brought from 25 C to 25, 160 and 300 C: converges, at the profile pressure, with negligible O(0) and H(0). |
 | `bulk_density_check.R` | `Rscript tests/bulk_density_check.R` | `data/mineral_molar_volumes.csv` covers every production phase; `solid_density()` closes mass and volume on a hand-built case; the Scenario R rock matches the reconstruction's phase library. |
 | `restart_closure_check.R` | `Rscript tests/restart_closure_check.R` | A 2-orbit run vs a 1-orbit run plus a 1-orbit restart (tidal and bulk, 160 C, 15 wt% IOM): every element's system total agrees within 1e-9 relative or the solver's mole-balance tolerance. Runs PHREEQC, about 6 minutes. |
+| `gas_eos_check.R` | `Rscript tests/gas_eos_check.R` | Every gas a generator puts in a GAS_PHASE has Peng-Robinson constants in all three databases; H2 at 160 C, 261.2 atm, PR against ideal. |
+| `gas_mass_balance_check.R` | `Rscript tests/gas_mass_balance_check.R` | Whole-system element totals per orbit for both `pore_gas_fate` options (160 C, 15 wt% IOM, <= 1e-9); the no-bubble identity (25 C, no metal). Runs PHREEQC, about 15 minutes. |
 | `test_A4_formulas.pqi` | `phreeqc tests/test_A4_formulas.pqi out.txt databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B2_Hdg_carbon.pqi` | same pattern, coupled coreclath | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B3_real_assemblage.pqi` | same pattern, `databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_B3_real_assemblage_2026-09-27.md` |

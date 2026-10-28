@@ -856,3 +856,41 @@ One commit per item; each commit message has its pass check.
   solids, IOM and gas. `tests/restart_closure_check.R`: 2 orbits vs 1 + restart 1, tidal and bulk,
   160 C, 15 wt% IOM: every element total agrees within 1e-9 relative or the solver tolerance (max
   4.8e-13 for the rock-dominated totals).
+
+### gas-ice-docs branch, Stage 2: fixed-pressure gas phases (2026-10-28)
+
+- **Gases leave EQUILIBRIUM_PHASES.** Every `X(g) 0 0` equilibrium phase (an infinite reservoir at
+  1 atm, which capped dissolved gases at their 1-atm solubility and kept what exsolved) is gone from
+  all six generators and both restarts. Each reservoir has a fixed-pressure GAS_PHASE instead,
+  starting empty: porewater GAS_PHASE 1 at the porewater pressure, ocean GAS_PHASE 2 at the ocean
+  pressure (tidal generators; never emptied), and one GAS_PHASE 1 at the solution's pressure in the
+  bulk generators. Components (`gas_components()`): the gases the EP lists carried, filtered by
+  carbon mode (`c4_only`: Mtg(g) CO2(g) H2(g) H2S(g) N2(g) NH3(g) SO2(g)). Clathrates stay
+  equilibrium phases.
+- **`pore_gas_fate`** (`tidal_kinetic`, `tidal_equil`, `tidal_kinetic_restart`): `"retain"`
+  (default) keeps the pore bubble with the porewater; `"to_ocean"` moves its moles into the ocean
+  step each orbit (USER_PUNCH `PUT` + `KINETICS 3` at a constant rate over 1 s; `gas_transfer_block()`)
+  and starts the porewater's next orbit with an empty gas phase. Stamped in the header; a restart
+  warns if it differs from its parent's.
+- **Peng-Robinson for every gas** (`scripts/gas_eos.py`; `--ideal` reverses it): ordinary gases get
+  their own commented constants back, the decoupled gases their analogues' (Mtg←CH4, Hdg←H2,
+  H2Sg←H2S, Ntg←N2, Oxg←O2, as in phreeqc.dat 3.8.6); H2's Omega is −0.225 (phreeqc.dat), not the
+  entry's +0.225. H2 at 160 °C, 261.2 atm: PR dissolves 8.3% more at saturation and its bubble's
+  molar volume is 8.7% larger than ideal (`tests/gas_eos_check.R`).
+- **Diagnostics punched every row:** `Vgas_L`, `P_gas_atm` (0 when there is no bubble),
+  `Vgas_Vpore` (gas volume over the pore volume, from the porewater mass at 1 kg/L), and each
+  component's moles (`g_` columns, `-gases`). `H_total_mol`, `O_total_mol` (total H and O with water;
+  the `-totals` H and O leave water out) for mass balance.
+- **Convergence:** `-high_precision` (item 4) also sets PHREEQC's mole-balance criterion to 1e-12;
+  with a gas phase the metal-pulse step then ran for > 15 min. A KNOBS after SELECTED_OUTPUT puts
+  back the default 1e-8 (the last setting read wins: PHREEQC read.cpp; the manual says "the smaller
+  of"). Gas-phase runs are still ~10x slower than before (2 orbits at 160 °C: ~140-280 s).
+- **Restarts** rebuild both gas phases from the parent's last cycle (`GAS_PHASE_MODIFY`, moles to
+  15 digits; `gas_restore_block()`).
+- `organic_contribution()` also reports the ocean gas phase's components (mol).
+- `bulk_density()` includes the pore gas bubble: rho_pore = (1 - s_g) rho_fluid + s_g rho_gas, gas
+  saturation s_g = min(Vgas/Vpore, 1).
+- `ocean_gas_loss_fraction_per_orbit` was not added: removing a fraction of a gas phase's moles at
+  run time has no simple PHREEQC route (see PROGRESS).
+- `tests/gas_mass_balance_check.R`: whole-system element totals per orbit, both fates (≤ 1e-11);
+  the no-bubble identity (25 °C, no metal).
