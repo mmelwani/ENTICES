@@ -831,3 +831,11 @@ One commit per item; each commit message has its pass check.
   unfilled. `bulk_density()` (`phreeqc_tools.R`) gives rho_solid, rho_bulk and a per-phase breakdown
   through a run; the IOM density (1.4 g/cm3) is UNSOURCED. Every generator now punches `Rho_soln`
   (PHREEQC's RHO); `FE_METAL_PUNCH_*` are renamed `SHARED_PUNCH_*`. `tests/bulk_density_check.R`.
+- **Mineral molar volumes stripped from the databases** (database change for Lucas to confirm).
+  `scripts/strip_mineral_vm.py` comments out (`#vm# `) the `-Vm`/`Vm` line of every non-gas PHASES
+  entry in the coupled and uncoupled databases (384 each, 1 unhyphenated); `make_c4only.py` applies
+  the same pass (flag `strip_mineral_vm`, `--no-strip-mineral-vm`). With aqueous volumes inactive
+  under the LLNL model, the term shifted each mineral's log K by its whole Vm·ΔP/(ln10·RT)
+  (antigorite −4.16 at 261 atm). Mineral equilibria are now at the database reference pressure
+  (~0.1–0.2 log unit omission at 260 bar). Check: the 160 °C production case at 66.7 vs 261.2 atm
+  gives byte-identical CSVs, 265 warnings each (was 350 / 641), 116 s (was 481 / 672 s).

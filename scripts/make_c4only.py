@@ -12,6 +12,9 @@ Usage (from the repo root):
     python scripts/make_c4only.py <src.dat> <out.dat>
     python scripts/make_c4only.py <src.dat> <out.dat> --keep HCOOH HCOO-
         (--keep re-admits the named entries, for sensitivity runs; not for production)
+    python scripts/make_c4only.py --no-strip-mineral-vm
+        (keeps mineral -Vm lines; by default strip_mineral_vm is on, and the output gets the same
+        pass that scripts/strip_mineral_vm.py gives the other coreclath databases)
 
 Line endings: the source is read with any line ending and the output is written with
 CRLF, like the other databases. The source hash in the header is of the source with LF
@@ -23,7 +26,11 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from strip_mineral_vm import strip_lines
 args = [a for a in sys.argv[1:]]
+strip_mineral_vm = "--no-strip-mineral-vm" not in args
+args = [a for a in args if a != "--no-strip-mineral-vm"]
 keep_extra = set()
 if "--keep" in args:
     i = args.index("--keep")
@@ -169,5 +176,6 @@ for n in kept_c:
     w += n + ", "
 H.append(w.rstrip(", "))
 H += ["# ============================================================================", "#"]
+new, n_vm, _ = strip_lines(new, strip_mineral_vm)  # a no-op if the source was already stripped
 open(out, "wb").write("\r\n".join(H + new).encode("utf-8"))
 print(f"{out}: removed {len(removed)} entries, kept {len(kept_c)} carbon species/phases")

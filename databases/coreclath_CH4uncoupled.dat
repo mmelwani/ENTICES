@@ -1,3 +1,4 @@
+# Mineral molar volumes (-Vm) commented out with '#vm# ' by scripts/strip_mineral_vm.py (LLNL aqueous model: see that script); --restore reverses it.
 # Marc Neveu - created March 2, 2017. marc.f.neveu@nasa.gov
 #
 #
@@ -3043,13 +3044,13 @@ PHASES
 Mtg_hydrate # Tishchenko et al. (2005) https://doi.org.10.1016/j.chemgeo.2005.02.008
 	Mtg:6H2O = Mtg + 6 H2O
 	-analytic	-1.0654E+01	4.2897E-02	0	0	0	-3.0649E-05 # Manual fit
-	Vm 136.112
+#vm# 	Vm 136.112
 
 #Added by LF
 CO2_hydrate 
 	CO2:6H2O = CO2 + 6 H2O #hydration number should actually vary from ~6.4 to 5.7 between 273 and 283 K (G.K. Anderson 2003)
 	-analytic   -11.419 0.0416 0 0 0 0 
-	-vm 137 #calculated using ~1.11 kg/L from Aya et al 1997 (for hydration n=~5.75-6)
+#vm# 	-vm 137 #calculated using ~1.11 kg/L from Aya et al 1997 (for hydration n=~5.75-6)
 #Analytic expression fit using simulated diss. pressure data from Hydoff.exe clathrate stability program.
 #Pressure data then converted to logK using T-dependent Henrys constants from Sander 2015.
 #Finally, linear fit to logK. Note this is only applicable up to T <= ~283 K; at greater T the P_diss
@@ -3059,7 +3060,7 @@ CO2_hydrate
 H2S_hydrate
 	H2S:6H2O = H2S + 6 H2O
 	-analytic   -10.309 0.0351 0 0 0 0
-	-vm 133.99 #calculated using density from Carroll 2009, Chapter 8. 
+#vm# 	-vm 133.99 #calculated using density from Carroll 2009, Chapter 8. 
 #Same note on analytic expression as for CO2_hydrate. This H2S_hydrate equation only applicable <=301.6 K (otherwise we assume unstable). 
 
 
@@ -3072,7 +3073,7 @@ H2S_hydrate
 	log_k		63.04
 	-analytic	137.16 -0.320465 0 0 0 0.000241
 #	Range		0-350
-	-Vm		16.5
+#vm# 	-Vm		16.5
 #	Extrapol	supcrt92
 #	Ref		R01, calculations and fit by N17
 
@@ -3082,7 +3083,7 @@ H2S_hydrate
 	-delta_H	30.240		kcal/mol
 	-analytic	-46.6 0.111 0 0 0 -7.99e-5
 #	Range		0-350
-	-Vm		-2.4
+#vm# 	-Vm		-2.4
 #	Extrapol	supcrt92
 #	Ref		RH98
 
@@ -3106,7 +3107,7 @@ Afwillite
 #	deltafH		-1143.31	kcal/mol
 	-analytic	1.8353e1 1.9014e-3 1.8478e4 -6.6311 -4.0227e5
 #	Range		0-300
-	-Vm		129.23 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		129.23 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -3117,7 +3118,7 @@ Akermanite
 #	deltafH		-926.497	kcal/mol
 	-analytic	-4.8295e1 -8.5613e-3 2.0880e4 1.3798e1 -7.1975e5
 #	Range		0-350
-	-Vm		92.81
+#vm# 	-Vm		92.81
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3128,7 +3129,7 @@ Al
 #	deltafH		0		kJ/mol
 	-analytic	-1.8752e2 -4.6187e-2 5.7127e4 6.6270e1 -3.8952e5
 #	Range		0-300
-	-Vm		9.99 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		9.99 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -3139,7 +3140,7 @@ Al2(SO4)3
 #	deltafH		-3441.04	kJ/mol
 	-analytic	-6.1001e2 -2.4268e-1 2.9194e4 2.4383e2 4.5573e2
 #	Range		0-300
-	-Vm		126.25 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		126.25 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -3150,7 +3151,7 @@ Alabandite
 #	deltafH		-51		kcal/mol
 	-analytic	-1.5515e2 -4.8820e-2 4.9049e3 6.1765e1 7.6583e1
 #	Range		0-350
-	-Vm		21.46
+#vm# 	-Vm		21.46
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3161,7 +3162,7 @@ Alanine
 #	deltafH		-134.500	kcal/mol
 	-analytic	-91.63 -0.009624 7206 34.55 -3.3e5 # JD 2021
 #	Range		0-300
-	-Vm		63.64
+#vm# 	-Vm		63.64
 #	Extrapol	supcrt92
 #	Ref		HOKR98.1 #JD 2021
 
@@ -3173,7 +3174,7 @@ Albite
 #	deltafH		-939.68		kcal/mol
 	-analytic	-1.1694e1 1.4429e-2 1.3784e4 -7.2866 -1.6136e6
 #	Range		0-350
-	-Vm		100.25
+#vm# 	-Vm		100.25
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3184,7 +3185,7 @@ Albite_high
 #	deltafH		-937.05		kcal/mol
 	-analytic	-1.8957e1 1.3726e-2 1.4801e4 -4.9732 -1.6442e6
 #	Range		0-350
-	-Vm		100.25
+#vm# 	-Vm		100.25
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3195,7 +3196,7 @@ Albite_low
 #	deltafH		-939.68		kcal/mol
 	-analytic	-1.2860e1 1.4481e-2 1.3913e4 -6.9417 -1.6256e6
 #	Range		0-350
-	-Vm		100.25
+#vm# 	-Vm		100.25
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3206,7 +3207,7 @@ Alum-K
 #	deltafH		-1447		kcal/mol
 	-analytic	-8.8025e2 -2.5706e-1 2.2399e4 3.5434e2 3.4978e2
 #	Range		0-300
-	-Vm		269.54 # Marion+09
+#vm# 	-Vm		269.54 # Marion+09
 #	Extrapol	Cp integration
 #	Ref		73bar/kna 
 
@@ -3217,7 +3218,7 @@ Alunite
 #	deltafH		-1235.6		kcal/mol
 	-analytic	-6.8581e2 -2.2455e-1 2.6886e4 2.6758e2 4.1973e2
 #	Range		0-350
-	-Vm		205.40 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		205.40 # thermo.com.V8.R6+.tdat
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3228,7 +3229,7 @@ Amesite-14A
 #	deltafH		-2145.67	kcal/mol
 	-analytic	-5.4326e2 -1.4144e-1 5.4150e4 1.9361e2 8.4512e2
 #	Range		0-300
-	-Vm		205.4
+#vm# 	-Vm		205.4
 #	Extrapol	Cp integration
 #	Ref		78wol
 
@@ -3239,7 +3240,7 @@ Analcime
 #	deltafH		-3296.86	kJ/mol
 	-analytic	-6.8694 6.6052e-3 9.8260e3 -4.8540 -8.8780e5
 #	Range		0-350
-	-Vm		97.1 # 96.8 in thermo.com.V8.R6+.tdat
+#vm# 	-Vm		97.1 # 96.8 in thermo.com.V8.R6+.tdat
 #	Extrapol	supcrt92, Cp integration
 #	Ref		HDN+78, 82joh/flo match but differ from Wilson+06 by 1 log K at 0C, 0 log K a 300C
 
@@ -3250,7 +3251,7 @@ Andalusite
 #	deltafH		-615.866	kcal/mol
 	-analytic	-7.1115e1 -3.2234e-2 1.2308e4 2.2357e1 1.9208e2
 #	Range		0-350
-	-Vm		51.53
+#vm# 	-Vm		51.53
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 1.6 log K at 0C, 0.5 log K at 350C
 
@@ -3261,7 +3262,7 @@ Andradite
 #	deltafH		-1380.35	kcal/mol
 	-analytic	1.3884e1 -2.3886e-2 1.5314e4 -8.1606 -4.2193e5
 #	Range		0-350
-	-Vm		131.85
+#vm# 	-Vm		131.85
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3272,7 +3273,7 @@ Anhydrite
 #	deltafH		-342.76		kcal/mol
 	-analytic	-2.0986e2 -7.8823e-2 5.0969e3 8.5642e1 7.9594e1
 #	Range		0-350
-	-Vm		45.94 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		45.94 # thermo.com.V8.R6+.tdat
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3283,7 +3284,7 @@ Annite
 #	deltafH		-1232.19	kcal/mol
 	-analytic	-4.0186e1 -1.4238e-2 1.8929e4 7.9859e0 -8.4343e5
 #	Range		0-350
-	-Vm		154.32
+#vm# 	-Vm		154.32
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3294,7 +3295,7 @@ Anorthite
 #	deltafH		-1007.55	kcal/mol
 	-analytic	3.9717e-1 -1.8751e-2 1.4897e4 -6.3078 -2.3885e5
 #	Range		0-350
-	-Vm		100.79
+#vm# 	-Vm		100.79
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3305,7 +3306,7 @@ Anthophyllite
 #	deltafH		-2888.75	kcal/mol
 	-analytic	-1.2865e2 1.9705e-2 5.4853e4 1.9444e1 -3.8080e6
 #	Range		0-350
-	-Vm		264.4
+#vm# 	-Vm		264.4
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3316,7 +3317,7 @@ Antigorite
 #	deltafH		-17070.9	kcal/mol
 	-analytic	-8.1630e2 -6.7780e-2 2.5998e5 2.2029e2 -9.3275e6
 #	Range		0-350
-	-Vm		1749.13
+#vm# 	-Vm		1749.13
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3327,7 +3328,7 @@ Aragonite
 #	deltafH		-288.531	kcal/mol
 	-analytic	-1.4934e2 -4.8043e-2 4.9089e3 6.0284e1 7.6644e1
 #	Range		0-325
-	-Vm		34.15 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		34.15 # thermo.com.V8.R6+.tdat
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3338,7 +3339,7 @@ Arcanite
 #	deltafH		-1437.78	kJ/mol
 	-analytic	-1.6428e2 -6.7762e-2 1.9879e3 7.1116e1 3.1067e1
 #	Range		0-300
-	-Vm		65.50 # Marion+05
+#vm# 	-Vm		65.50 # Marion+05
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -3349,7 +3350,7 @@ Artinite
 #	deltafH		-698.043	kcal/mol
 	-analytic	-2.8614e2 -6.7344e-2 1.5230e4 1.1104e2 2.3773e2
 #	Range		0-350
-	-Vm		96.9 # 97.85 Webmineral.com
+#vm# 	-Vm		96.9 # 97.85 Webmineral.com
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3360,7 +3361,7 @@ Atacamite
 #	deltafH		-1654.43	kJ/mol
 	-analytic	-2.6623e2 -4.8121e-2 1.5315e4 9.8395e1 2.6016e2
 #	Range		0-200
-	-Vm		56.80 # Webmineral.com
+#vm# 	-Vm		56.80 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		87woo/gar
 
@@ -3371,7 +3372,7 @@ Azurite
 #	deltafH		-390.1		kcal/mol
 	-analytic	-4.4042e2 -1.1934e-1 1.8053e4 1.7158e2 2.8182e2
 #	Range		0-350
-	-Vm		91.01
+#vm# 	-Vm		91.01
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3382,7 +3383,7 @@ B
 #	deltafH		0		kJ/mol
 	-analytic	8.0471e1 1.2577e-3 2.9653e4 -2.8593e1 4.6268e2
 #	Range		0-300
-	-Vm		4.386 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		4.386 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -3393,7 +3394,7 @@ B2O3
 #	deltafH		-1273.5		kJ/mol
 	-analytic	9.0905e1 5.5365e-3 -2.6629e3 -3.1553e1 -4.1578e1
 #	Range		0-300
-	-Vm		28.30 # gfw/density
+#vm# 	-Vm		28.30 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -3404,7 +3405,7 @@ Bassanite
 #	deltafH		-1576.89	kJ/mol
 	-analytic	-2.2010e2 -8.0230e-2 5.5092e3 8.9651e1 8.6031e1
 #	Range		0-300
-	-Vm		52.31 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		52.31 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3415,7 +3416,7 @@ Bassetite
 #	deltafH		-1099.33	kcal/mol
 	-analytic	-5.7788e1 -4.5400e-2 4.0119e3 1.6216e1 6.8147e1
 #	Range		0-200
-	-Vm		256.19 # Webmineral.com
+#vm# 	-Vm		256.19 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		78lan
 
@@ -3426,7 +3427,7 @@ Beidellite-Ca
 #	deltafH		-1370.66	kcal/mol
 	-analytic	3.872e1 -1.431e-1 0 0 0 9.036e-5
 #	Range		0-300
-	-Vm		133.081
+#vm# 	-Vm		133.081
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78 wol differ by 1.5 log K at 0C, 1 log K at 300C
 
@@ -3437,7 +3438,7 @@ Beidellite-Fe
 #	deltafH		-1351.1		kcal/mol
 	-analytic	3.641e1 -1.391e-1 0 0 0 8.671e-5
 #	Range		0-300
-	-Vm		134.293
+#vm# 	-Vm		134.293
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -3448,7 +3449,7 @@ Beidellite-K
 #	deltafH		-1371.9		kcal/mol
 	-analytic	3.307e1 -1.254e-1 0 0 0 7.660e-5
 #	Range		0-300
-	-Vm		137.214
+#vm# 	-Vm		137.214
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78 wol differ by 2.9 log K at 0C, 1.7 log K at 300C
 
@@ -3459,7 +3460,7 @@ Beidellite-Mg
 #	deltafH		-1366.89	kcal/mol
 	-analytic	3.750e1 -1.415e-1 0 0 0 8.929e-5
 #	Range		0-300
-	-Vm		132.116
+#vm# 	-Vm		132.116
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78 wol differ by 2.4 log K at 0C, 1.4 log K at 300C
 
@@ -3470,7 +3471,7 @@ Beidellite-Na
 #	deltafH		-1369.76	kcal/mol
 	-analytic	3.613e1 -1.347e-1 0 0 0 8.470e-5
 #	Range		0-300
-	-Vm		134.522
+#vm# 	-Vm		134.522
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, differ from 78 wol and Wilson+06 (which match) by 2.8 log K at 0C, 1.3 log K at 300C
 
@@ -3481,7 +3482,7 @@ Berlinite
 #	deltafH		-1733.85	kJ/mol
 	-analytic	-2.8134e2 -9.9933e-2 1.0308e4 1.0883e2 1.6094e2
 #	Range		0-300
-	-Vm		46.19 # Webmineral.com
+#vm# 	-Vm		46.19 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3492,7 +3493,7 @@ Bieberite
 #	deltafH		-2980.02	kJ/mol
 	-analytic	-2.6405e2 -7.2497e-2 6.6673e3 1.0538e2 1.0411e2
 #	Range		0-300
-	-Vm		147.95 # Webmineral.com
+#vm# 	-Vm		147.95 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3503,7 +3504,7 @@ Bixbyite
 #	deltafH		-958.971	kJ/mol
 	-analytic	-1.1600e2 -2.8056e-3 1.3418e4 2.8639e1 2.0941e2
 #	Range		0-300
-	-Vm		31.89 # Webmineral.com, density 4.95
+#vm# 	-Vm		31.89 # Webmineral.com, density 4.95
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -3514,7 +3515,7 @@ Boehmite
 #	deltafH		-238.24		kcal/mol
 	-analytic	-1.2196e2 -3.1138e-2 8.8643e3 4.4075e1 1.3835e2
 #	Range		0-225
-	-Vm		19.535
+#vm# 	-Vm		19.535
 #	Extrapol	supcrt92
 #	Ref		HDN+78, 95pok/hel
 
@@ -3525,7 +3526,7 @@ Borax
 #	deltafH		-6288.44	kJ/mol
 	-analytic	7.8374e1 1.9328e-2 -5.3279e3 -2.1914e1 -8.3160e1
 #	Range		0-300
-	-Vm		222.66 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		222.66 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3536,7 +3537,7 @@ Boric_acid
 #	deltafH		-1094.8		kJ/mol
 	-analytic	3.9122e1 6.4058e-3 -2.2525e3 -1.3592e1 -3.5160e1
 #	Range		0-300
-	-Vm		43.09 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		43.09 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -3547,7 +3548,7 @@ Bornite
 #	deltafH		-79.922		kcal/mol
 	-analytic	-7.0495e2 -2.0082e-1 -9.1376e3 2.8004e2 -1.4238e2
 #	Range		0-350
-	-Vm		98.6
+#vm# 	-Vm		98.6
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3558,7 +3559,7 @@ Brezinaite
 #	deltafH		-111.9		kcal/mol
 	-analytic	-7.0528e1 -3.6568e-2 1.0598e4 1.9665e1 1.8000e2
 #	Range		0-200
-	-Vm		69.16 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		69.16 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		78vau/cra
 
@@ -3569,7 +3570,7 @@ Brochantite
 #	deltafH		-2198.72	kJ/mol
 	-analytic	-2.3609e2 -3.9046e-2 1.5970e4 8.4701e1 2.7127e2
 #	Range		0-200
-	-Vm		113.60 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		113.60 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87woo/gar
 
@@ -3580,7 +3581,7 @@ Brucite
 #	deltafH		-221.39		kcal/mol
 	-analytic	-1.0280e2 -1.9759e-2 9.0180e3 3.8282e1 1.4075e2
 #	Range		0-350
-	-Vm		24.63
+#vm# 	-Vm		24.63
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3591,7 +3592,7 @@ Bunsenite
 #	deltafH		-57.3		kcal/mol
 	-analytic	-8.1664e1 -1.9796e-2 7.4064e3 3.0385e1 1.1559e2
 #	Range		0-350
-	-Vm		10.97
+#vm# 	-Vm		10.97
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3602,7 +3603,7 @@ C
 #	deltafH		0		kcal/mol
 	-analytic	-3.5556e1 -3.3691e-2 1.9774e4 1.7548e1 3.0856e2
 #	Range		0-350
-	-Vm		5.298
+#vm# 	-Vm		5.298
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3613,7 +3614,7 @@ Ca
 #	deltafH		0		kJ/mol
 	-analytic	-1.1328e2 -2.6554e-2 4.7638e4 4.1989e1 -2.3545e5
 #	Range		0-300
-	-Vm		26.19 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		26.19 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -3624,7 +3625,7 @@ Ca-Al_Pyroxene
 #	deltafH		-783.793	kcal/mol
 	-analytic	-1.4664e2 -5.0409e-2 2.1045e4 5.1318e1 3.2843e2
 #	Range		0-350
-	-Vm		63.5
+#vm# 	-Vm		63.5
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3635,7 +3636,7 @@ Ca3Al2O6
 #	deltafH		-857.492	kcal/mol
 	-analytic	-2.7163e2 -5.2897e-2 5.0815e4 9.2946e1 8.6300e2
 #	Range		0-200
-	-Vm		88.94 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		88.94 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -3646,7 +3647,7 @@ Ca4Al2Fe2O10
 #	deltafH		-1211		kcal/mol
 	-analytic	-4.1808e2 -8.2787e-2 7.0288e4 1.4043e2 1.1937e3
 #	Range		0-200
-	-Vm		130.28 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		130.28 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -3657,7 +3658,7 @@ CaAl2O4
 #	deltafH		-555.996	kcal/mol
 	-analytic	-3.0378e2 -7.9356e-2 3.0096e4 1.1049e2 4.6971e2
 #	Range		0-300
-	-Vm		53.02 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		53.02 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -3668,7 +3669,7 @@ CaAl4O7
 #	deltafH		-951.026	kcal/mol
 	-analytic	-3.1044e2 -6.7078e-2 4.4566e4 1.0085e2 7.5689e2
 #	Range		0-200
-	-Vm		89.35 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		89.35 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -3679,7 +3680,7 @@ CaUO4
 #	deltafH		-2002.3		kJ/mol
 	-analytic	-8.7902e1 -1.9810e-2 9.2354e3 3.1832e1 1.4414e2
 #	Range		0-300
-	-Vm		45.92 # M13
+#vm# 	-Vm		45.92 # M13
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -3690,7 +3691,7 @@ Calcite
 #	deltafH		-288.552	kcal/mol
 	-analytic	-1.4978e2 -4.8370e-2 4.8974e3 6.0458e1 7.6464e1
 #	Range		0-350
-	-Vm		36.934
+#vm# 	-Vm		36.934
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3700,7 +3701,7 @@ Cattierite
 #	deltafH		-36.589		kcal/mol
 	-analytic	-2.1970e2 -7.8585e-2 -1.9592e3 8.8809e1 -3.0507e1
 #	Range		0-300
-	-Vm		25.53 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		25.53 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		78vau/cra
 
@@ -3711,7 +3712,7 @@ Celadonite
 #	deltafH		-1394.9		kcal/mol
 	-analytic	-3.3097e1 1.7989e-2 1.8919e4 -2.1219 -2.0588e6
 #	Range		0-300
-	-Vm		157.1
+#vm# 	-Vm		157.1
 #	Extrapol	supcrt92, Cp integration
 #	Ref		HDN+78, 78wol match
 
@@ -3722,7 +3723,7 @@ Chalcanthite
 #	deltafH		-2279.68	kJ/mol
 	-analytic	-1.1262e2 -1.5544e-2 3.6176e3 4.1420e1 6.1471e1
 #	Range		0-200
-	-Vm		108.97 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		108.97 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -3733,7 +3734,7 @@ Chalcedony
 #	deltafH		-217.282	kcal/mol
 	-analytic	-9.0068 9.3241e-3 4.0535e3 -1.0830 -7.5077e5
 #	Range		0-350
-	-Vm		22.68
+#vm# 	-Vm		22.68
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3744,7 +3745,7 @@ Chalcocite
 #	deltafH		-19		kcal/mol
 	-analytic	-1.3703e2 -4.0727e-2 -7.1694e3 5.5963e1 -1.1183e2
 #	Range		0-350
-	-Vm		27.48
+#vm# 	-Vm		27.48
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3755,7 +3756,7 @@ Chalcocyanite
 #	deltafH		-771.4		kJ/mol
 	-analytic	5.8173 -1.6933e-2 2.0097e3 -1.8583 3.4126e1
 #	Range		0-200
-	-Vm		40.88 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		40.88 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		CWM89
 
@@ -3766,7 +3767,7 @@ Chalcopyrite
 #	deltafH		-44.453		kcal/mol
 	-analytic	-3.1575e2 -9.8947e-2 8.3400e2 1.2522e2 1.3106e1
 #	Range		0-350
-	-Vm		42.83
+#vm# 	-Vm		42.83
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3777,7 +3778,7 @@ Chamosite
 #	deltafH		-902.407	kcal/mol
 	-analytic	1.577e2 -4.614e-1 0 0 0 3.413e-4
 #	Range		0-300
-	-Vm		213.42
+#vm# 	-Vm		213.42
 #	Extrapol	supcrt92
 #	Ref		Wilson+06
 
@@ -3788,7 +3789,7 @@ Chloromagnesite
 #	deltafH		-641.317	kJ/mol
 	-analytic	-2.3640e2 -8.2017e-2 1.3480e4 9.5963e1 2.1042e2
 #	Range		0-300
-	-Vm		40.95 # Webmineral.com
+#vm# 	-Vm		40.95 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -3799,7 +3800,7 @@ Chromite
 #	deltafH		-1444.83	kJ/mol
 	-analytic	-1.9060e2 -2.5695e-2 1.9465e4 5.9865e1 3.0379e2
 #	Range		0-300
-	-Vm		44.01 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.01 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3810,7 +3811,7 @@ Chrysotile
 #	deltafH		-1043.12	kcal/mol
 	-analytic	-9.2462e1 -1.1359e-2 1.8312e4 2.9289e1 -6.2342e5
 #	Range		0-350
-	-Vm		108.5
+#vm# 	-Vm		108.5
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3821,7 +3822,7 @@ Citric_Acid
 #	deltafH		-369.000	kcal/mol
 	-analytic	-161.9 -0.01147 1.15e5 61.07 -3.358e5 # JD 2021
 #	Range		0-350
-	-Vm		124.59
+#vm# 	-Vm		124.59
 #	Extrapol	supcrt92
 #	Ref		LH06a
 
@@ -3832,7 +3833,7 @@ Clinochlore-14A
 #	deltafH		-2116.96	kcal/mol
 	-analytic	-2.0441e2 -6.2268e-2 3.5388e4 6.9239e1 5.5225e2
 #	Range		0-350
-	-Vm		207.11
+#vm# 	-Vm		207.11
 #	Extrapol	supcrt92
 #	Ref		HDN+78, Wilson+06 differ by 0.4 log K at 0C, 1.6 log K at 300C
 
@@ -3843,7 +3844,7 @@ Clinochlore-7A
 #	deltafH		-2113.2		kcal/mol
 	-analytic	-2.1644e2 -6.4187e-2 3.6548e4 7.4123e1 5.7037e2
 #	Range		0-350
-	-Vm		211.5
+#vm# 	-Vm		211.5
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -3854,7 +3855,7 @@ Clinoptilolite-Ca
 #	deltafH		-4919.84	kcal/mol
 	-analytic	-4.4820e1 5.3696e-2 5.4878e4 -3.1459e1 -7.5491e6
 #	Range		0-300
-	-Vm		625.19 # Webmineral.com, density 2.15
+#vm# 	-Vm		625.19 # Webmineral.com, density 2.15
 #	Extrapol	Cp integration
 #	Ref		89db 7
 
@@ -3865,7 +3866,7 @@ Clinoptilolite-K
 #	deltafH		-4937.77	kcal/mol
 	-analytic	1.1697e1 6.9480e-2 4.7718e4 -4.7442e1 -7.6907e6
 #	Range		0-300
-	-Vm		655.93 # Webmineral.com, density 2.15
+#vm# 	-Vm		655.93 # Webmineral.com, density 2.15
 #	Extrapol	Cp integration
 #	Ref		89db 7
 
@@ -3876,7 +3877,7 @@ Clinoptilolite-Na
 #	deltafH		-4912.36	kcal/mol
 	-analytic	-3.4572e1 6.8377e-2 5.1962e4 -3.3426e1 -7.5586e6
 #	Range		0-300
-	-Vm		629.95 # Webmineral.com, density 2.15
+#vm# 	-Vm		629.95 # Webmineral.com, density 2.15
 #	Extrapol	Cp integration
 #	Ref		89db 7
 
@@ -3887,7 +3888,7 @@ Clinozoisite
 #	deltafH		-1643.78	kcal/mol
 	-analytic	-2.8690e1 -3.7056e-2 2.2770e4 3.7880 -2.5834e5
 #	Range		0-300
-	-Vm		136.2
+#vm# 	-Vm		136.2
 #	Extrapol	supcrt92
 #	Ref		HDN+78, SH88
 
@@ -3898,7 +3899,7 @@ Co
 #	deltafH		0		kJ/mol
 	-analytic	-6.2703e1 -2.0172e-2 1.8888e4 2.3391e1 2.9474e2
 #	Range		0-300
-	-Vm		6.67 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		6.67 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -3909,7 +3910,7 @@ Co2SiO4
 #	deltafH		-353.011	kcal/mol
 	-analytic	-3.9978 -3.7985e-3 5.1554e3 -1.5033 -1.6100e5
 #	Range		0-300
-	-Vm		44.52 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.52 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3920,7 +3921,7 @@ CoCl2
 #	deltafH		-312.722	kJ/mol
 	-analytic	-2.2386e2 -8.0936e-2 8.8631e3 9.1528e1 1.3837e2
 #	Range		0-300
-	-Vm		38.69 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		38.69 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3931,7 +3932,7 @@ CoCl2:2H2O
 #	deltafH		-923.206	kJ/mol
         -analytic	-5.6411e1 -2.3390e-2 3.0519e3 2.3361e1 5.1845e1
 #  	Range		0-200
-	-Vm		66.61 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		66.61 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -3942,7 +3943,7 @@ CoCl2:6H2O
 #	deltafH		-2115.67	kJ/mol
 	-analytic	-1.5066e2 -2.2132e-2 5.0591e3 5.7743e1 8.5962e1
 #	Range		0-200
-	-Vm		123.66 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		123.66 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -3953,7 +3954,7 @@ CoFe2O4
 #	deltafH		-272.466	kcal/mol
 	-analytic	-3.0149e2 -7.9159e-2 1.5683e4 1.1046e2 2.4480e2
 #	Range		0-300
-	-Vm		44 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		74nau/ryz
 
@@ -3964,7 +3965,7 @@ CoO
 #	deltafH		-237.946	kJ/mol
 	-analytic	-8.4424e1 -1.9457e-2 7.8616e3 3.1281e1 1.2270e2
 #	Range		0-300
-	-Vm		11.64 # gfw/density
+#vm# 	-Vm		11.64 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3975,7 +3976,7 @@ CoS
 #	deltafH		-20.182		kcal/mol
 	-analytic	-1.5128e2 -4.8484e-2 2.9553e3 5.9983e1 4.6158e1
 #	Range		0-300
-	-Vm		22.91 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		22.91 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		74nau/ryz
 
@@ -3986,7 +3987,7 @@ CoSO4
 #	deltafH		-887.964	kJ/mol
 	-analytic	-1.9907e2 -7.7890e-2 7.7193e3 8.0525e1 1.2051e2
 #	Range		0-300
-	-Vm		41.78 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		41.78 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -3997,7 +3998,7 @@ CoSO4:6H2O
 #	deltafH		-2683.87	kJ/mol
 	-analytic	-2.5469e2 -7.3092e-2 6.6767e3 1.0172e2 1.0426e2
 #	Range		0-300
-	-Vm		130.30 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		130.30 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4008,7 +4009,7 @@ CoSO4:H2O
 #	deltafH		-287.032	kcal/mol
 	-analytic	-1.0570e1 -1.6196e-2 1.7180e3 3.4000 2.9178e1
 #	Range		0-200
-	-Vm		56.26 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		56.26 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		74nau/ryz
 
@@ -4019,7 +4020,7 @@ Coesite
 #	deltafH		-216.614	kcal/mol
 	-analytic	-9.7312 9.1773e-3 4.2143e3 -7.8065e-1 -7.4905e5
 #	Range		0-350
-	-Vm		20.641
+#vm# 	-Vm		20.641
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4030,7 +4031,7 @@ Coffinite
 #	deltafH		-1991.33	kJ/mol
 	-analytic	2.3126e2 6.2389e-2 -4.6189e3 -9.7976e1 -7.8517e1
 #	Range		0-200
-	-Vm		46.12 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		46.12 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H Approx
 #	Ref		92gre/fug
 
@@ -4041,7 +4042,7 @@ Cordierite_anhyd
 #	deltafH		-2183.2		kcal/mol
 	-analytic	2.6562 -2.3801e-2 3.5192e4 -1.9911e1 -1.0894e6
 #	Range		0-350
-	-Vm		233.22
+#vm# 	-Vm		233.22
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 3 log K at 0C, 0.8 log K at 350C
 
@@ -4052,7 +4053,7 @@ Cordierite_hydr
 #	deltafH		-2255.68	kcal/mol
 	-analytic	-1.2985e2 -4.1335e-2 4.1566e4 2.7892e1 -1.4819e6
 #	Range		0-350
-	-Vm		241.22
+#vm# 	-Vm		241.22
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 3.4 log K at 0C, 0.8 log K at 350C
 
@@ -4063,7 +4064,7 @@ Corundum
 #	deltafH		-400.5		kcal/mol
 	-analytic	-1.4278e2 -7.8519e-2 1.3776e4 5.5881e1 2.1501e2
 #	Range		0-350
-	-Vm		25.575
+#vm# 	-Vm		25.575
 #	Extrapol	supcrt92
 #	Ref		HDN+78, 95pok/hel differ by 1 log K at 0C, 7 log K at 300C !! flag
 
@@ -4074,7 +4075,7 @@ Covellite
 #	deltafH		-12.5		kcal/mol
 	-analytic	-1.6068e2 -4.9040e-2 -1.4234e3 6.3536e1 -2.2164e1
 #	Range		0-350
-	-Vm		20.42
+#vm# 	-Vm		20.42
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4085,7 +4086,7 @@ Cr
 #	deltafH		0		kJ/mol
 	-analytic	-2.2488e1 -5.5886e-3 3.4288e4 3.1585 5.3503e2
 #	Range		0-300
-	-Vm		7.231 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		7.231 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4096,7 +4097,7 @@ CrCl3
 #	deltafH		-556.5		kJ/mol
 	-analytic	-2.6348e2 -9.5339e-2 1.4785e4 1.0517e2 2.3079e2
 #	Range		0-300
-	-Vm		57.38 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		57.38 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4107,7 +4108,7 @@ CrO2
 #	deltafH		-143		kcal/mol
 	-analytic	2.7763 -7.7698e-3 -5.2893e3 -7.4970e-1 -8.9821e1
 #	Range		0-200
-	-Vm		16.95 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		16.95 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -4118,7 +4119,7 @@ CrO3
 #	deltafH		-140.9		kcal/mol
 	-analytic	-1.3262e2 -6.1411e-2 2.2083e3 5.6564e1 3.4497e1
 #	Range		0-300
-	-Vm		35.14 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		35.14 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		76del/hal
 
@@ -4129,7 +4130,7 @@ CrS
 #	deltafH		-31.9		kcal/mol
 	-analytic	-1.1134e2 -3.5954e-2 3.8744e3 4.3815e1 6.0490e1
 #	Range		0-300
-	-Vm		17.33 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		17.33 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		76del/hal
 
@@ -4140,7 +4141,7 @@ Cristobalite(alpha)
 #	deltafH		-216.755	kcal/mol
 	-analytic	-1.1936e1 9.0520e-3 4.3701e3 -1.1464e-1 -7.6568e5
 #	Range		0-350
-	-Vm		25.74
+#vm# 	-Vm		25.74
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4151,7 +4152,7 @@ Cristobalite(beta)
 #	deltafH		-215.675	kcal/mol
 	-analytic	-4.7414 9.7567e-3 3.8831e3 -2.5830 -6.9636e5
 #	Range		0-350
-	-Vm		27.38
+#vm# 	-Vm		27.38
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4162,7 +4163,7 @@ Cronstedtite-7A
 #	deltafH		-697.413	kcal/mol
 	-analytic	-2.3783e2 -7.1026e-2 1.7752e4 8.7147e1 2.7707e2
 #	Range		0-300
-	-Vm		110.9 # HDN+78
+#vm# 	-Vm		110.9 # HDN+78
 #	Extrapol	Cp integration
 #	Ref		78wol
 
@@ -4173,7 +4174,7 @@ Cu
 #	deltafH		0		kcal/mol
 	-analytic	-7.0719e1 -2.0300e-2 1.2802e4 2.6401e1 1.9979e2
 #	Range		0-300
-	-Vm		7.113
+#vm# 	-Vm		7.113
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4185,7 +4186,7 @@ CuCl2
 #	deltafH		-219.874	kJ/mol
 	-analytic	-1.7803e1 -2.4432e-2 1.5729e3 9.5104 2.6716e1
 #	Range		0-200
-	-Vm		39.71 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		39.71 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -4196,7 +4197,7 @@ CuCr2O4
 #	deltafH		-307.331	kcal/mol
 	-analytic	-1.8199e2 -1.0254e-2 2.0123e4 5.4062e1 3.4178e2
 #	Range		0-200
-	-Vm		42.74 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		42.74 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -4207,7 +4208,7 @@ Cuprite
 #	deltafH		-40.83		kcal/mol
 	-analytic	-8.6240e1 -1.1445e-2 1.7851e3 3.3041e1 2.7880e1
 #	Range		0-350
-	-Vm		23.437
+#vm# 	-Vm		23.437
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4218,7 +4219,7 @@ Daphnite-14A
 #	deltafH		-1693.04	kcal/mol
 	-analytic	-1.5261e2 -6.1392e-2 2.8283e4 5.1788e1 4.4137e2
 #	Range		0-350
-	-Vm		213.42
+#vm# 	-Vm		213.42
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4229,7 +4230,7 @@ Daphnite-7A
 #	deltafH		-1689.51	kcal/mol
 	-analytic	-1.6430e2 -6.3160e-2 2.9499e4 5.6442e1 4.6035e2
 #	Range		0-300
-	-Vm		221.2
+#vm# 	-Vm		221.2
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4240,7 +4241,7 @@ Dawsonite
 #	deltafH		-1963.96	kJ/mol
 	-analytic	-1.1393e2 -2.3487e-2 7.1758e3 4.0900e1 1.2189e2
 #	Range		0-200
-	-Vm		59.50 # Webmineral.com
+#vm# 	-Vm		59.50 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		RHF79
 
@@ -4251,7 +4252,7 @@ Delafossite
 #	deltafH		-126.904	kcal/mol
 	-analytic	-1.5275e2 -3.5478e-2 5.1404e3 5.6437e1 8.0255e1
 #	Range		0-300
-	-Vm		27.52 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		27.52 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		74nau/ryz
 
@@ -4262,7 +4263,7 @@ Diaspore
 #	deltafH		-238.924	kcal/mol
 	-analytic	-1.2618e2 -3.1671e-2 8.8737e3 4.5669e1 1.3850e2
 #	Range		0-225
-	-Vm		17.76
+#vm# 	-Vm		17.76
 #	Extrapol	supcrt92
 #	Ref		HDN+78, 95pok/hel
 
@@ -4273,7 +4274,7 @@ Dicalcium_silicate
 #	deltafH		-2317.9		kJ/mol
 	-analytic	-5.9723e1 -1.3682e-2 1.5461e4 2.1547e1 -3.7732e5
 #	Range		0-300
-	-Vm		59.11 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		59.11 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4284,7 +4285,7 @@ Diopside
 #	deltafH		-765.378	kcal/mol
 	-analytic	7.1240e1 1.5514e-2 8.1437e3 -3.0672e1 -5.6880e5
 #	Range		0-350
-	-Vm		66.09
+#vm# 	-Vm		66.09
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4295,7 +4296,7 @@ Dioptase
 #	deltafH		-1358.47	kJ/mol
 	-analytic	2.3913e2 6.2669e-2 -5.4030e3 -9.4420e1 -9.1834e1
 #	Range		0-200
-	-Vm		48.24 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		48.24 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87woo/gar
 
@@ -4306,7 +4307,7 @@ Dolomite
 #	deltafH		-556.631	kcal/mol
 	-analytic	-3.1782e2 -9.8179e-2 1.0845e4 1.2657e2 1.6932e2
 #	Range		0-350
-	-Vm		64.365
+#vm# 	-Vm		64.365
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4317,7 +4318,7 @@ Dolomite-dis
 #	deltafH		-553.704	kcal/mol
 	-analytic	-3.1706e2 -9.7886e-2 1.1442e4 1.2604e2 1.7864e2
 #	Range		0-350
-	-Vm		64.39
+#vm# 	-Vm		64.39
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4328,7 +4329,7 @@ Dolomite-ord
 #	deltafH		-556.631	kcal/mol
 	-analytic	-3.1654e2 -9.7902e-2 1.0805e4 1.2607e2 1.6870e2
 #	Range		0-350
-	-Vm		64.34
+#vm# 	-Vm		64.34
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4339,7 +4340,7 @@ Enstatite
 #	deltafH		-369.686	kcal/mol
 	-analytic	-4.9278e1 -3.2832e-3 9.5205e3 1.4437e1 -5.4324e5
 #	Range		0-350
-	-Vm		31.276
+#vm# 	-Vm		31.276
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4350,7 +4351,7 @@ Epidote
 #	deltafH		-1543.99	kcal/mol
 	-analytic	-2.6187e1 -3.6436e-2 1.9351e4 3.3671 -3.0319e5
 #	Range		0-350
-	-Vm		139.2
+#vm# 	-Vm		139.2
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4361,7 +4362,7 @@ Epidote-ord
 #	deltafH		-1544.02	kcal/mol
 	-analytic	1.9379e1 -3.2870e-2 1.5692e4 -1.1901e1 2.4485e2
 #	Range		0-350
-	-Vm		139.2
+#vm# 	-Vm		139.2
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4372,7 +4373,7 @@ Eskolaite
 #	deltafH		-1139.74	kJ/mol
 	-analytic	-2.0411e2 -1.2809e-1 2.2197e3 9.1186e1 3.4697e1
 #	Range		0-300
-	-Vm		29.09 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		29.09 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4383,7 +4384,7 @@ Ettringite
 #	deltafH		-4193		kcal/mol
 	-analytic	-1.0576e3 -1.1585e-1 5.9580e4 3.8585e2 1.0121e3
 #	Range		0-200
-	-Vm		697.28 # Webmineral.com
+#vm# 	-Vm		697.28 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -4394,7 +4395,7 @@ Eu
 #	deltafH		0		kJ/mol
 	-analytic	-6.5749e1 -2.8921e-2 5.4018e4 2.3561e1 8.4292e2
 #	Range		0-300
-	-Vm		28.97 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		28.97 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		85rar 2
 
@@ -4405,7 +4406,7 @@ Eu(OH)3
 #	deltafH		-1336.04	kJ/mol
 	-analytic	-6.3077e1 -6.1421e-3 8.7323e3 2.0595e1 1.4831e+2
 #	Range		0-200
-	-Vm		38.44 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		38.44 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87rar 2
 
@@ -4416,7 +4417,7 @@ Eu2(SO4)3:8H2O
 #	deltafH		-6139.77	kJ/mol
 	-analytic	-5.6582e1 -3.8846e-2 3.3821e3 1.8561e1 5.7452e1
 #	Range		0-200
-	-Vm		245.41 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		245.41 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4427,7 +4428,7 @@ Eu2O3(cubic)
 #	deltafH		-1661.96	kJ/mol
 	-analytic	-5.3469e1 -1.2554e-2 2.1925e4 1.4324e1 3.7233e2
 #	Range		0-200
-	-Vm		48.29 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		48.29 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4438,7 +4439,7 @@ Eu2O3(monoclinic)
 #	deltafH		-1650.88	kJ/mol
 	-analytic	-5.4022e1 -1.2627e-2 2.2508e4 1.4416e1 3.8224e2
 #	Range		0-200
-	-Vm		44.02 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.02 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4449,7 +4450,7 @@ Eu3O4
 #	deltafH		-2270.56	kJ/mol
 	-analytic	-1.1829e2 -2.0354e-2 3.4981e4 3.8007e1 5.9407e2
 #	Range		0-200
-	-Vm		64.15 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		64.15 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4460,7 +4461,7 @@ EuCl2
 #	deltafH		-822.5		kJ/mol
 	-analytic	-2.5741e1 -2.4956e-2 1.5713e3 1.3670e1 2.6691e1
 #	Range		0-200
-	-Vm		45.49 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		45.49 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87rar 2
 
@@ -4471,7 +4472,7 @@ EuCl3
 #	deltafH		-935.803	kJ/mol
 	-analytic	3.2865e1 -3.1877e-2 4.9792e3 -8.2294 8.4542e1
 #	Range		0-200
-	-Vm		52.83 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		52.83 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4482,7 +4483,7 @@ EuCl3:6H2O
 #	deltafH		-2781.66	kJ/mol
 	-analytic	-1.0987e2 -2.9851e-2 4.9991e3 4.3198e1 8.4930e1
 #	Range		0-200
-	-Vm		151.22 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		151.22 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4493,7 +4494,7 @@ EuOCl
 #	deltafH		-911.17		kJ/mol
 	-analytic	-7.7446 -1.4960e-2 6.6242e3 2.2813 1.1249e2
 #	Range		0-200
-	-Vm		31.68 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		31.68 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87rar 2
 
@@ -4504,7 +4505,7 @@ EuS
 #	deltafH		-447.302	kJ/mol
         -analytic	-4.1026e1 -1.5582e-2 5.7842e3 1.6639e1 9.8238e1
 #	Range		0-200
-	-Vm		32.03 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		32.03 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4515,7 +4516,7 @@ EuSO4
 #	deltafH		-1471.08	kJ/mol
 	-analytic	3.0262e-1 -1.7571e-2 -3.0392e3 2.5356 -5.1610e1
 #	Range		0-200
-	-Vm		49.71 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		49.71 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		85rar 2
 
@@ -4526,7 +4527,7 @@ Eucryptite
 #	deltafH		-2124.41	kJ/mol
 	-analytic	-2.2213 -8.2498e-3 6.4838e3 -1.4183 1.0117e2
 #	Range		0-300
-	-Vm		53.63 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		53.63 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4537,7 +4538,7 @@ Fayalite
 #	deltafH		-354.119	kcal/mol
 	-analytic	1.3853e1 -3.5501e-3 7.1496e3 -6.8710e0 -6.3310e4
 #	Range		0-350
-	-Vm		46.39
+#vm# 	-Vm		46.39
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4548,7 +4549,7 @@ Fe
 #	deltafH		0		kcal/mol
 	-analytic	-6.2882e1 -2.0379e-2 2.0690e4 2.3673e1 3.2287e2
 #	Range		0-350
-	-Vm		7.092 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		7.092 # thermo.com.V8.R6+.tdat
 #	Extrapol	supcrt92
 #	Ref		RHF79
 
@@ -4559,7 +4560,7 @@ Fe(OH)2
 #	deltafH		-568.525	kJ/mol
 	-analytic	-8.6666e1 -1.8440e-2 7.5723e3 3.2597e1 1.1818e2
 #	Range		0-300
-	-Vm		26.43 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		26.43 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4570,7 +4571,7 @@ Fe(OH)3
 #	deltafH		-823.013	kJ/mol
         -analytic	-1.3316e2 -3.1284e-2 7.9753e3 4.9052e1 1.2449e2
 #	Range		0-300
-	-Vm		34.36 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		34.36 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4581,7 +4582,7 @@ Fe2(SO4)3
 #	deltafH		-2577.16	kJ/mol
 	-analytic	-5.8649e2 -2.3718e-1 2.2736e4 2.3601e2 3.5495e2
 #	Range		0-300
-	-Vm		130.77 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		130.77 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79	
 
@@ -4592,7 +4593,7 @@ FeO
 #	deltafH		-65.02		kcal/mol
 	-analytic	-7.8750e1 -1.8268e-2 7.6852e3 2.9074e1 1.1994e2
 #	Range		0-350
-	-Vm		12
+#vm# 	-Vm		12
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4603,7 +4604,7 @@ FeSO4
 #	deltafH		-928.771	kJ/mol
 	-analytic	-2.0794e2 -7.6891e-2 7.8705e3 8.3685e1 1.2287e2
 #	Range		0-300
-	-Vm		41.58 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		41.58 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4614,7 +4615,7 @@ Ferrite-Ca
 #	deltafH		-363.494	kcal/mol
         -analytic	-2.8472e2 -7.5870e-2 2.0688e4 1.0485e2 3.2289e2
 #	Range		0-300
-	-Vm		44.98 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.98 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -4625,7 +4626,7 @@ Ferrite-Cu
 #	deltafH		-965.178	kJ/mol
 	-analytic	-3.1271e2 -7.9976e-2 1.8818e4 1.1466e2 2.9374e2
 #	Range		0-300
-	-Vm		44.53 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.53 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4636,7 +4637,7 @@ Ferrite-Dicalcium
 #	deltafH		-2139.26	kJ/mol
 	-analytic	-3.6277e2 -9.5015e-2 3.3898e4 1.3506e2 5.2906e2
 #	Range		0-300
-	-Vm		67.18 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		67.18 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4647,7 +4648,7 @@ Ferrite-Mg
 #	deltafH		-1428.42	kJ/mol
 	-analytic	-2.8297e2 -7.4820e-2 2.1333e4 1.0295e2 3.3296e2
 #	Range		0-300
-	-Vm		44.57 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.57 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4658,7 +4659,7 @@ Ferrite-Zn
 #	deltafH		-1169.29	kJ/mol
 	-analytic	-2.9809e2 -7.7263e-2 1.9067e4 1.0866e2 2.9761e2
 #	Range		0-300
-	-Vm		45.23 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		45.23 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4669,7 +4670,7 @@ Ferrosilite
 #	deltafH		-285.658	kcal/mol
 	-analytic	9.0041 3.7917e-3 5.1625e3 -6.3009 -3.9565e5
 #	Range		0-350
-	-Vm		32.952
+#vm# 	-Vm		32.952
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4696,7 +4697,7 @@ Forsterite
 #	deltafH		-520		kcal/mol
 	-analytic	-7.6195e1 -1.4013e-2 1.4763e4 2.5090e1 -3.0379e5
 #	Range		0-350
-	-Vm		43.79
+#vm# 	-Vm		43.79
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4707,7 +4708,7 @@ Foshagite
 #	deltafH		-1438.27	kcal/mol
 	-analytic	2.9983e1 5.5272e-3 2.3427e4 -1.3879e1 -8.9461e5
 #	Range		0-300
-	-Vm		154.23 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		154.23 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -4719,7 +4720,7 @@ Gd
 #	deltafH		0		kJ/mol
 	-analytic	-3.3949e2 -6.5698e-2 7.4278e4 1.2189e2 -9.7055e5
 #	Range		0-300
-	-Vm		19.89 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		19.89 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4730,7 +4731,7 @@ Gehlenite
 #	deltafH		-951.225	kcal/mol
 	-analytic	-2.1784e2 -6.7200e-2 2.9779e4 7.8488e1 4.6473e2
 #	Range		0-350
-	-Vm		90.24
+#vm# 	-Vm		90.24
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4741,7 +4742,7 @@ Gibbsite
 #	deltafH		-309.065	kcal/mol
 	-analytic	-1.1403e2 -3.6453e-2 7.7236e3 4.3134e1 1.2055e2
 #	Range		0-150
-	-Vm		31.956
+#vm# 	-Vm		31.956
 #	Extrapol	supcrt92
 #	Ref		HDN+78, 95pok/hel
 
@@ -4752,7 +4753,7 @@ Glycine
 #	deltafH		-128.394	Kcal/mol
 	-analytic	-123.3 -0.01696 9108 46.23 -4.915e5 # JD 2021
 #	Range		0-250
-	-Vm		46.63
+#vm# 	-Vm		46.63
 #	Extrapol	supcrt92
 #	Ref		HOKR98.1, LD12.1
 
@@ -4764,7 +4765,7 @@ Goethite
 #	deltafH		-559.328	kJ/mol
 	-analytic	-6.0331e1 -1.0847e-2 4.7759e3 1.9429e1 8.1122e1
 #	Range		0-200
-	-Vm		20.82
+#vm# 	-Vm		20.82
 #	Extrapol	supcrt92, Constant H approx
 #	Ref		Sho09, MLS+03, RHF79 match
 
@@ -4775,7 +4776,7 @@ Greenalite
 #	deltafH		-787.778	kcal/mol
 	-analytic	-1.4187e1 -3.8377e-3 1.1710e4 1.6442 -4.8290e5
 #	Range		0-350
-	-Vm		115
+#vm# 	-Vm		115
 #	Extrapol	supcrt92
 #	Ref		HDN+78, 78wol, Wilson+06 match
 
@@ -4786,7 +4787,7 @@ Grossular
 #	deltafH		-1582.74	kcal/mol
 	-analytic	2.9389e1 -2.2478e-2 2.0323e4 -1.4624e1 -2.5674e5
 #	Range		0-350
-	-Vm		125.3
+#vm# 	-Vm		125.3
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4797,7 +4798,7 @@ Gypsum
 #	deltafH		-2022.69	kJ/mol
 	-analytic	-2.4417e2 -8.3329e-2 5.5958e3 9.9301e1 8.7389e1
 #	Range		0-300
-	-Vm		74.69 # Marion+05
+#vm# 	-Vm		74.69 # Marion+05
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4808,7 +4809,7 @@ Gyrolite
 #	deltafH		-1176.55	kcal/mol
 	-analytic	-2.4416e1 1.4646e-2 1.6181e4 2.3723 -1.5369e6
 #	-Range		0-300
-	-Vm		136.85 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		136.85 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -4819,7 +4820,7 @@ Halite
 #	deltafH		-98.26		kcal/mol
 	-analytic	-1.0163e2 -3.4761e-2 2.2796e3 4.2802e1 3.5602e1
 #	Range		0-350
-	-Vm		27.015
+#vm# 	-Vm		27.015
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4830,7 +4831,7 @@ Hatrurite
 #	deltafH		-700.234	kcal/mol
 	-analytic	-4.5448e1 -1.9998e-2 2.3800e4 1.8494e1 -7.3385e4
 #	Range		0-300
-	-Vm		75.60 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		75.60 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -4841,7 +4842,7 @@ Hausmannite
 #	deltafH		-1387.83	kJ/mol
 	-analytic	-2.0600e2 -2.2214e-2 2.0160e4 6.2700e1 3.1464e2
 #	Range		0-300
-	-Vm		48.07 # Webmineral.com
+#vm# 	-Vm		48.07 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4852,7 +4853,7 @@ Heazlewoodite
 #	deltafH		-203.012	kJ/mol
 	-analytic	-3.5439e2 -1.1740e-1 2.1811e4 1.3919e2 3.4044e2
 #	Range		0-300
-	-Vm		40.95 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		40.95 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -4863,7 +4864,7 @@ Hedenbergite
 #	deltafH		-678.276	kcal/mol
 	-analytic	-1.9473e1 1.5288e-3 1.2910e4 2.1729 -9.0058e5
 #	Range		0-350
-	-Vm		68.27
+#vm# 	-Vm		68.27
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4874,7 +4875,7 @@ Hematite
 #	deltafH		-197.72		kcal/mol
 	-analytic	-2.2015e2 -6.0290e-2 1.1812e4 8.0253e1 1.8438e2
 #	Range		0-350
-	-Vm		30.274
+#vm# 	-Vm		30.274
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4885,7 +4886,7 @@ Hercynite
 #	deltafH		-1966.45	kJ/mol
 	-analytic	-3.1848e2 -7.9501e-2 2.5892e4 1.1483e2 4.0412e2
 #	Range		0-300
-	-Vm		40.75 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		40.75 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4896,7 +4897,7 @@ Hillebrandite
 #	deltafH		-637.404	kcal/mol
 	-analytic	-1.9360e1 -7.5176e-3 1.1947e4 8.0558 -1.4504e5
 #	Range		0-300
-	-Vm		71.79 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		71.79 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -4907,7 +4908,7 @@ Huntite
 #	deltafH		-1082.6		kcal/mol
 	-analytic	-6.5e2 -1.9671e-1 2.4815e4 2.5688e2 3.8740e2
 #	Range		0-350
-	-Vm		122.9
+#vm# 	-Vm		122.9
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4918,7 +4919,7 @@ Hydromagnesite
 #	deltafH		-1557.09	kcal/mol
 	-analytic	-7.9288e2 -2.1448e-1 3.6749e4 3.0888e2 5.7367e2
 #	Range		0-350
-	-Vm		208.8
+#vm# 	-Vm		208.8
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4929,7 +4930,7 @@ Hydrophilite
 #	deltafH		-795.788	kJ/mol
 	-analytic	-2.2278e2 -8.1414e-2 9.0298e3 9.2349e1 1.4097e2
 #	Range		0-300
-	-Vm		49.99 # Webmineral.com
+#vm# 	-Vm		49.99 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4940,7 +4941,7 @@ Hydroxyapatite
 #	deltafH		-6685.52	kJ/mol
 	-analytic	-8.5221e2 -2.9430e-1 2.8125e4 3.4044e2 4.3911e2
 #	Range		0-300
-	-Vm		128.9
+#vm# 	-Vm		128.9
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -4951,7 +4952,7 @@ Ice
 #	deltafH		-69.93		kcal/mol
 	-analytic	-2.3260e1 4.7948e-4 7.7351e2 8.3499 1.3143e1
 #	Range		0-200
-	-Vm		19.635 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		19.635 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		87kee/rup
 
@@ -4959,7 +4960,7 @@ Ilmenite
 	FeTiO3 + 2 H+ + H2O = Fe+2 + Ti(OH)4
 	log_k		0.9046
 #	deltafH		-1236.65	kJ/mol
-	-Vm		32.15 # Webmineral.com
+#vm# 	-Vm		32.15 # Webmineral.com
 #	Ref		RHF79
 
 Jadeite
@@ -4969,7 +4970,7 @@ Jadeite
 #	deltafH		-722.116	kcal/mol
 	-analytic	1.5934 5.0757e-3 9.5602e3 -7.0164 -8.4454e5
 #	Range		0-350
-	-Vm		60.4
+#vm# 	-Vm		60.4
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -4980,7 +4981,7 @@ Jarosite
 #	deltafH		-894.79		kcal/mol
 	-analytic	-1.0813e2 -5.0381e-2 9.6893e3 3.2832e1 1.6457e2
 #	Range		0-200
-	-Vm		162.07 # Webmineral.com
+#vm# 	-Vm		162.07 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		75kas/bor
 
@@ -4991,7 +4992,7 @@ K
 #	deltafH		0		kJ/mol
 	-analytic	-3.1102e1 -1.0003e-2 2.1338e4 1.3534e1 3.3296e2
 #	Range		0-300
-	-Vm		45.94 # Webelements.com
+#vm# 	-Vm		45.94 # Webelements.com
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -5002,7 +5003,7 @@ K-Feldspar
 #	deltafH		-949.188	kcal/mol
 	-analytic	-1.0684 1.3111e-2 1.1671e4 -9.9129 -1.5855e6
 #	Range		0-350
-	-Vm		108.87
+#vm# 	-Vm		108.87
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5013,7 +5014,7 @@ K2O
 #	deltafH		-86.8		kcal/mol
 	-analytic	-1.8283e1 -5.2255e-3 2.3184e4 1.0553e1 3.6177e2
 #	Range		0-350
-	-Vm		40.085 # gfw/density
+#vm# 	-Vm		40.085 # gfw/density
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5024,7 +5025,7 @@ KAl(SO4)2
 #	deltafH		-2470.29	kJ/mol
 	-analytic	-4.2785e2 -1.6303e-1 1.5311e4 1.7312e2 2.3904e2
 #	Range		0-300
-	-Vm		146.71 # gfw/density
+#vm# 	-Vm		146.71 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5035,7 +5036,7 @@ Kalsilite
 #	deltafH		-509.408	kcal/mol
 	-analytic	-6.7595 -7.4301e-3 6.5380e3 1.8999e-1 -2.2880e5
 #	Range		0-350
-	-Vm		59.89
+#vm# 	-Vm		59.89
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5046,7 +5047,7 @@ Kaolinite
 #	deltafH		-982.221	kcal/mol
 	-analytic	1.6835e1 -7.8939e-3 7.7636e3 -1.2190e1 -3.2354e5
 #	Range		0-350
-	-Vm		99.52
+#vm# 	-Vm		99.52
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 1.6 log K at 0C, 0.4 log K at 350C
 
@@ -5056,7 +5057,7 @@ KerogenC128
 	-delta_H	-14623.902	kcal/mol
 	-analytic	23405.37 -54.726 0 0 0 0.041
 #	Range		0-350
-	-Vm		1320.7
+#vm# 	-Vm		1320.7
 #	Extrapol	supcrt92
 #	Ref		RH98, Hel+09
 
@@ -5066,7 +5067,7 @@ KerogenC292
 	-delta_H	-36994.127	kcal/mol
 	-analytic	59184.26 -138.37 0 0 0 0.10
 #	Range		0-350
-	-Vm		3398.2
+#vm# 	-Vm		3398.2
 #	Extrapol	supcrt92
 #	Ref		RH98, Hel+09
 
@@ -5076,7 +5077,7 @@ KerogenC406
 	-delta_H	-54827.227 	kcal/mol
 	-analytic	-1.278e5 -17.76 1.968e7 4.565e4 -5.015e8 # JD 2021
 #	Range		0-350
-	-Vm		5086.4
+#vm# 	-Vm		5086.4
 #	Extrapol	supcrt92
 #	Ref		HRMNS09
 
@@ -5086,7 +5087,7 @@ KerogenC415
 	-delta_H	-60342.962	kcal/mol
 	-analytic	-1.757e5 -24.36 2.372e7 6.279e4 -6.807e8 # JD 2021
 #	Range		0-350
-	-Vm		5654.1
+#vm# 	-Vm		5654.1
 #	Extrapol	supcrt92
 #	Ref		HRMNS09
 
@@ -5096,7 +5097,7 @@ KerogenC515
 	-delta_H 	-65346.703	kcal/mol
 	-analytic	104660.55 -244.27 0 0 0 0.183
 #	Range		0-350
-	-Vm		6989.3
+#vm# 	-Vm		6989.3
 #	Extrapol	supcrt92
 #	Ref		RH98, Hel+09
 
@@ -5107,7 +5108,7 @@ Kyanite
 #	deltafH		-616.897	kcal/mol
 	-analytic	-7.3335e1 -3.2853e-2 1.2166e4 2.3412e1 1.8986e2
 #	Range		0-175
-	-Vm		44.09
+#vm# 	-Vm		44.09
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5118,7 +5119,7 @@ Larnite
 #	deltafH		-551.74		kcal/mol
 	-analytic	2.6900e1 -2.1833e-3 1.0900e4 -9.5257 -7.2537e4
 #	Range		0-300
-	-Vm		51.6 # HDN+78
+#vm# 	-Vm		51.6 # HDN+78
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -5129,7 +5130,7 @@ Laumontite
 #	deltafH		-1728.66	kcal/mol
 	-analytic	1.1904 8.1763e-3 1.9005e4 -1.4561e1 -1.5851e6
 #	Range		0-350
-	-Vm		207.55
+#vm# 	-Vm		207.55
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 1.7 log K at 0C, 0.1 log K at 350C
 
@@ -5140,7 +5141,7 @@ Lawrencite
 #	deltafH		-341.65		kJ/mol
 	-analytic	-2.2798e2 -8.1819e-2 9.2620e3 9.3097e1 1.4459e2
 #	Range		0-300
-	-Vm		40.31 # Webmineral.com
+#vm# 	-Vm		40.31 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5151,7 +5152,7 @@ Lawsonite
 #	deltafH		-1158.1		kcal/mol
 	-analytic	1.3995e1 -1.7668e-2 1.0119e4 -8.3100 1.5789e2
 #	Range		0-350
-	-Vm		101.32
+#vm# 	-Vm		101.32
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5162,7 +5163,7 @@ Li
 #	deltafH		0		kJ/mol
 	-analytic	-1.0227e2 -1.8118e-2 2.6262e4 3.8056e1 -1.6166e5
 #	Range		0-300
-	-Vm		13.017 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		13.017 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -5173,7 +5174,7 @@ Lime
 #	deltafH		-151.79		kcal/mol
 	-analytic	-7.2686e1 -1.7654e-2 1.2199e4 2.8128e1 1.9037e2
 #	Range		0-350
-	-Vm		16.764
+#vm# 	-Vm		16.764
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5184,7 +5185,7 @@ Linnaeite
 #	deltafH		-85.81		kcal/mol
 	-analytic	-6.0034e2 -2.0179e-1 -9.2145e3 2.3618e2 -1.4361e2
 #	Range		0-300
-	-Vm		63.55 # Webmineral.com
+#vm# 	-Vm		63.55 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		78vau/cra
 
@@ -5193,7 +5194,7 @@ Lizardite
 	log_k		30.560
 	-analytic	7.886e1 -2.108e-1 0 0 0 1.637e-4
 #	Range		0-300
-	-Vm		107.31
+#vm# 	-Vm		107.31
 #	Extrapol	supcrt92
 #	Ref		Wilson+06
 
@@ -5204,7 +5205,7 @@ Lopezite
 #	deltafH		-493.003	kcal/mol
 	-analytic	7.8359e1 -2.2908e-2 -9.3812e3 -2.3245e1 -1.5933e2
 #	Range		0-200
-	-Vm		109.93 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		109.93 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H Approx
 #	Ref		76del/hal
 
@@ -5215,7 +5216,7 @@ Magnesiochromite
 #	deltafH		-1783.6		kJ/mol
 	-analytic	-1.7376e2 -8.7429e-3 2.1600e4 5.0762e1 3.6685e2
 #	Range		0-200
-	-Vm		43.564 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		43.564 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H Approx
 #	Ref		WEP+82
 
@@ -5226,7 +5227,7 @@ Magnesite
 #	deltafH		-265.63		kcal/mol
 	-analytic	-1.6665e2 -4.9469e-2 6.4344e3 6.5506e1 1.0045e2
 #	Range		0-350
-	-Vm		28.018
+#vm# 	-Vm		28.018
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5238,7 +5239,7 @@ Magnetite
 	-analytic	436.5 0.01802 -2.529e4 -152.2 2.656e6 #JD 2021
 #	-analytic	-3.0510e2 -7.9919e-2 1.8709e4 1.1178e2 2.9203e2
 #	Range		0-350
-	-Vm		44.524
+#vm# 	-Vm		44.524
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5249,7 +5250,7 @@ Malachite
 #	deltafH		-251.9		kcal/mol
 	-analytic	-2.7189e2 -6.9454e-2 1.1451e4 1.0511e2 1.7877e2
 #	Range		0-350
-	-Vm		54.86
+#vm# 	-Vm		54.86
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5260,7 +5261,7 @@ Manganosite
 #	deltafH		-92.07		kcal/mol
 	-analytic	-8.4114e1 -1.8490e-2 8.7792e3 3.1561e1 1.3702e2
 #	Range		0-350
-	-Vm		13.221
+#vm# 	-Vm		13.221
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5271,7 +5272,7 @@ Margarite
 #	deltafH		-1485.8		kcal/mol
 	-analytic	-2.3138e2 -8.2788e-2 3.0154e4 7.9148e1 4.7060e2
 #	Range		0-350
-	-Vm		129.4
+#vm# 	-Vm		129.4
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 3.3 log K at 0C, 1.1 log K at 350C
 
@@ -5282,7 +5283,7 @@ Maximum_Microcline
 #	deltafH		-949.188	kcal/mol
 	-analytic	-9.4387 1.3561e-2 1.2656e4 -7.4925 -1.6795e6
 #	Range		0-350
-	-Vm		108.741
+#vm# 	-Vm		108.741
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5293,7 +5294,7 @@ Mayenite
 #	deltafH		-4644		kcal/mol
 	-analytic	-1.4778e3 -2.9898e-1 2.4918e5 4.9518e2 4.2319e3
 #	Range		0-200
-	-Vm		517.41 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		517.41 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -5304,7 +5305,7 @@ Melanterite
 #	deltafH		-3014.48	kJ/mol
 	-analytic	-2.6230e2 -7.2469e-2 6.5854e3 1.0484e2 1.0284e2
 #	Range		0-300
-	-Vm		146.48 # Marion+08
+#vm# 	-Vm		146.48 # Marion+08
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5315,7 +5316,7 @@ Merwinite
 #	deltafH		-1090.8		kcal/mol
 	-analytic	-2.2524e2 -4.2525e-2 3.5619e4 7.9984e1 -9.8259e5
 #	Range		0-350
-	-Vm		104.4
+#vm# 	-Vm		104.4
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5326,7 +5327,7 @@ Mesolite
 #	deltafH		-5947.05	kJ/mol
 	-analytic	7.1993 5.9356e-3 1.4717e4 -1.3627e1 -9.8863e5
 #	Range		0-300
-	-Vm		171.2 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		171.2 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		89db 6
 
@@ -5337,7 +5338,7 @@ Mg
 #	deltafH		0		kJ/mol
 	-analytic	-6.5988e1 -1.9356e-2 4.0318e4 2.3862e1 6.2914e2
 #	Range		0-300
-	-Vm		13.996 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		13.996 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -5348,7 +5349,7 @@ MgOHCl
 #	deltafH		-191.2		kcal/mol
 	-analytic	-1.6614e2 -4.9715e-2 1.0311e4 6.5578e1 1.6093e2
 #	Range		0-300
-	-Vm		33.23 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		33.23 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		73bar/kna
 
@@ -5359,7 +5360,7 @@ MgSO4
 #	deltafH		-1284.92	kJ/mol
 	-analytic	-2.2439e2 -7.9688e-2 9.3058e3 8.9622e1 1.4527e2
 #	Range		0-300
-	-Vm		45.25 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		45.25 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5370,7 +5371,7 @@ Millerite
 #	deltafH		-82.171		kJ/mol
 	-analytic	-1.4848e2 -4.8834e-2 2.6981e3 5.8976e1 4.2145e1
 #	Range		0-300
-	-Vm		16.89 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		16.89 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5381,7 +5382,7 @@ Minnesotaite
 #	deltafH		-1153.37	kcal/mol
 	-analytic	-1.8812e1 1.7261e-2 1.9804e4 -6.4410 -2.0433e6
 #	Range		0-300
-	-Vm		147.86 # HDN+78
+#vm# 	-Vm		147.86 # HDN+78
 #	Extrapol	Cp integration
 #	Ref		78wol, Wilson+06 differ by 2.6 log K at 0C, 1.6 log K at 350C
 
@@ -5392,7 +5393,7 @@ Mirabilite
 #	deltafH		-4328		kJ/mol
 	-analytic	-2.1877e2 -3.6692e-3 5.9214e3 8.0361e1 1.0063e2
 #	Range		0-200
-	-Vm		219.80 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		219.80 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		RHF79
 
@@ -5403,7 +5404,7 @@ Mn
 #	deltafH		0		kJ/mol
 	-analytic	-6.5558e1 -2.0429e-2 2.7571e4 2.5098e1 4.3024e2
 #	Range		0-300
-	-Vm		7.354 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		7.354 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5414,7 +5415,7 @@ Mn(OH)2(am)
 #	deltafH		-695.096	kJ/mol
 	-analytic	-7.8518e1 -7.5357e-3 8.0198e3 2.7955e1 1.3621e2
 #	Range		0-200
-	-Vm		22.36 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		22.36 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5425,7 +5426,7 @@ MnCl2:2H2O
 #	deltafH		-1092.01	kJ/mol
 	-analytic	-6.2823e1 -2.3959e-2 2.9931e3 2.5834e1 5.0850e1
 #	Range		0-200
-	-Vm		71.12 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		71.12 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5436,7 +5437,7 @@ MnCl2:4H2O
 #	deltafH		-1687.41	kJ/mol
 	-analytic	-1.1049e2 -2.3376e-2 4.0458e3 4.3097e1 6.8742e1
 #	Range		0-200
-	-Vm		98.46 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		98.46 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5447,7 +5448,7 @@ MnCl2:H2O
 #	deltafH		-789.793	kJ/mol
 	-analytic	-4.5051e1 -2.5923e-2 2.8739e3 1.9674e1 4.8818e1
 #	Range		0-200
-	-Vm		42.27 # gfw/density
+#vm# 	-Vm		42.27 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5458,7 +5459,7 @@ MnSO4
 #	deltafH		-1065.33	kJ/mol
 	-analytic	-2.3088e2 -8.2694e-2 8.1653e3 9.3256e1 1.2748e2
 #	Range		0-300
-	-Vm		46.46 # gfw/density
+#vm# 	-Vm		46.46 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5469,7 +5470,7 @@ Mo
 #	deltafH		0		kJ/mol
 	-analytic	-2.0021e2 -8.3006e-2 4.1629e4 8.0219e1 -3.4570e5
 #	Range		0-300
-	-Vm		9.387 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		9.387 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5480,7 +5481,7 @@ Molysite
 #	deltafH		-399.24		kJ/mol
 	-analytic	-3.1810e2 -1.2357e-1 1.3860e4 1.3010e2 2.1637e2
 #	Range		0-300
-	-Vm		55.86 # Webmineral.com
+#vm# 	-Vm		55.86 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5491,7 +5492,7 @@ Monohydrocalcite
 #	deltafH		-1498.29	kJ/mol
 	-analytic	-7.2614e1 -1.7217e-2 3.1850e3 2.8185e1 5.4111e1
 #	Range		0-200
-	-Vm		49.62 # Webmineral.com
+#vm# 	-Vm		49.62 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		RHF79
 
@@ -5502,7 +5503,7 @@ Monticellite
 #	deltafH		-540.8		kcal/mol
 	-analytic	1.5730e1 -3.5567e-3 9.0789e3 -6.3007 1.4166e2
 #	Range		0-300
-	-Vm		51.47
+#vm# 	-Vm		51.47
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5513,7 +5514,7 @@ Montmor-Ca
 #	deltafH		-1361.5		kcal/mol
 	-analytic	2.459e1	-9.080e-2 0 0 0 5.223e-5
 #	Range		0-300
-	-Vm		136.007
+#vm# 	-Vm		136.007
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 88db 3 match
 
@@ -5524,7 +5525,7 @@ Montmor-K
 #	deltafH		-1362.83	kcal/mol
 	-analytic	2.022e1	-7.624e-2 0 0 0	4.102e-5
 #	Range		0-300
-	-Vm		140.140
+#vm# 	-Vm		140.140
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 88db 3 match
 
@@ -5535,7 +5536,7 @@ Montmor-Mg
 #	deltafH		-1357.87	kcal/mol
 	-analytic	2.381e1 -9.031e-2 0 0 0 5.203e-5
 #	Range		0-300
-	-Vm		135.042
+#vm# 	-Vm		135.042
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 88db 3 match
 
@@ -5546,7 +5547,7 @@ Montmor-Na
 #	deltafH		-1360.69	kcal/mol
 	-analytic	2.348e1	-8.604e-2 0 0 0 4.951e-5
 #	Range		0-300
-	-Vm		137.449
+#vm# 	-Vm		137.449
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 88db 3 match, but differ from Wilson+06 by 3.4 log K at 0C, 1.7 log K at 300C
 
@@ -5557,7 +5558,7 @@ Mordenite
 #	deltafH		-6736.64	kJ/mol
 	-analytic	-5.4675e1 3.2513e-2 2.3412e4 -1.0419 -3.2292e6
 #	Range		0-300
-	-Vm		209.90 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		209.90 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		91joh/tas
 
@@ -5568,7 +5569,7 @@ Morenosite
 #	deltafH		-2976.46	kJ/mol
 	-analytic	-2.6654e2 -7.2132e-2 6.7983e3 1.0636e2 1.0616e2
 #	Range		0-300
-	-Vm		144.17 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		144.17 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5579,7 +5580,7 @@ Muscovite
 #	deltafH		-1427.41	kcal/mol
 	-analytic	3.3085e1 -1.2425e-2 1.2477e4 -2.0865e1 -5.4692e5
 #	Range		0-350
-	-Vm		140.71
+#vm# 	-Vm		140.71
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5590,7 +5591,7 @@ Na
 #	deltafH		0		kJ/mol
 	-analytic	-4.0458e1 -8.7899e-3 2.1223e4 1.5927e1 -1.2715e4
 #	Range		0-300
-	-Vm		23.812 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		23.812 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -5602,7 +5603,7 @@ Na2CO3
 #	deltafH		-1108.51	kJ/mol Chase 1998
 	-analytic	-1.5495e2 -4.3374e-2 6.4821e3 6.3571e1 1.0119e2
 #	Range		0-300
-	-Vm		41.86 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		41.86 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5613,7 +5614,7 @@ Na2CO3:7H2O
 #	deltafH		-3199.19	kJ/mol
 	-analytic	-2.0593e2 -3.4509e-3 8.1601e3 7.6594e1 1.3864e2
 #	Range		0-200
-	-Vm		153.71 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		153.71 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5624,7 +5625,7 @@ Na2Cr2O7
 #	deltafH		-473		kcal/mol
 	-analytic	4.4885e1 -2.4919e-2 -5.0321e3 -1.2430e1 -8.5468e1
 #	Range		0-200
-	-Vm		103.96 # gfw/density
+#vm# 	-Vm		103.96 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -5635,7 +5636,7 @@ Na2CrO4
 #	deltafH		-320.8		kcal/mol
 	-analytic	5.4985 -9.9008e-3 1.0510e2
 #	Range		0-200
-	-Vm		59.48 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		59.48 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -5646,7 +5647,7 @@ Na2O
 #	deltafH		-99.14		kcal/mol
 	-analytic	-6.3585e1 -8.4695e-3 2.0923e4 2.5601e1 3.2651e2
 #	Range		0-350
-	-Vm		25
+#vm# 	-Vm		25
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5657,7 +5658,7 @@ Na2SiO3
 #	deltafH		-373.19		kcal/mol
 	-analytic	-3.4928e1 5.6905e-3 1.0284e4 1.1197e1 -6.0134e5
 #	Range		0-300
-	-Vm		50.86 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		50.86 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		73bar/kna
 
@@ -5668,7 +5669,7 @@ Na2U2O7
 #	deltafH		-3203.8		kJ/mol
 	-analytic	-8.6640e1 -1.0903e-2 1.1841e4 2.9406e1 1.8479e2
 #	Range		0-300
-	-Vm		95.34 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		95.34 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -5679,7 +5680,7 @@ NaFeO2
 #	deltafH		-698.218	kJ/mol
 	-analytic	-7.0047e1 -9.6226e-3 1.0647e4 2.3071e1 1.8082e2
 #	Range		0-200
-	-Vm		33.48 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		33.48 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5690,7 +5691,7 @@ NaUO3
 #	deltafH		-1494.9		kJ/mol
 	-analytic	-3.6363e1 7.0505e-4 4.5359e3 1.1828e1 7.0790e1
 #	Range		0-300
-	-Vm		42.56 # gfw/density
+#vm# 	-Vm		42.56 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -5701,7 +5702,7 @@ Nahcolite
 #	deltafH		-226.4		kcal/mol
 	-analytic	-2.2282e2 -5.9693e-2 5.4887e3 8.9744e1 8.5712e1
 #	Range		0-300
-	-Vm		38.62 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		38.62 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		73bar/kna
 
@@ -5712,7 +5713,7 @@ Nantokite
 #	deltafH		-137.329	kJ/mol
 	-analytic	-2.2442e1 -1.1201e-2 -1.8709e3 1.0221e1 -3.1763e1
 #	Range		0-200
-	-Vm		23.92 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		23.92 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5723,7 +5724,7 @@ Natrolite
 #	deltafH		-5718.56	kJ/mol
 	-analytic	-2.7712e1 -2.7963e-3 1.6075e4 1.5332 -9.5765e5
 #	Range		0-300
-	-Vm		169.72 # HDN+78
+#vm# 	-Vm		169.72 # HDN+78
 #	Extrapol	Cp integration
 #	Ref		83joh/flo
 
@@ -5734,7 +5735,7 @@ Natron
 #	deltafH		-4079.39	kJ/mol
 	-analytic	-1.9981e2 -2.9247e-2 5.2937e3 8.0973e1 8.2662e1
 #	Range		0-300
-	-Vm		195.99 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		195.99 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5745,7 +5746,7 @@ Natrosilite
 #	deltafH		-590.36		kcal/mol
 	-analytic	-2.7628e1 1.6865e-2 1.3302e4 4.2356 -1.2828e6
 #	Range		0-300
-	-Vm		72.57 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		72.57 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		77bar/kna
 
@@ -5756,7 +5757,7 @@ Nepheline
 #	deltafH		-500.241	kcal/mol
 	-analytic	-2.4856e1 -8.8171e-3 8.5653e3 6.0904 -2.2786e5
 #	Range		0-350
-	-Vm		54.16
+#vm# 	-Vm		54.16
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5767,7 +5768,7 @@ Nesquehonite
 #	deltafH		-472.576	kcal/mol
 	-analytic	1.3771e2 -6.0397e-2 -3.5049e4 -1.8831e1 4.4213e6
 #	Range		0-50
-	-Vm		74.79
+#vm# 	-Vm		74.79
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5776,7 +5777,7 @@ NH4Cl
 	log_k		1.3252
 	-analytic	-3.078 1.550e-2 0 0 0 -3.451e-6  
 #	Range		0-30
-	-Vm		34.96
+#vm# 	-Vm		34.96
 #	Extrapol	Marion+12
 #	Ref		Marion+12, WangLi11 match 
 
@@ -5785,7 +5786,7 @@ NH4-feldspar # Buddingtonite (sometimes with +0.5 H2O, especially at low temp)
 	log_k		-2.7243
 	-analytic	-7.434e1 3.080e-1 0 0 0 -2.270e-4
 #	Range		25-325
-	-Vm		114.78 # Webmineral.com
+#vm# 	-Vm		114.78 # Webmineral.com
 #	Extrapol	N17
 #	Ref		Wat81
 
@@ -5794,7 +5795,7 @@ NH4HCO3
 	log_k		-0.0207
 	-analytic	-1.587e1 9.703e-2 0 0 0 -1.472e-4
 #	Range		0-40
-	-Vm		50.04
+#vm# 	-Vm		50.04
 #	Extrapol	Marion+12
 #	Ref		Marion+12
 
@@ -5803,7 +5804,7 @@ NH4-muscovite # Tobelite
 	log_k		6.8109
 	-analytical	-6.638e1 3.170e-1 0 0 0 -2.386e-4
 #	Range		25-325
-	-Vm		146.07 # Hovis04
+#vm# 	-Vm		146.07 # Hovis04
 #	Extrapol	N17
 #	Ref		Wat81
 
@@ -5814,7 +5815,7 @@ Ni
 #	deltafH		0		kcal/mol
 	-analytic	-5.8308e1 -2.0133e-2 1.8444e4 2.1590e1 2.8781e2
 #	Range		0-350
-	-Vm		6.588
+#vm# 	-Vm		6.588
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -5825,7 +5826,7 @@ Ni(OH)2
 #	deltafH		-529.998	kJ/mol
 	-analytic	-6.5279e1 -5.9499e-3 7.3471e3 2.2290e1 1.2479e2
 #	Range		0-200
-	-Vm		22.34 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		22.34 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5836,7 +5837,7 @@ Ni2SiO4
 #	deltafH		-341.705	kcal/mol
 	-analytic	-4.0414e1 -1.1194e-2 9.6515e3 1.2026e1 -3.6336e5
 #	Range		0-300
-	-Vm		42.61 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		42.61 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		74nau/ryz
 
@@ -5847,7 +5848,7 @@ NiCl2
 #	deltafH		-305.336	kJ/mol
 	-analytic	-1.2416 -2.3139e-2 2.6529e3 3.1696 4.5052e1
 #	Range		0-200
-	-Vm		36.70 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		36.70 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5858,7 +5859,7 @@ NiCl2:2H2O
 #	deltafH		-922.135	kJ/mol
 	-analytic	-4.8814e1 -2.2602e-2 2.5951e3 2.0518e1 4.4086e1
 #	Range		0-200
-	-Vm		64.07 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		64.07 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5869,7 +5870,7 @@ NiSO4
 #	deltafH		-873.066	kJ/mol
 	-analytic	-1.8878e2 -7.6403e-2 7.9412e3 7.6866e1 1.2397e2
 #	Range		0-300
-	-Vm		42.05 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		42.05 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -5880,7 +5881,7 @@ NiSO4:6H2O(alpha)
 #	deltafH		-2682.99	kJ/mol
 	-analytic	-1.1937e2 -1.3785e-2 4.1543e3 4.3454e1 7.0587e1
 #	Range		0-200
-	-Vm		126.6 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		126.6 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5891,7 +5892,7 @@ Nickelbischofite
 #	deltafH		-2103.23	kJ/mol
 	-analytic	-1.4340e2 -2.1257e-2 5.1858e3 5.4759e1 8.8112e1
 #	Range		0-200
-	-Vm		123.15 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		123.15 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -5902,7 +5903,7 @@ Ningyoite
 #	deltafH		-1016.65	kcal/mol
 	-analytic	-1.0274e2 -4.9041e-2 1.7779e3 3.2973e1 3.0227e1
 #	Range		0-200
-	-Vm		116.77 # Webmineral.com
+#vm# 	-Vm		116.77 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		78lan
 
@@ -5913,7 +5914,7 @@ Niter
 #	deltafH		-494.46		kJ/mol
 	-analytic	-6.5607e1 -2.8165e-2 -4.0131e2 3.0361e1 -6.2425
 #	Range		0-300
-	-Vm		48.04 # Marion+05
+#vm# 	-Vm		48.04 # Marion+05
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -5924,7 +5925,7 @@ Nontronite-Ca
 #	deltafH		-1166.7		kcal/mol
 	-analytic	3.697 -4.892e-2 0 0 0 1.489e-5
 #	Range		0-300
-	-Vm		137.780
+#vm# 	-Vm		137.780
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 2.6 log K at 0C, 0.2 log K at 300C
 
@@ -5935,7 +5936,7 @@ Nontronite-K
 #	deltafH		-1167.93	kcal/mol
 	-analytic	-1.959 -3.115e-2 0 0 0 1.139e-6
 #	Range		0-300
-	-Vm		141.913
+#vm# 	-Vm		141.913
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 1.1 log K at 0C, 0.5 log K at 300C
 
@@ -5946,7 +5947,7 @@ Nontronite-Mg
 #	deltafH		-1162.93	kcal/mol
 	-analytic	2.476 -4.730e-2 0 0 0 1.382e-5
 #	Range		0-300
-	-Vm		136.815
+#vm# 	-Vm		136.815
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol
 
@@ -5957,7 +5958,7 @@ Nontronite-Na
 #	deltafH		-1165.8		kcal/mol
 	-analytic	1.106 -4.045e-2 0 0 0 9.229e-6
 #	Range		0-300
-	-Vm		139.221
+#vm# 	-Vm		139.221
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 1.7 log K at 0C, 0.2 log K at 300C
 
@@ -5968,7 +5969,7 @@ Okenite
 #	deltafH		-749.641	kcal/mol
 	-analytic	-7.7353e1 1.5091e-2 1.3023e4 2.1337e1 -1.1831e6
 #	Range		0-300
-	-Vm		94.77 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		94.77 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -5979,7 +5980,7 @@ P
 #	deltafH		0		kJ/mol
 	-analytic	-9.2727e1 -6.8342e-2 4.3465e4 4.0156e1 6.7826e2
 #	Range		0-300
-	-Vm		17.2 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		17.2 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -5990,7 +5991,7 @@ Paragonite
 #	deltafH		-1416.96	kcal/mol
 	-analytic	3.5507e1 -1.0720e-2 1.3519e4 -2.2283e1 -4.5657e5
 #	Range		0-350
-	-Vm		132.53
+#vm# 	-Vm		132.53
 #	Extrapol	supcrt92
 #	Ref		HDN+78, differ by 2.5 log K at 0C, 0.6 log K at 350C, but match Wilson+06
 
@@ -6001,7 +6002,7 @@ Pargasite
 #	deltafH		-3016.62	kcal/mol
 	-analytic	-6.7889e1 -3.7817e-2 5.0493e4 9.2705 -1.0163e6
 #	Range		0-350
-	-Vm		273.5
+#vm# 	-Vm		273.5
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6012,7 +6013,7 @@ Periclase
 #	deltafH		-143.8		kcal/mol
 	-analytic	-8.8465e1 -1.8390e-2 1.0414e4 3.2469e1 1.6253e2
 #	Range		0-350
-	-Vm		11.248
+#vm# 	-Vm		11.248
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6023,7 +6024,7 @@ Petalite
 #	deltafH		-4886.15	kJ/mol
 	-analytic	-6.6355 2.4316e-2 1.5949e4 -1.3341e1 -2.2265e6
 #	Range		0-300
-	-Vm		128.4 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		128.4 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6034,7 +6035,7 @@ Phlogopite
 #	deltafH		-1488.07	kcal/mol
 	-analytic	-8.7730e1 -1.7253e-2 2.3748e4 2.4465e1 -8.9045e5
 #	Range		0-350
-	-Vm		149.66
+#vm# 	-Vm		149.66
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6044,7 +6045,7 @@ Polydymite
 #	deltafH		-78.014		kcal/mol
 	-analytic	-1.8030e1 -4.6945e-2 -1.1557e4 8.8339 -1.9625e2
 #	Range		0-200
-	-Vm		64.14 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		64.14 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		78vau/cra
 
@@ -6055,7 +6056,7 @@ Portlandite
 #	deltafH		-986.074	kJ/mol
 	-analytic	-8.3848e1 -1.8373e-2 9.3154e3 3.2584e1 1.4538e2
 #	Range		0-300
-	-Vm		33.056 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		33.056 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6066,7 +6067,7 @@ Prehnite
 #	deltafH		-1481.65	kcal/mol
 	-analytic	-3.5763e1 -2.1396e-2 2.0167e4 6.3554 -7.4967e5
 #	Range		0-350
-	-Vm		140.33
+#vm# 	-Vm		140.33
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6077,7 +6078,7 @@ Pseudowollastonite
 #	deltafH		-388.9		kcal/mol
 	-analytic	2.6691e1 6.3323e-3 5.5723e3 -1.1822e1 -3.6038e5
 #	Range		0-300
-	-Vm		40.08 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		40.08 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		77bar/kna
 
@@ -6087,7 +6088,7 @@ Pyridine
 	-delta_H	-669.9574	kcal/mol
 	-analytic	1071.04 -2.50773 0 0 0 0.00188
 #	Range		0-350
-	-Vm		64.4
+#vm# 	-Vm		64.4
 #	Extrapol	supcrt92
 #	Ref		Hel+98
 
@@ -6098,7 +6099,7 @@ Pyrite
 #	deltafH		-41		kcal/mol
 	-analytic	-2.4195e2 -8.7948e-2 -6.2911e2 9.9248e1 -9.7454
 #	Range		0-350
-	-Vm		23.94
+#vm# 	-Vm		23.94
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6109,7 +6110,7 @@ Pyrolusite
 #	deltafH		-520.031	kJ/mol
 	-analytic	-1.1541e2 -4.1665e-2 -1.8960e3 4.7094e1 -2.9551e1
 #	Range		0-300
-	-Vm		18.38 # Webmineral.com
+#vm# 	-Vm		18.38 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6120,7 +6121,7 @@ Pyrophyllite
 #	deltafH		-1345.31	kcal/mol
 	-analytic	1.1066e1 1.2707e-2 1.6417e4 -1.9596e1 -1.8791e6
 #	Range		0-350
-	-Vm		126.6
+#vm# 	-Vm		126.6
 #	Extrapol	supcrt92
 #	Ref		HDN+78, Wilson+06 match
 
@@ -6131,7 +6132,7 @@ Pyrrhotite
 #	deltafH		-24		kcal/mol
 	-analytic	-1.5785e2 -5.2258e-2 3.9711e3 6.3195e1 6.2012e1
 #	Range		0-350
-	-Vm		18.2
+#vm# 	-Vm		18.2
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6142,7 +6143,7 @@ Quartz
 #	deltafH		-217.65		kcal/mol
 	-analytic	7.7698e-2 1.0612e-2 3.4651e3 -4.3551 -7.2138e5
 #	Range		0-350
-	-Vm		22.68
+#vm# 	-Vm		22.68
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6153,7 +6154,7 @@ Rankinite
 #	deltafH		-941.7		kcal/mol
 	-analytic	-9.6393e1 -1.6592e-2 2.4832e4 3.2541e1 -9.4630e5
 #	Range		0-300
-	-Vm		96.13 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		96.13 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		77bar/kna
 
@@ -6164,7 +6165,7 @@ Rhodochrosite
 #	deltafH		-212.521	kcal/mol
 	-analytic	-1.6195e2 -4.9344e-2 5.0937e3 6.4402e1 7.9531e1
 #	Range		0-350
-	-Vm		31.075
+#vm# 	-Vm		31.075
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6175,7 +6176,7 @@ Rhodonite
 #	deltafH		-1319.42	kJ/mol
 	-analytic	2.0585e1 4.9941e-3 4.5816e3 -9.8212 -3.0658e5
 #	Range		0-300
-	-Vm		35.87 # Webmineral.com
+#vm# 	-Vm		35.87 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6186,7 +6187,7 @@ Riebeckite
 #	deltafH		-2395.978	kcal/mol
 	-analytic	3.8839e1 -1.187e-1 0 0 0 6e-5
 #	Range		0-350
-	-Vm		274.9
+#vm# 	-Vm		274.9
 #	Extrapol	supcrt92
 #	Ref		HDN+78 for S, Cp; HP11 for deltafH; Z16 for deltafG
 
@@ -6197,7 +6198,7 @@ Ripidolite
 #	deltafH		-1947.87	kcal/mol
 	-analytic	2.122e2 -6.025e-1 0 0 0 4.579e-4
 #	Range		0-300
-	-Vm		208.614
+#vm# 	-Vm		208.614
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6208,7 +6209,7 @@ Rutherfordine
 #	deltafH		-1689.53	kJ/mol
 	-analytic	-8.8224e1 -3.1434e-2 2.6675e3 3.4161e1 4.1650e1
 #	Range		0-300
-	-Vm		57.90 # Webmineral.com
+#vm# 	-Vm		57.90 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6216,7 +6217,7 @@ Rutile
 	TiO2 + 2 H2O = Ti(OH)4
 	log_k		-9.6452
 #	deltafH		-226.107	kcal/mol
-	-Vm		18.82
+#vm# 	-Vm		18.82
 #	Ref		RHF79
 
 S
@@ -6226,7 +6227,7 @@ S
 #	deltafH		0		kJ/mol
 	-analytic	-8.8928e1 -2.8454e-2 -1.1516e4 3.6747e1 -1.7966e2
 #	Range		0-300
-	-Vm		15.511 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		15.511 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -6237,7 +6238,7 @@ Saleeite
 #	deltafH		-1189.61	kcal/mol
 	-analytic	-6.0028e1 -4.4391e-2 3.9168e3 1.6428e1 6.6533e1
 #	Range		0-200
-	-Vm		285.77 # Webmineral.com
+#vm# 	-Vm		285.77 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		78lan
 
@@ -6248,7 +6249,7 @@ Sanidine_high
 #	deltafH		-946.538	kcal/mol
 	-analytic	-3.4889 1.4495e-2 1.2856e4 -9.8978 -1.6572e6
 #	Range		0-350
-	-Vm		109.008
+#vm# 	-Vm		109.008
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6257,7 +6258,7 @@ Saponite-Fe-Ca
 	log_k		20.3624
 	-analytic	5.992e1 -1.681e-1 0 0 0 1.174e-4
 #	Range		0-300
-	-Vm		143.506
+#vm# 	-Vm		143.506
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6266,7 +6267,7 @@ Saponite-Fe-Fe
 	log_k		18.9359
 	-analytic	5.762e1 -1.630e-1 0 0 0 1.099e-4 #MMD corrected typo 2025-01-10
 #	Range		0-300
-	-Vm		142.672
+#vm# 	-Vm		142.672
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6275,7 +6276,7 @@ Saponite-Fe-K
 	log_k		18.7937
 	-analytic	5.427e1 -1.504e-1 0 0 0 1.037e-4
 #	Range		0-300
-	-Vm		147.639
+#vm# 	-Vm		147.639
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6284,7 +6285,7 @@ Saponite-Fe-Mg
 	log_k		19.5290
 	-analytic	5.870e1 -1.665e-1 0 0 0 1.163e-4
 #	Range		0-300
-	-Vm		142.541
+#vm# 	-Vm		142.541
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6293,7 +6294,7 @@ Saponite-Fe-Na
 	log_k		19.7977
 	-analytic	5.733e1 -1.597e-1 0 0 0 1.117e-4
 #	Range		0-300
-	-Vm		144.947
+#vm# 	-Vm		144.947
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6304,7 +6305,7 @@ Saponite-Mg-Ca
 #	deltafH		-1436.51	kcal/mol
 	-analytic	8.088e1 -2.233e-1 0 0 0 1.655e-4
 #	Range		0-300
-	-Vm		141.250
+#vm# 	-Vm		141.250
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol match
 
@@ -6313,7 +6314,7 @@ Saponite-Mg-Fe
 	log_k		27.6789
 	-analytic	7.825e1 -2.180e-1 0 0 0 1.612e-4
 #	Range		0-300
-	-Vm		140.416
+#vm# 	-Vm		140.416
 #	Extrapol	supcrt92
 #	Ref		Catalano13
 
@@ -6324,7 +6325,7 @@ Saponite-Mg-K
 #	deltafH		-1437.74	kcal/mol
 	-analytic	7.522e1 -2.055e-1 0 0 0 1.517e-4
 #	Range		0-300
-	-Vm		145.383
+#vm# 	-Vm		145.383
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 1.7 log K at 0C, 0.7 log K at 300C
 
@@ -6335,7 +6336,7 @@ Saponite-Mg-Mg
 #	deltafH		-1432.79	kcal/mol
 	-analytic	7.965e1 -2.217e-1 0 0 0 1.644e-4
 #	Range		0-300
-	-Vm		140.285
+#vm# 	-Vm		140.285
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 2.2 log K at 0C, 0.6 log K at 300C
 
@@ -6346,7 +6347,7 @@ Saponite-Mg-Na
 #	deltafH		-1435.61	kcal/mol
 	-analytic	7.829e1 -2.148e-1 0 0 0 1.598e-4
 #	Range		0-300
-	-Vm		142.691
+#vm# 	-Vm		142.691
 #	Extrapol	supcrt92, Cp integration
 #	Ref		Catalano13, 78wol differ by 2.4 log K at 0C, 0.7 log K at 300C
 
@@ -6357,7 +6358,7 @@ Sc
 #	deltafH 	0		kJ/mol
 	-analytic	-6.6922e1 -2.9150e-2 5.4559e4 2.4189e1 8.5137e2
 #	Range		0-300
-	-Vm		15.038 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		15.038 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6368,7 +6369,7 @@ Scacchite
 #	deltafH		-481.302	kJ/mol
 	-analytic	-2.3476e2 -8.2437e-2 9.0088e3 9.6128e1 1.4064e2
 #	Range		0-300
-	-Vm		42.27 # Webmineral.com
+#vm# 	-Vm		42.27 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6379,7 +6380,7 @@ Schoepite
 #	deltafH		-1826.1		kJ/mol
 	-analytic	1.3645e1 1.0884e-2 2.5412e3 -8.3167e0 3.9649e1
 #	Range		0-300
-	-Vm		66.08 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		66.08 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6390,7 +6391,7 @@ Scolecite
 #	deltafH		-6048.92	kJ/mol
 	-analytic	5.0656e1 -3.1485e-3 1.0574e4 -2.5663e1 -5.2769e5
 #	Range		0-300
-	-Vm		172.29 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		172.29 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		83joh/flo
 
@@ -6401,7 +6402,7 @@ Sepiolite
 #	deltafH		-2418		kcal/mol
 	-analytic	1.8690e1 4.7544e-2 2.6765e4 -2.5301e1 -2.6498e6
 #	Range		0-350
-	-Vm		285.6
+#vm# 	-Vm		285.6
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6412,7 +6413,7 @@ Si
 #	deltafH		0		kJ/mol
 	-analytic	-5.7245e2 -7.6302e-2 8.3516e4 2.0045e2 -2.8494e6
 #	Range		0-300
-	-Vm		12.056 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		12.056 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -6423,7 +6424,7 @@ Siderite
 #	deltafH		-179.173	kcal/mol
 	-analytic	-1.5990e2 -4.9361e-2 5.4947e3 6.3032e1 8.5787e1
 #	Range		0-350
-	-Vm		29.378
+#vm# 	-Vm		29.378
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6434,7 +6435,7 @@ Sillimanite
 #	deltafH		-615.099	kcal/mol
 	-analytic	-7.1610e1 -3.2196e-2 1.2493e4 2.2449e1 1.9496e2
 #	Range		0-350
-	-Vm		49.9
+#vm# 	-Vm		49.9
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6445,7 +6446,7 @@ SiO2(am)
 #	deltafH		-214.568	kcal/mol
 	-analytic	1.2109 7.0767e-3 2.3634e3 -3.4449 -4.8591e5
 #	Range		0-325
-	-Vm		29
+#vm# 	-Vm		29
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6456,7 +6457,7 @@ Sm
 #	deltafH 	0		kJ/mol
 	-analytic	-7.1599e1 -2.0083e-2 4.2693e4 2.7291e1 6.6621e2
 #	Range		0-300
-	-Vm		19.98 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		19.98 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6467,7 +6468,7 @@ Smectite-high-Fe-Mg
 #	deltafH		-1351.39	kcal/mol
 	-analytic	-9.6102 1.2551e-3 1.8157e4 -7.9862 -1.3005e6
 #	Range		0-300
-	-Vm		139.07 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		139.07 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		78wol
 
@@ -6478,7 +6479,7 @@ Smectite-low-Fe-Mg
 #	deltafH		-1352.12	kcal/mol
 	-analytic	-1.7003e1 6.9848e-3 1.8359e4 -6.8896 -1.6637e6
 #	Range		0-300
-	-Vm		139.39 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		139.39 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		78wol
 
@@ -6489,7 +6490,7 @@ Smithsonite
 #	deltafH		-194.26		kcal/mol
 	-analytic	-1.6452e2 -5.0231e-2 5.5925e3 6.5139e1 8.7314e1
 #	Range		0-350
-	-Vm		28.275
+#vm# 	-Vm		28.275
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6500,7 +6501,7 @@ Sphaerocobaltite
 #	deltafH		-171.459	kcal/mol
 	-analytic	-1.5709e2 -4.8957e-2 5.3158e3 6.2075e1 8.2995e1
 #	Range		0-300
-	-Vm		28.8 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		28.8 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		84sve
 
@@ -6511,7 +6512,7 @@ Sphalerite
 #	deltafH		-49		kcal/mol
 	-analytic	-1.5497e2 -4.8953e-2 1.7850e3 6.1472e1 2.7899e1
 #	Range		0-350
-	-Vm		23.83
+#vm# 	-Vm		23.83
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6522,7 +6523,7 @@ Spinel
 #	deltafH		-546.847	kcal/mol
 	-analytic	-3.3895e2 -8.3595e-2 2.9251e4 1.2260e2 4.5654e2
 #	Range		0-350
-	-Vm		39.71
+#vm# 	-Vm		39.71
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6533,7 +6534,7 @@ Spinel-Co
 #	deltafH		-891		kJ/mol
 	-analytic	-3.2239e2 -8.0782e-2 1.4635e4 1.1755e2 2.2846e2
 #	Range		0-300
-	-Vm		39.41 # gfw/density
+#vm# 	-Vm		39.41 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6544,7 +6545,7 @@ Spodumene
 #	deltafH		-3054.75	kJ/mol
 	-analytic	-9.8111 2.1191e-3 9.6920e3 -3.0484 -7.8822e5
 #	Range		0-300
-	-Vm		58.37 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		58.37 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6555,7 +6556,7 @@ Stilbite
 #	deltafH		-11005.7	kJ/mol
 	-analytic	-2.4483e1 3.0987e-2 2.8013e4 -1.5802e1 -3.4491e6
 #	Range		0-300
-	-Vm		333.50 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		333.50 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		90how/joh
 
@@ -6566,7 +6567,7 @@ Strengite
 #	deltafH		-1876.23	kJ/mol
 	-analytic	-2.7752e2 -9.4014e-2 7.6862e3 1.0846e2 1.2002e2
 #	Range		0-300
-	-Vm		65.10 # Webmineral.com
+#vm# 	-Vm		65.10 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6577,7 +6578,7 @@ Sylvite
 #	deltafH		-104.37		kcal/mol
 	-analytic	-8.1204e1 -3.3074e-2 8.2819e2 3.6014e1 1.2947e1
 #	Range		0-350
-	-Vm		37.524
+#vm# 	-Vm		37.524
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6588,7 +6589,7 @@ Talc
 #	deltafH		-1410.92	kcal/mol
 	-analytic	1.1164e1 2.4724e-2 1.9810e4 -1.7568e1 -1.8241e6
 #	Range		0-350
-	-Vm		136.25
+#vm# 	-Vm		136.25
 #	Extrapol	supcrt92
 #	Ref		HDN+78, Wilson+06 match
 
@@ -6599,7 +6600,7 @@ Tarapacaite
 #	deltafH		-335.4		kcal/mol
 	-analytic	2.7953e1 -1.0863e-2 -2.7589e3 -6.4154e0 -4.6859e1
 #	Range		0-200
-	-Vm		70.87 # Webmineral.com
+#vm# 	-Vm		70.87 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -6610,7 +6611,7 @@ Tenorite
 #	deltafH		-37.2		kcal/mol
 	-analytic	-8.9899e1 -1.8886e-2 6.0346e3 3.3517e1 9.4191e1
 #	Range		0-350
-	-Vm		12.22
+#vm# 	-Vm		12.22
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6621,7 +6622,7 @@ Tephroite
 #	deltafH		-1730.47	kJ/mol
 	-analytic	-3.2440e1 -1.1023e-2 8.8910e3 1.1691e1 1.3875e2
 #	Range		0-300
-	-Vm		47.52 # Webmineral.com
+#vm# 	-Vm		47.52 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6632,7 +6633,7 @@ Th
 #	deltafH		0		kJ/mol
 	-analytic	-2.8256e1 -1.1963e-2 6.8870e4 4.2068e0 1.0747e3
 #	Range		0-300
-	-Vm		19.83 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		19.83 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -6643,7 +6644,7 @@ Th(NO3)4:5H2O
 #	deltafH		-3007.35	kJ/mol
 	-analytic	-1.2480e2 -2.0405e-2 5.1601e3 4.6613e1 8.7669e1
 #	Range		0-200
-	-Vm		203.62 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		203.62 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -6654,7 +6655,7 @@ Th(SO4)2
 #	deltafH		-2542.12	kJ/mol
 	-analytic	-8.4525 -3.5442e-2 0 0 -1.1540e5
 #	Range		0-200
-	-Vm		100.39 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		100.39 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -6665,7 +6666,7 @@ Th2S3
 #	deltafH		-1082.89	kJ/mol
 	-analytic	-3.2969e2 -1.1090e-1 4.6877e4 1.2152e2 7.3157e2
 #	Range		0-300
-	-Vm		71.19 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		71.19 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6676,7 +6677,7 @@ Th7S12
 #	deltafH		-4136.58	kJ/mol
 	-analytic	-2.1309e2 -1.4149e-1 9.8550e4 5.2042e1 1.6736e3
 #	Range		0-200
-	-Vm		248.02 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		248.02 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -6687,7 +6688,7 @@ ThCl4
 #	deltafH		-283.519	kcal/mol
 	-analytic	-5.9340 -4.1640e-2 9.8623e3 3.6804 1.6748e2
 #	Range		0-200
-	-Vm		81.45 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		81.45 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		80lan/her
 
@@ -6698,7 +6699,7 @@ ThS2
 #	deltafH		-625.867	kJ/mol
 	-analytic	-3.7691e1 -2.3714e-2 8.4673e3 1.0970e1 1.4380e2
 #	Range		0-200
-	-Vm		40.57 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		40.57 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -6709,7 +6710,7 @@ Thenardite
 #	deltafH		-1387.87	kJ/mol
 	-analytic	-2.1202e2 -7.1613e-2 5.1083e3 8.7244e1 7.9773e1
 #	Range		0-300
-	-Vm		53.33 # Marion+05
+#vm# 	-Vm		53.33 # Marion+05
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6720,7 +6721,7 @@ Thermonatrite
 #	deltafH		-1428.78	kJ/mol
 	-analytic	-1.4030e2 -3.5263e-2 5.7840e3 5.7528e1 9.0295e1
 #	Range		0-300
-	-Vm		54.92 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		54.92 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -6731,7 +6732,7 @@ Thorianite
 #	deltafH		-1226.4		kJ/mol
 	-analytic	-1.4249e1 -2.4645e-3 4.3110e3 -1.6605e-2 2.1598e5
 #	Range		0-300
-	-Vm		26.373 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		26.373 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -6739,63 +6740,63 @@ Ti
 	Ti + 2 H2O + O2 = Ti(OH)4
 	log_k		149.2978
 #	deltafH		0		kJ/mol
-	-Vm		10.631 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		10.631 # thermo.com.V8.R6+.tdat
 #	Ref		CWM89
 
 Ti2O3
 	Ti2O3 + 4 H2O + 0.5 O2 = 2 Ti(OH)4
 	log_k		42.9866
 #	deltafH		-1520.78	kJ/mol
-	-Vm		32.02 # gfw/density
+#vm# 	-Vm		32.02 # gfw/density
 #	Ref		WEP+82
 
 Ti3O5
 	Ti3O5 + 6 H2O + 0.5 O2 = 3 Ti(OH)4
 	log_k		34.6557
 #	deltafH		-2459.24	kJ/mol
-	-Vm		48.93 # gfw/density
+#vm# 	-Vm		48.93 # gfw/density
 #	Ref		WEP+82
 
 TiB2
 	TiB2 + 5 H2O + 2.5 O2 = Ti(OH)4 + 2 B(OH)3
 	log_k		312.4194
 #	deltafH		-323.883	kJ/mol
-	-Vm		15.37 # gfw/density
+#vm# 	-Vm		15.37 # gfw/density
 #	Ref		WEP+82
 
 TiC
 	TiC + 3 H2O + 2 O2 = H+ + HCO3- + Ti(OH)4
 	log_k		181.8139
 #	deltafH		-184.346	kJ/mol
-	-Vm		12.15 # gfw/density
+#vm# 	-Vm		12.15 # gfw/density
 #	Ref		WEP+82
 
 TiCl2
 	TiCl2 + 3 H2O + 0.5 O2 = Ti(OH)4 + 2 Cl- + 2 H+
 	log_k		70.9386
 #	deltafH		-514.012	kJ/mol
-	-Vm		37.95 # gfw/density
+#vm# 	-Vm		37.95 # gfw/density
 #	Ref		WEP+82
 
 TiCl3
 	TiCl3 + 3.5 H2O + 0.25 O2 = Ti(OH)4 + 3 Cl- + 3 H+
 	log_k		39.3099
 #	deltafH		-720.775	kJ/mol
-	-Vm		58.42 # gfw/density
+#vm# 	-Vm		58.42 # gfw/density
 #	Ref		WEP+82
 
 TiN
 	TiN + 3.5 H2O + 0.25 O2 = NH3 + Ti(OH)4
 	log_k		35.2344
 #	deltafH		-338.304	kJ/mol
-	-Vm		11.46 # gfw/density
+#vm# 	-Vm		11.46 # gfw/density
 #	Ref		WEP+82
 
 Titanite
 	CaTiSiO5 + 2 H+ + H2O = Ca+2 + SiO2 + Ti(OH)4
 	log_k		719.5839
 #	deltafH		0		kcal/mol
-	-Vm		55.65
+#vm# 	-Vm		55.65
 #	Ref		RHF79
 
 Tobermorite-11A
@@ -6805,7 +6806,7 @@ Tobermorite-11A
 #	deltafH		-2556.42	kcal/mol
 	-analytic	7.9123e1 3.9150e-2 2.9429e4 -3.9191e1 -2.4122e6
 #	Range		0-300
-	-Vm		286.81 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		286.81 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		82sar/bar
 
@@ -6816,7 +6817,7 @@ Tremolite
 #	deltafH		-2944.04	kcal/mol
 	-analytic	8.5291e1 4.6337e-2 3.9465e4 -5.4414e1 -3.1913e6
 #	Range		0-350
-	-Vm		272.92
+#vm# 	-Vm		272.92
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -6827,7 +6828,7 @@ Trevorite
 #	deltafH		-1081.15	kJ/mol
 	-analytic	-1.4322e2 -2.9429e-2 1.4518e4 4.5698e1 2.4658e2
 #	Range		0-200
-	-Vm		44.89 # Webmineral.com
+#vm# 	-Vm		44.89 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		RHF79
 
@@ -6838,7 +6839,7 @@ Tridymite
 #	deltafH		-909.065	kJ/mol
 	-analytic	3.1594e2 6.9315e-2 -1.1358e4 -1.2219e2 -1.9299e2
 #	Range		0-200
-	-Vm		26.12 # Webmineral.com
+#vm# 	-Vm		26.12 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -6849,7 +6850,7 @@ Troilite
 #	deltafH		-101.036	kJ/mol
 	-analytic	-1.6146e2 -5.3170e-2 4.0461e3 6.4620e1 6.3183e1
 #	Range		0-300
-	-Vm		19.07 # Webmineral.com
+#vm# 	-Vm		19.07 # Webmineral.com
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
@@ -6860,7 +6861,7 @@ U
 #	deltafH		0		kJ/mol
 	-analytic	-2.4912e2 -4.7104e-2 8.1115e4 8.7008e1 -1.0158e6
 #	Range		0-300
-	-Vm		12.49 # Webelements.com
+#vm# 	-Vm		12.49 # Webelements.com
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -6871,7 +6872,7 @@ U2O2Cl5
 #	deltafH		-2197.4		kJ/mol
 	-analytic	-4.3945e2 -1.6239e-1 2.1694e4 1.7551e2 3.3865e2
 #	Range		0-300
-	-Vm		142.48 # gfw/density
+#vm# 	-Vm		142.48 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6882,7 +6883,7 @@ U3S5
 #	deltafH		-1431		kJ/mol
 	-analytic	-1.1011e2 -6.7959e-2 1.0369e4 3.8481e1 1.7611e2
 #	Range		0-200
-	-Vm		106.12 # gfw/density
+#vm# 	-Vm		106.12 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		92gre/fug
 
@@ -6893,7 +6894,7 @@ UC
 #	deltafH		-97.9		kJ/mol
 	-analytic	-4.6329e1 -4.4600e-2 6.1417e4 1.9566e1 9.5836e2
 #	Range		0-300
-	-Vm		18.34 # gfw/density
+#vm# 	-Vm		18.34 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6904,7 +6905,7 @@ UCl3
 #	deltafH		-863.7		kJ/mol
 	-analytic	-2.6388e2 -1.0241e-1 1.1629e4 1.0846e2 1.8155e2
 #	Range		0-300
-	-Vm		62.62 # gfw/density
+#vm# 	-Vm		62.62 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6915,7 +6916,7 @@ UCl4
 #	deltafH		-1018.8		kJ/mol
 	-analytic	-3.6881e2 -1.3618e-1 1.9685e4 1.4763e2 3.0727e2
 #	Range		0-300
-	-Vm		78.00 # gfw/density
+#vm# 	-Vm		78.00 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6926,7 +6927,7 @@ UCl6
 #	deltafH		-1066.5		kJ/mol
 	-analytic	-4.5589e2 -1.9203e-1 2.8029e4 1.9262e2 4.3750e2
 #	Range		0-300
-	-Vm		125.21 # gfw/density
+#vm# 	-Vm		125.21 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6937,7 +6938,7 @@ UH3(beta)
 #	deltafH		-126.98		kJ/mol
 	-analytic	5.2870e1 4.2151e-3 6.0167e4 -2.2701e1 1.0217e3
 #	Range		0-200
-	-Vm		22.01 # gfw/density
+#vm# 	-Vm		22.01 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		92gre/fug
 
@@ -6948,7 +6949,7 @@ UN
 #	deltafH		-290		kJ/mol
 	-analytic	-1.6393e2 -1.1679e-3 2.8845e3 6.5637e1 3.0122e6
 #	Range		0-300
-	-Vm		45.85 # gfw/density
+#vm# 	-Vm		45.85 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6959,7 +6960,7 @@ UO2(NO3)2
 #	deltafH		-1351		kJ/mol
 	-analytic	-1.2216e1 -1.1261e-2 3.9895e3 5.7166 6.7751e1
 #	Range		0-200
-	-Vm		140.23 # gfw/density
+#vm# 	-Vm		140.23 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		92gre/fug
 
@@ -6970,7 +6971,7 @@ UO2(NO3)2:6H2O
 #	deltafH		-3167.5		kJ/mol
 	-analytic	-1.4019e2 -4.3682e-2 2.7842e3 5.9070e1 4.3486e1
 #	Range		0-300
-	-Vm		178.88 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		178.88 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6981,7 +6982,7 @@ UO2(OH)2(beta)
 #	deltafH		-1533.8		kJ/mol
 	-analytic	-1.7478e1 -1.6806e-3 3.4226e3 4.6260 5.3412e1
 #	Range		0-300
-	-Vm		51.31 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		51.31 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -6992,7 +6993,7 @@ UO2SO4
 #	deltafH		-1845.14	kJ/mol
 	-analytic	-1.5677e2 -6.5310e-2 6.7411e3 6.2867e1 1.0523e2
 #	Range		0-300
-	-Vm		111.61 # gfw/density
+#vm# 	-Vm		111.61 # gfw/density
 #	Extrapol	Cp integration
 #	Ref		92gre/fug
 
@@ -7003,7 +7004,7 @@ UO2SO4:3H2O
 #	deltafH		-2751.5		kJ/mol
 	-analytic	-5.0134e1 -1.0321e-2 3.0505e3 1.6799e1 5.1818e1
 #	Range		0-200
-	-Vm		108.34 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		108.34 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		92gre/fug
 
@@ -7014,7 +7015,7 @@ UO3(beta)
 #	deltafH		-1220.3		kJ/mol
 	-analytic	-1.2298e1 -1.7800e-3 4.5621e3 2.3593 7.1191e1
 #	Range		0-300
-	-Vm		34.46 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		34.46 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		92gre/fug
 
@@ -7025,7 +7026,7 @@ Uraninite
 #	deltafH		-1085		kJ/mol
 	-analytic	-7.5776e1 -1.0558e-2 5.9677e3 2.1853e1 9.3142e1
 #	Range		0-325
-	-Vm		24.638
+#vm# 	-Vm		24.638
 #	Extrapol	Cp integration
 #	Ref		CWM89, SSB97 match
 
@@ -7036,7 +7037,7 @@ Vaesite
 #	deltafH		-32.067		kcal/mol
 	-analytic	1.6172e1 -2.2673e-2 -8.2514e3 -3.4392 -1.4013e2
 #	Range		0-200
-	-Vm		27.697 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		27.697 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		78vau/cra
 
@@ -7047,7 +7048,7 @@ Wairakite
 #	deltafH		-1579.33	kcal/mol
 	-analytic	-1.7914e1 3.2944e-3 2.2782e4 -9.0981 -1.6934e6
 #	Range		0-350
-	-Vm		186.87
+#vm# 	-Vm		186.87
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -7058,7 +7059,7 @@ Wollastonite
 #	deltafH		-389.59		kcal/mol
 	-analytic	3.0931e1 6.7466e-3 5.1749e3 -1.3209e1 -3.4579e5
 #	Range		0-350
-	-Vm		39.93
+#vm# 	-Vm		39.93
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -7069,7 +7070,7 @@ Wurtzite
 #	deltafH		-45.85		kcal/mol
 	-analytic	-1.5446e2 -4.8874e-2 2.4551e3 6.1278e1 3.8355e1
 #	Range		0-350
-	-Vm		23.846
+#vm# 	-Vm		23.846
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
@@ -7080,7 +7081,7 @@ Wustite
 #	deltafH		-266.265	kJ/mol
 	-analytic	-7.6919e1 -1.8433e-2 7.3823e3 2.8312e1 1.1522e2
 #	Range		0-300
-	-Vm		12.04 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		12.04 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		WEP+82
 
@@ -7091,7 +7092,7 @@ Xonotlite
 #	deltafH		-2397.25	kcal/mol
 	-analytic	1.6080e3 3.7309e-1 -2.2548e4 -6.2716e2 -3.8346e2
 #	Range		0-200
-	-Vm		264.81 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		264.81 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		82sar/bar
 
@@ -7102,7 +7103,7 @@ Zincite
 #	deltafH		-350.46		kJ/mol
 	-analytic	-8.6681e1 -1.9324e-2 7.1034e3 3.2256e1 1.1087e2
 #	Range		0-350
-	-Vm		14.338
+#vm# 	-Vm		14.338
 #	Extrapol	supcrt92, Cp integration
 #	Ref		SSW+97, CWM89 match
 
@@ -7113,7 +7114,7 @@ Zn
 #	deltafH		0		kJ/mol
 	-analytic	-6.4131e1 -2.0009e-2 2.3921e4 2.3702e1 3.7329e2
 #	Range		0-300
-	-Vm		9.162 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		9.162 # thermo.com.V8.R6+.tdat
 #	Extrapol	Cp integration
 #	Ref		CWM89
 
@@ -7124,7 +7125,7 @@ Zn(NO3)2:6H2O
 #	deltafH		-2306.8		kJ/mol
 	-analytic	-1.7152e2 -1.6875e-2 5.6291e3 6.5094e1 9.5649e1
 #	Range		0-200
-	-Vm		144.06 # gfw/density
+#vm# 	-Vm		144.06 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7135,7 +7136,7 @@ Zn(OH)2(beta)
 #	deltafH		-641.851	kJ/mol
 	-analytic	-7.7810e1 -7.8548e-3 7.1994e3 2.7455e1 1.2228e2
 #	Range		0-200
-	-Vm		32.60 # gfw/density
+#vm# 	-Vm		32.60 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7146,7 +7147,7 @@ Zn(OH)2(epsilon)
 #	deltafH		-643.281	kJ/mol
 	-analytic	-7.7938e1 -7.8767e-3 7.1282e3 2.7496e1 1.2107e2
 #	Range		0-200
-	-Vm		32.60 # gfw/density
+#vm# 	-Vm		32.60 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7157,7 +7158,7 @@ Zn2SiO4
 #	deltafH		-1636.75	kJ/mol
 	-analytic	2.0970e2 5.3663e-2 -1.2724e2 -8.5445e1 -2.2336
 #	Range		0-200
-	-Vm		55.03 # Webmineral.com
+#vm# 	-Vm		55.03 # Webmineral.com
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7168,7 +7169,7 @@ ZnCl2
 #	deltafH		-415.09		kJ/mol
 	-analytic	-1.6157e1 -2.5405e-2 2.6505e3 8.8584 4.5015e1
 #	Range		0-200
-	-Vm		46.84 # gfw/density
+#vm# 	-Vm		46.84 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7179,7 +7180,7 @@ ZnCr2O4
 #	deltafH		-370.88		kcal/mol
 	-analytic	-1.7603e2 -1.0217e-2 1.7414e4 5.1966e1 2.9577e2
 #	Range		0-200
-	-Vm		44.03 # thermo.com.V8.R6+.tdat
+#vm# 	-Vm		44.03 # thermo.com.V8.R6+.tdat
 #	Extrapol	Constant H approx
 #	Ref		76del/hal
 
@@ -7190,7 +7191,7 @@ ZnSO4
 #	deltafH		-982.855	kJ/mol
 	-analytic	6.9905 -1.8046e-2 2.2566e3 -2.2819 3.8318e1
 #	Range		0-200
-	-Vm		45.61 # gfw/density
+#vm# 	-Vm		45.61 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7201,7 +7202,7 @@ ZnSO4:6H2O
 #	deltafH		-2777.61	kJ/mol
 	-analytic	-1.4506e2 -1.8736e-2 5.2179e3 5.3121e1 8.8657e1
 #	Range		0-200
-	-Vm		130.08 # gfw/density
+#vm# 	-Vm		130.08 # gfw/density
 #	Extrapol	Constant H approx
 #	Ref		WEP+82
 
@@ -7212,7 +7213,7 @@ Zoisite
 #	deltafH		-1643.69	kcal/mol
 	-analytic	2.5321 -3.5886e-2 1.9902e4 -6.2443 3.1055e2
 #	Range		0-350
-	-Vm		135.9
+#vm# 	-Vm		135.9
 #	Extrapol	supcrt92
 #	Ref		HDN+78 differ by 2.5 log K at 0C, 0.6 log K at 350C
 

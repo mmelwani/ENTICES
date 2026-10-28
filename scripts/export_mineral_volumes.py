@@ -128,8 +128,9 @@ def read_db(path):
         m = VM_RX.match(l)
         if m and cur:
             if phases[cur]["vm"] is None:
-                phases[cur].update(vm=float(m.group(1)), vm_hyphen=bool(re.match(r"^\s*(?:#vm#\s*)?-", l)),
-                                   comment=l.split("#", 1)[1].strip() if "#" in l.replace("#vm#", "", 1) else "")
+                ll = re.sub(r"^#vm#\s*", "", l)       # a line stripped by strip_mineral_vm.py
+                phases[cur].update(vm=float(m.group(1)), vm_hyphen=ll.lstrip().startswith("-"),
+                                   comment=ll.split("#", 1)[1].strip() if "#" in ll else "")
             continue
         if re.match(r"^[A-Za-z(\[]", code) and "=" not in code:
             cur = first; phases[cur] = dict(formula=None, vm=None, vm_hyphen=None, comment="")
