@@ -1,0 +1,868 @@
+---
+title: "ENTICES runs"
+output: html_notebook
+---
+
+> **Sandbox notebook: run it chunk by chunk, not with Knit or Run All.** It
+> holds example and exploratory calls of the generators (`generate_phreeqc_input_*`)
+> and restarts, kept as Lucas's working record. It isn't a test or a
+> reproducible pipeline: chunks depend on one another's state and on local file
+> paths, and several chunks `source()` scripts that **are not in this repo**:
+> `minerals_plot.R`, `chemistry_plot.R`, `sweep_heatmaps.R`,
+> `porewater_kinetic_plots.R`, `sweep_plots.R`, `ph_fp_wr_plot.R`,
+> `stacked_rxn_progress_plots.R`, `bulk_comparison_plots.R`,
+> `bulk_kinetic_comparison.R`, `step_comparison.R`, `stitch_plots.R`,
+> `check1_regression.R`, `check2_grouping.R`, `check3_conservation.R` and
+> `water_rock_calculator.R`. Those chunks fail without them.
+> (`mineral_dissolution_constants.R` with a capital R resolves to
+> `mineral_dissolution_constants.r` only on case-insensitive file systems.)
+> For the supported entry points and self-tests, see `README.md`.
+
+```{r, fig.show='hide'}
+# Create Enceladus configuration
+source("ENTICES_LF_20260917.R")
+
+enceladus <- EnceladusConfig$new()
+
+props <- enceladus$get_derived_properties()
+
+# Print initial configuration details
+print("Initial configuration properties:")
+print(props)
+
+# Plot gravity profile
+enceladus$plot_gravity_profile()
+seafloor_g <- enceladus$calculate_gravity(enceladus$core_radius)
+print(paste("Gravity at seafloor:", seafloor_g, "m/s^2"))
+
+# Create and run hydrothermal simulator
+sim <- Simulator$new(
+  k = 1e-12,              # Permeability [m²]
+  layer_thickness = 600,   # Layer thickness [m]
+  porosity = 0.32,        # Porosity [dimensionless]
+  config = enceladus      # Use our Enceladus configuration
+)
+
+# Run simulation
+results <- sim$run_simulation(timesteps = 1000)
+print("Simulation results summary:")
+print(sim$get_summary_metrics())
+
+# Generate simulation plots
+plots <- sim$generate_plots()
+print("Simulation plots:")
+print(plots)
+```
+
+
+```{r}
+# === User parameters ===
+# mode = "ocean_circulations" : adaptive time steps. Many orbital cycles are bundled
+#                               using the auto-computed grouping factor.
+#                               Set n_circulations = number of full ocean circulations.
+#
+# mode = "ungrouped"          : high-resolution. Each KINETICS step = 1 orbital period.
+#                               Set n_orbital_cycles = number of orbital cycles.
+#
+# mode = "grouped"            : user-controlled grouping. Same n_orbital_cycles as
+#                               "ungrouped" but steps cover grouping_factor orbital periods.
+#                               Useful for directly comparing grouped vs ungrouped output
+#                               over the same total time span.
+#                               Set n_orbital_cycles and grouping_factor.
+
+cycle_mode       <- "ungrouped"  # "ocean_circulations", "ungrouped", or "grouped"
+n_circulations   <- NULL         # used when mode = "ocean_circulations"
+n_orbital_cycles <- 10000         # used when mode = "ungrouped" or "grouped"
+grouping_factor  <- NULL         # used when mode = "grouped"  e.g. grouping_factor <- 10
+
+# Initialize PHREEQC integration
+phreeqc <- PhreeqcIntegrator$new(sim)
+
+# Generate PHREEQC input file
+phreeqc_file <- phreeqc$generate_phreeqc_input_equil(
+  n_orbital_cycles = n_orbital_cycles
+)
+print(paste("PHREEQC input file generated:", phreeqc_file))
+
+# Print PHREEQC parameters
+print("PHREEQC scaling parameters:")
+print(phreeqc$phreeqc_params)
+```
+
+```{r}
+# Run parameter sweep
+# === User parameters ===
+generate_phreeqc <- TRUE   # set TRUE to write .pqi files for each parameter combination
+
+# linspace equivalent:  seq(from, to, length.out = n)
+# geomspace equivalent: pH
+k_values              <- c(1e-14)#, 1e-7, 1e-4)#c(1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7) #10^seq(log10(1e-13), log10(1e-11), length.out = 20)   # geomspace
+layer_thickness_values <- c(500, 1e4, 1.942e5)#c(500, 1e3, 5e3, 1e4, 5e4, 1e5, 1.942e5)#10^seq(log10(500), log10(194.2e3), length.out = 20) # geomspace
+
+print("\nRunning parameter sweep...")
+parameter_sweep <- expand.grid(
+  k = k_values,
+  layer_thickness = layer_thickness_values,
+  stringsAsFactors = FALSE
+)
+
+cycle_mode       <- "ungrouped"
+n_circulations   <- NULL
+n_orbital_cycles <- 10000
+
+source("parameter_sweep.R")
+  
+
+
+```
+
+```{r}
+# Summarize sweep results
+print("\nParameter sweep summary:")
+sweep_summary <- do.call(rbind, lapply(sweep_results, function(x) {
+  data.frame(
+    k = x$params$k,
+    layer_thickness = x$params$layer_thickness,
+    mean_flow_rate = x$metrics$mean_flow_rate_Ls,
+    circulation_time = x$metrics$circulation_time_years,
+    complete_circulation_time = x$metrics$complete_circulation_time
+  )
+}))
+print(sweep_summary)
+```
+```{r}
+# Create summary plot
+sweep_plot <- ggplot(sweep_summary,
+                    aes(x = log10(k), y = layer_thickness,
+                        size = mean_flow_rate, color = circulation_time)) +
+  geom_point() +
+  scale_color_viridis_c(trans = "log10") +
+  scale_y_log10() +
+  labs(x = "log10(Permeability [m²])",
+       y = "Layer Thickness [m]",
+       size = "Mean Flow Rate [L/s]",
+       color = "Circulation Time [years]") +
+  theme_minimal() +
+  theme(aspect.ratio = 0.8)
+ggsave("sweep_summary_plot.png", plot = sweep_plot, dpi = 300, width = 7, height = 4)
+
+sweep_plot2 <- ggplot(sweep_summary,
+                     aes(x = log10(k), y = layer_thickness,
+                         size = mean_flow_rate, color = complete_circulation_time)) +
+  geom_point() +
+  scale_color_viridis_c(trans = "log10") +
+  scale_y_log10() +
+  labs(x = "log10(Permeability [m²])",
+       y = "Layer Thickness [m]",
+       size = "Mean Flow Rate [L/s]",
+       color = "Complete Circ. Time [years]") +
+  theme_minimal() +
+  theme(aspect.ratio = 0.8)
+ggsave("sweep_summary_plot2.png", plot = sweep_plot2, dpi = 300, width = 7, height = 4)
+```
+
+
+phreeqc$generate_phreeqc_input(
+  n_orbital_cycles = 10000,
+  exchange_ratio   = 0.01    # 1% of porewater exchanged per model cycle
+)
+
+
+
+```{r}
+# Create integrator with 15% organics
+phreeqc <- PhreeqcIntegrator$new(sim)
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 15)
+phreeqc_file <- phreeqc$generate_phreeqc_input()
+```
+
+
+```{r}
+# STEP 1: Create Enceladus configuration
+config <- EnceladusConfig$new()
+
+# Step 2: Create the hydrothermal simulator
+sim <- Simulator$new(
+  k = 1e-11,              # Permeability [m²] 
+  layer_thickness = 194.2e3,  # Permeable layer thickness [m]
+  porosity = 0.32,        # Porosity [fraction]
+  config = config         # Enceladus configuration
+)
+
+# Step 3: Run the simulation
+results <- sim$run_simulation(timesteps = 1000)
+
+# Step 4: Create PhreeqcIntegrator
+phreeqc <- PhreeqcIntegrator$new(sim)
+
+# Step 5: Calculate PHREEQC parameters with organic content
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 15)
+
+# === User parameters ===
+# mode = "ocean_circulations" : adaptive time steps. Many orbital cycles are bundled
+#                               using the auto-computed grouping factor.
+#                               Set n_circulations = number of full ocean circulations.
+#
+# mode = "ungrouped"          : high-resolution. Each KINETICS step = 1 orbital period.
+#                               Set n_orbital_cycles = number of orbital cycles.
+#
+# mode = "grouped"            : user-controlled grouping. Same n_orbital_cycles as
+#                               "ungrouped" but steps cover grouping_factor orbital periods.
+#                               Set n_orbital_cycles and grouping_factor.
+
+cycle_mode       <- "ocean_circulations"  # "ocean_circulations", "ungrouped", or "grouped"
+n_circulations   <- 5                     # used when mode = "ocean_circulations"
+n_orbital_cycles <- NULL                  # used when mode = "ungrouped" or "grouped"
+grouping_factor  <- NULL                  # used when mode = "grouped"  e.g. grouping_factor <- 10
+
+# Step 6: Generate PHREEQC input files for different circulation counts
+#phreeqc_file_1circ <- phreeqc$generate_phreeqc_input(mode = "ocean_circulations", n_circulations = 1)
+#print(paste("1 circulation file:", phreeqc_file_1circ))
+
+phreeqc_file_5circ <- phreeqc$generate_phreeqc_input(
+  mode             = cycle_mode,
+  n_circulations   = n_circulations,
+  n_orbital_cycles = n_orbital_cycles,
+  grouping_factor  = grouping_factor
+)
+print(paste("5 circulation file:", phreeqc_file_5circ))
+
+#phreeqc_file_10circ <- phreeqc$generate_phreeqc_input(mode = "ocean_circulations", n_circulations = 10)
+#print(paste("10 circulation file:", phreeqc_file_10circ))
+
+# ALTERNATIVE: Step 6 using a loop for multiple circulation scenarios
+# circulation_counts <- c(1, 5, 10, 20, 50)
+# phreeqc_files <- list()
+#
+# for(n_circ in circulation_counts) {
+#   filename <- phreeqc$generate_phreeqc_input(mode = "ocean_circulations", n_circulations = n_circ)
+#   phreeqc_files[[paste0("circ_", n_circ)]] <- filename
+#   print(paste("Generated:", basename(filename)))
+# }
+
+# Step 7: View what files were created
+# print("All PHREEQC files created:")
+# print(unlist(phreeqc_files))
+```
+
+```{r}
+# Thicknesses to sweep (metres)
+thickness_values <- c(500, 1e3, 5e3, 1e4, 194.2e3)
+
+bulk_files <- list()
+
+for (d in thickness_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,      # arbitrary — not used in this file type
+    layer_thickness = d,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+  fname        <- phreeqc_bulk$generate_phreeqc_input_hydrosphere_equil()
+  bulk_files[[as.character(d)]] <- fname
+  print(paste("Written:", fname))
+}
+```
+
+```{r}
+# Kinetic bulk hydrosphere sweep
+# Thicknesses to sweep (metres)
+thickness_values <- c(500, 1e3, 5e3, 1e4, 194.2e3)
+
+bulk_files <- list()
+
+for (d in thickness_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,      # arbitrary — not used in this file type
+    layer_thickness = d,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+  fname        <- phreeqc_bulk$generate_phreeqc_input_hydrosphere_kinetic(n_orbital_cycles=10000, suffix= "_nomagnetite")
+  bulk_files[[as.character(d)]] <- fname
+  print(paste("Written:", fname))
+}
+```
+
+
+```{r}
+#porewater only kinetic model
+source("ENTICES_LF_20260917.R")
+
+sim_any <- Simulator$new(k = 1e-10, layer_thickness = 500, config = enceladus)
+#k and layer_thickness not actually used here, just needed for simulator init
+sim_any$run_simulation()  
+
+phreeqc_pw <- PhreeqcIntegrator$new(sim_any)
+
+phreeqc_pw$generate_phreeqc_input_porewater_kinetic(
+  water_rock_ratio = 0.2,
+  n_orbital_cycles = 10000,
+  suffix           = ""
+)
+```
+
+
+```{r}
+#restarting kinetic bulk hydrosphere run
+
+thickness_values <- c(500, 1e3, 5e3, 1e4)#, 194.2e3)
+
+for (d in thickness_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,
+    layer_thickness = d,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+  prev_csv <- sprintf("/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_d%g_orb40000000_step5000_hydrosphere_kinetic_restart_r1.csv", d)
+  phreeqc_bulk$generate_phreeqc_input_hydrosphere_kinetic_restart(
+    prev_csv         = prev_csv,
+    n_orbital_cycles = 4e9,
+    orbits_per_step  = 500000,
+    equil_minerals   = c("Albite", "Anorthite", "Fayalite", "Magnetite", "Ferrosilite", "Forsterite"),
+    suffix           = "_r2"
+  )
+}
+
+```
+```{r}
+#restarting kinetic bulk hydrosphere run
+
+step_values <- c(5e3)
+
+for (step in step_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,
+    layer_thickness = 194.2e3,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+  prev_csv <- sprintf("/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_d%g_orb10000_hydrosphere_kinetic.csv", d)
+  phreeqc_bulk$generate_phreeqc_input_hydrosphere_kinetic_restart(
+    prev_csv         = prev_csv,
+    n_orbital_cycles = 4e7,
+    orbits_per_step  = step,
+    equil_minerals   = c("Albite", "Anorthite", "Fayalite", "Magnetite"),
+    suffix           = "_r1"
+  )
+}
+
+```
+
+```{r}
+source("ENTICES_LF_20260917.R")
+
+sim_any <- Simulator$new(k = 1e-10, layer_thickness = 500, config = enceladus)
+#k and layer_thickness not actually used here, just needed for simulator init
+sim_any$run_simulation()  
+
+phreeqc_pw <- PhreeqcIntegrator$new(sim_any)
+
+phreeqc_pw$generate_phreeqc_input_porewater_kinetic_restart(
+  prev_csv         = "/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_wr0.2_orb10000_porewater_kinetic.csv",
+  n_orbital_cycles = 40000000,
+  orbits_per_step  = 5000,
+  equil_minerals   = c("Albite", "Anorthite", "Fayalite","Magnetite"),
+  suffix           = "_r1"
+)
+```
+
+```{r}
+source("ENTICES_LF_20260917.R")
+
+sim_any <- Simulator$new(k = 1e-10, layer_thickness = 500, config = enceladus)
+#k and layer_thickness not actually used here, just needed for simulator init
+sim_any$run_simulation()  
+
+phreeqc_pw <- PhreeqcIntegrator$new(sim_any)
+
+phreeqc_pw$generate_phreeqc_input_porewater_kinetic_restart(
+  prev_csv         = "/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_wr0.1884_orb4e+07_step5000_porewater_kinetic_restart_r1.csv",
+  n_orbital_cycles = 4e9,
+  orbits_per_step  = 500000,
+  equil_minerals   = c("Albite", "Anorthite", "Fayalite","Magnetite", "Forsterite", "Ferrosilite"),
+  suffix           = "_r2"
+)
+```
+
+```{r}
+library(tibble)
+source("mineral_dissolution_constants.r")
+TC <- 1.45; TK <- TC + 273.15
+grouping_factor <- 4; substeps <- 1; H <- 1e-7
+minerals <- c("Forsterite","Enstatite","Troilite",
+              "Albite","Diopside","Anorthite","K-Feldspar","Tephroite",
+              "IOM_CO2","IOM_CH4","IOM_N", "IOM_S")
+moles <- c(2.8833, 0.2212, 2.9845, 0.6569, 0.7981, 0.2323, 0.0616, 0.0527,
+            0.62535, 0.28620, 0.13125, 0.06930)
+diss_per_step <- mapply(dissolution_per_step, minerals, moles,
+                        MoreArgs= list(grouping_factor/substeps, H=H, TK=TK, fe3=1e-30))
+frac_per_step <- diss_per_step/moles
+frac_per_step
+```
+
+```{r}
+prev_csv <- paste0("/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/",
+                   "enceladus_wr0.2_Tocean_org0_orb4_",
+                   "porewater_kineticWR_test.csv")
+
+prev_pqi_out <- sub("csv", "pqi.out", prev_csv)
+prev_pqi_out <- sub("Documents/phreeqc-3.5.0-14000", "Downloads/ENTICES-MAIN/phreeqc_outputs", prev_pqi_out)
+# out_file <- readLines(prev_pqi_out)
+# match_idx <- grep()
+prev_rates <- last_dissolution_rate(prev_csv, minerals)
+prev_diss_per_step <- unlist(prev_rates$rate_mol_s)*118800*grouping_factor
+prev_frac_per_step <- unlist(prev_rates$rate_frac_s)*118800*grouping_factor
+last_moles <- latest_mineral_moles(prev_csv, minerals)
+my_tibble <- tibble(Mineral = minerals, Moles = moles)
+my_tibble$last_moles <- unlist(last_moles)
+my_tibble$fraction_per_step  <- frac_per_step
+my_tibble$prev_frac_per_step <- prev_frac_per_step
+my_tibble
+```
+```{r}
+orig_pqi <- paste0("/Users/fiferelsi/Downloads/ENTICES-main/phreeqc_inputs/",
+                      "enceladus_k1.00e-07_d194200_T150_org15_orb12.pqi")
+pqi_lines <- readLines(orig_pqi)
+T_o_line <- pqi_lines[grep("SOLUTION", pqi_lines)[2]+1]
+T_pw_line <- pqi_lines[grep("SOLUTION", pqi_lines)[1]+1]
+T_o_line <- sub("temp", "",T_o_line)
+T_o_line <- gsub(" ", "",T_o_line)
+
+T_pw_line <- sub("temp", "",T_pw_line)
+T_pw_line <- gsub(" ", "",T_pw_line)
+
+T_o <- as.numeric(T_o_line)
+T_pw <- as.numeric(T_pw_line)
+
+c(T_o, T_pw)
+# fluid_mass <- sub(".*: ","",fluid_line)
+# fluid_mass <- sub(" kg","",fluid_mass)
+```
+
+
+
+
+```{r}
+orig_pqi <- paste0("/Users/fiferelsi/Downloads/ENTICES-main/phreeqc_inputs/",
+                      "enceladus_k1.00e-07_d194200_T150_org15_orb12.pqi")
+pqi_lines <- readLines(orig_pqi)
+fluid_line <- pqi_lines[grep("Flowing fluid mass", pqi_lines)[1]]
+fluid_mass <- sub(".*: ","",fluid_line)
+fluid_mass <- sub(" kg","",fluid_mass)
+
+pw_line <- pqi_lines[grep("Porewater mass", pqi_lines)[1]]
+pw_mass <- sub(".*: ","",pw_line)
+pw_mass <- sub(" kg","",pw_mass)
+
+exchanged_ratio_per_cycle <- as.numeric(fluid_mass)/as.numeric(pw_mass)
+exchanged_ratio <- exchanged_ratio_per_cycle*grouping_factor
+exchanged_ratio
+
+data <- read.csv(prev_csv, sep = "\t")
+last_time_secs <- tail(data$Time_Years, 1)*3.154e+7
+approx_tot_exchanged <- exchanged_ratio_per_cycle*last_time_secs/118800
+approx_tot_exchanged
+```
+```{r}
+k <- 1e-07
+d <- 194200
+```
+
+```{r}
+source("ENTICES_LF_20260917.R")
+config_bulk <- EnceladusConfig$new()
+sim_bulk    <- Simulator$new(
+  k               = 1e-12,
+  layer_thickness = 1000,
+  porosity        = 0.32,
+  config          = config_bulk
+)
+
+sim_bulk$run_simulation(timesteps = 1000)
+
+phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+phreeqc_bulk$generate_phreeqc_input_bulk_kinetic_restart(
+  prev_csv=prev_csv,
+  mode="porewater",
+  n_orbital_cycles=45,
+  orbits_per_step=1,
+  suffix="WR_test_r1a", 
+  CH4_redox_override="coupled")
+```
+
+
+```{r}
+source("ENTICES_LF_20260917.R")
+enceladus <- EnceladusConfig$new()
+
+sim_any <- Simulator$new(k = k, layer_thickness = d, config = enceladus)
+sim_any$run_simulation()  
+
+phreeqc <- PhreeqcIntegrator$new(sim_any)
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 15)
+
+phreeqc$generate_phreeqc_input_tidal_kinetic_restart(
+  prev_csv=prev_csv,
+  n_orbital_cycles = grouping_factor*100,
+  suffix           = "_r3",
+  porewater_temp=TC,
+  equil_minerals=c("Fayalite", "Albite", "Anorthite","Magnetite", 
+                     "Forsterite"),
+  substeps=substeps,
+  mode="grouped",
+  grouping_factor=grouping_factor,
+  depletion_mineral="Ferrosilite"
+
+)
+```
+
+#c("Fayalite", "Albite", "Anorthite", "Magnetite", 
+            #          "Forsterite", "Ferrosilite", "Enstatite")
+#.   "Pyrrhotite"
+
+```{r}
+source("ENTICES_LF_20260917.R")
+enceladus <- EnceladusConfig$new()
+
+sim_any <- Simulator$new(k = k, layer_thickness = d, config = enceladus)
+sim_any$run_simulation()  
+
+phreeqc <- PhreeqcIntegrator$new(sim_any)
+phreeqc$calculate_phreeqc_parameters(organic_wt_percent = 0)
+
+phreeqc$generate_phreeqc_input_tidal_kinetic(
+  n_orbital_cycles = 12,
+  suffix           = "",
+  porewater_temp=160,
+  mode="ungrouped",
+)
+```
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggtext)
+
+```
+
+```{r}
+# === Load PHREEQC output and drop all-zero columns ===
+phreeqc_output_file <- "/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_k1.00e-07_d500_orb10000_equil.csv"
+
+raw_data <- read.delim(phreeqc_output_file, sep = "\t", header = TRUE, strip.white = TRUE)
+
+zero_cols   <- names(raw_data)[sapply(raw_data, function(col) all(col == 0))]
+active_data <- raw_data[, !names(raw_data) %in% zero_cols]
+
+cat("Dropped", length(zero_cols), "all-zero columns:\n")
+print(zero_cols)
+cat("\nRemaining columns:", ncol(active_data), "\n")
+
+active_minerals <- c("Analcime", "Beidellite.Na","Boehmite","Brucite","Cronstedtite.7A",
+                      "Greenalite","Saponite.Fe.Fe","Saponite.Fe.Na","Saponite.Mg.Ca",
+                      "Saponite.Mg.Mg","Saponite.Mg.Na","Tobermorite.11A")
+active_minerals <- active_minerals[!active_minerals %in% zero_cols]
+
+```
+
+```{r, fig.show='hide'}
+# Edit eq_phase in minerals_plot.R (1 = porewater, 2 = seafloor), then source:
+source("minerals_plot.R")
+```
+
+```{r, fig.show='hide'}
+# === Plot remaining primary mineral masses (reacted porewater only) ===
+remain_cols <- names(active_data)[grepl("remain_g", names(active_data))]
+
+remain_data <- active_data %>%
+  dplyr::filter(step != -99) %>%
+  group_by(Time_Years) %>%
+  mutate(solution_type = factor(
+    row_number(),
+    levels = 1:4,
+    labels = c("Reacted porewater", "Combined ocean", "Resampled porewater", "Updated ocean")
+  )) %>%
+  ungroup() %>%
+  dplyr::filter(solution_type == "Reacted porewater") %>%
+  select(Time_Years, all_of(remain_cols)) %>%
+  pivot_longer(cols = all_of(remain_cols), names_to = "mineral", values_to = "mass_g") %>%
+  mutate(mineral = gsub("_remain_g", "", mineral))  # strip suffix for cleaner labels
+
+p_remain <- ggplot(remain_data, aes(x = Time_Years, y = mass_g, color = mineral)) +
+  geom_line() +
+  scale_color_discrete(name = "Mineral") +
+  labs(
+    x     = "Time (years)",
+    y     = "Remaining mass (g)",
+    title = "Primary mineral depletion — reacted porewater"
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme_minimal() +
+  theme(
+    aspect.ratio    = 0.55,
+    legend.text     = element_text(size = 8),
+    legend.key.size = unit(0.4, "cm")
+  )
+
+phreeqc_base <- tools::file_path_sans_ext(basename(phreeqc_output_file))
+ggsave(paste0(phreeqc_base, "_remain_plot.png"), plot = p_remain, dpi = 300, width = 8, height = 4.4)
+```
+
+```{r}
+# === Plot pH vs time from PHREEQC output ===
+# Each time step produces 4 output rows (classified by water mass rank):
+#   Reacted porewater   - smallest mass (water consumed by hydration reactions)
+#   Resampled porewater - second smallest (taken from combined fluid)
+#   Ocean               - second largest  (updated ocean)
+#   Combined fluid      - largest (pore + ocean before resampling)
+
+#phreeqc_output_file <- "/Users/fiferelsi/Documents/phreeqc-3.5.0-14000/enceladus_k1.00e-12_d600_orb2000.csv"
+
+ph_raw <- read.delim(phreeqc_output_file, sep = "\t", header = TRUE, strip.white = TRUE)
+ph_raw <- ph_raw[ph_raw$step != -99, ]
+
+ph_data <- ph_raw %>%
+  group_by(Time_Years) %>%
+  mutate(solution_type = factor(
+    row_number(),
+    levels = 1:4,
+    labels = c("Reacted porewater", "Combined ocean", "Resampled porewater", "Updated ocean")
+  )) %>%
+  ungroup()
+```
+
+```{r}
+# === User parameters — edit these ===
+vars_metals <- c("m_Fe+2", "m_FeOH-", "m_Mg+2")
+vars_cations <- c("m_Ca+2", "m_Na+")
+vars_N <- c("m_NH4+", "m_NH3", "m_N2")
+vars_S <- c("m_HS-", "m_H2S", "m_SO4-2")
+plot_vars <- "pH"
+show_reacted_porewater  <- TRUE
+show_flowing_fluid      <- FALSE
+show_combined_ocean     <- FALSE
+show_resampled_porewater <- FALSE
+show_updated_ocean      <- TRUE
+```
+
+```{r, fig.show='hide'}
+source("chemistry_plot.R")
+```
+
+```{r}
+metrics <- sim$get_summary_metrics()
+orbital_period_years <- sim$config$orbital_period / (365.25 * 24 * 3600)
+circ_time <- metrics$circulation_time_years
+n_orb <- circ_time / orbital_period_years
+cat("old:", circ_time * log(circ_time) + 0.577 * circ_time, "\n")
+cat("new:", (n_orb * log(n_orb) + 0.577 * n_orb) * orbital_period_years, "\n")
+```
+
+
+```{r, fig.show='hide'}
+source("sweep_heatmaps.R")
+```
+
+```{r, fig.show='hide'}
+source("porewater_kinetic_plots.R")
+```
+
+
+```{r, fig.show='hide'}
+source("sweep_plots.R")
+```
+
+```{r, fig.show='hide'}
+source("ph_fp_wr_plot.R")
+```
+
+```{r, fig.show='hide'}
+source("stacked_rxn_progress_plots.R")
+```
+
+```{r,fig.show='hide'}
+source("bulk_comparison_plots.R")
+```
+
+```{r,fig.show='hide'}
+source("mineral_dissolution_constants.R")
+plot_mineral_rates()
+
+```
+
+```{r,fig.show='hide'}
+source("bulk_kinetic_comparison.R")
+```
+
+```{r,fig.show='hide'}
+source("step_comparison.R")
+```
+```{r,fig.show='hide'}
+source("stitch_plots.R")
+```
+```{r}
+# === Test chunk: layer-normalised run (k=1e-10, d=500 m) ===
+# Uses suffix="_layernorm" so output files are named e.g.
+#   enceladus_k1.00e-10_d500_orb100_layernorm.pqi / .csv
+# and won't overwrite existing runs.
+
+config_test <- EnceladusConfig$new()
+sim_test <- Simulator$new(
+  k               = 1e-10,
+  layer_thickness = 500,
+  porosity        = 0.32,
+  config          = config_test
+)
+results_test <- sim_test$run_simulation(timesteps = 1000)
+
+phreeqc_test <- PhreeqcIntegrator$new(sim_test)
+phreeqc_test$calculate_phreeqc_parameters()
+
+print("PHREEQC params for test run:")
+print(phreeqc_test$phreeqc_params)
+
+test_file <- phreeqc_test$generate_phreeqc_input(
+  mode             = "ungrouped",
+  n_orbital_cycles = 1000,
+  suffix           = "_layernorm"
+)
+print(paste("Test input written to:", test_file))
+```
+
+
+```{r}
+#Check 1
+source("check1_regression.R")
+```
+
+
+```{r}
+#Check 3
+source("check3_conservation.R")
+```
+
+```{r}
+#Check 2
+source("check2_grouping.R")
+```
+
+```{r}
+source("water_rock_calculator.R")
+
+plot_wr_depth_heatmaps()
+```
+
+
+```{r}
+source("ENTICES_LF_20260917.R")
+
+wr_ratios <- c(.1574)#.2, .3, .45, .6)
+
+for (wr in wr_ratios) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,
+    layer_thickness = 1000,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+  phreeqc_bulk$generate_phreeqc_input_bulk_kinetic(
+    mode="porewater",
+    n_orbital_cycles=3,
+    water_rock_ratio= wr,
+    suffix="SMALLWATER_test_v2_receqbFALSE", 
+    rec_eqb_minerals = FALSE,
+    CH4_redox_override="coupled",
+    porewater_temp=160
+
+  )
+}
+
+
+
+ 
+```
+
+```{r}
+source("ENTICES_LF_20260917.R")
+
+thickness_values <- c(500, 1e3, 5e3, 1e4, 194.2e3)
+
+for (d in thickness_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,
+    layer_thickness = d,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+  phreeqc_bulk$generate_phreeqc_input_bulk_equil(
+    water_temp="ocean",
+    suffix="WR_test"
+  )
+}
+
+
+
+
+```
+
+
+
+```{r}
+
+thickness_values <- c(500, 1e3, 5e3, 1e4, 194.2e3)
+
+for (d in thickness_values) {
+  config_bulk <- EnceladusConfig$new()
+  sim_bulk    <- Simulator$new(
+    k               = 1e-12,
+    layer_thickness = d,
+    porosity        = 0.32,
+    config          = config_bulk
+  )
+
+  sim_bulk$run_simulation(timesteps = 1000)
+
+  phreeqc_bulk <- PhreeqcIntegrator$new(sim_bulk)
+
+  phreeqc_bulk$generate_phreeqc_input_bulk_equil(
+    suffix="WR_test"
+  )
+}
+```

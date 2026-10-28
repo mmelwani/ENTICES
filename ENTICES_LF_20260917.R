@@ -604,12 +604,12 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  mass = 1.0802e20,        # Total mass [kg] 
                                  
                                  # Material properties
-                                 core_density = 2353,     # Core bulk density [kg/m³] #This and above parameters from 4 papers?
+                                 core_density = 2353,     # Core bulk density [kg/m³]; the profile's rhoSil_kgm3 is 2353.19. [citation needed: the source of radius, core_radius, mass and core_density]
                                  core_porosity = 0.32,    # Core porosity [volume fraction] #Default assumed value from Stycinski et al 2023
                                  
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
-                                 max_tidal_stress = 1e5,  # [Pa]
+                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED: tidal stress amplitude, README section 5
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 
@@ -1422,6 +1422,32 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      unname(phase_names[names(stability)][overall_stable])
                                    },
 
+                                   # Writes the main ENTICES input: porewater reacting with the kinetic rock (silicates, troilite, schreibersite,
+                                   # IOM channels) and equilibrium phases, exchanging fluid with the ocean every step (REACT, MIX 4 ocean +
+                                   # seafloor phases, MIX 1, MIX 2). Porewater and ocean each have a fixed-pressure gas phase; pressures come
+                                   # from profile_file. Inputs only; run them with run_phreeqc().
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param mode "ocean_circulations" (default: auto grouping, n_circulations), "ungrouped" (1 orbit per step, n_orbital_cycles) or "grouped" (grouping_factor orbits per step; exchange compounds as 1 - (1 - x_tide)^G).
+                                   # @param n_circulations Number of ocean circulations (mode "ocean_circulations").
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param grouping_factor Orbits per step (mode "grouped").
+                                   # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param substeps KINETICS substeps per step. Default 1.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param trace_C_molal Numerical C seed in every initial SOLUTION, mol/kgw. Default NULL; production 1e-14 (the smallest tested to converge at 25 C).
+                                   # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
+                                   # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
+                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_tidal_kinetic(mode = "ungrouped", n_orbital_cycles = 2, porewater_temp = 25, trace_C_molal = 1e-14)
                                    generate_phreeqc_input_tidal_kinetic = function(output_dir = "phreeqc_inputs", mode = "ocean_circulations",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
@@ -1599,7 +1625,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
                                      # Temperatures and pressures for SOLUTION blocks. The ocean temperature is fixed.
-                                     ocean_temp_C <- 274.6 - 273.15  # ~1.45 °C (ocean-rock interface)
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -1832,7 +1858,7 @@ Forsterite
 	1   REM Ref PK04
 	10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
 	20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
+	21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
 	22  mw = 140.6715
 	40  k = (kacid + kneut) * SSA * mw * M
 	50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))
@@ -1846,7 +1872,7 @@ Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters 
   2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
   3   REM Rate depends on H+ and Fe3+ activities
   25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-  26  SSA = 5
+  26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   27  mw = 87.913
   30  k = kacid * SSA * mw * M
   40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
@@ -1860,7 +1886,7 @@ Diopside
   1   REM Ref PK04
   10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
   20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 216.55
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
@@ -1874,7 +1900,7 @@ K-Feldspar
   10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
   20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-  31  SSA = 5
+  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   32  mw = 278.33
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
@@ -1920,7 +1946,7 @@ Tephroite
   37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17
   38  IF Ea < 0 THEN Ea = 0
   40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
-  46  SSA = 0.1
+  46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   47  mw = 201.96
   50  k = kacid * SSA * mw * M
   60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
@@ -1935,7 +1961,7 @@ Enstatite
   1   REM Ref PK04
   10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
   20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 100.3725
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
@@ -1948,7 +1974,7 @@ Anorthite # Ca-endmember of plagioclase
   1   REM Ref PK04
   10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
   20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 5
+  21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 278.164
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
@@ -1965,7 +1991,7 @@ Albite # Na-endmember of plagioclase
   10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
   20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-  31  SSA = 5
+  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   32  mw = 262.1798
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
@@ -2010,7 +2036,8 @@ KINETICS 1
 
     
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---
+# --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
+#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Fe                   0  {fe_moles}          dissolve_only
    Ni                   0  {ni_moles}          dissolve_only
    Lawrencite           0  {lawrencite_moles}  dissolve_only
@@ -2460,6 +2487,25 @@ KNOBS
                                    # An inorganic limiting case: no IOM and no Schreibersite (see
                                    # EQUIL_INORGANIC_NOTE, written into the .pqi header).
                                    # ---------------------------------------------------------------
+                                   # As tidal_kinetic, with every primary mineral as a dissolve_only equilibrium phase: an inorganic limiting
+                                   # case (no IOM, no schreibersite).
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
+                                   # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
+                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @param trace_C_molal Numerical C seed in both initial SOLUTIONs, mol/kgw. Default NULL; give 1e-14 with a cometary ocean.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_tidal_equil(n_orbital_cycles = 2, porewater_temp = 100)
                                    generate_phreeqc_input_tidal_equil = function(output_dir = "phreeqc_inputs",
                                                                            n_orbital_cycles = NULL,
                                                                            mode = NULL,
@@ -2470,7 +2516,7 @@ KNOBS
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                            initial_ocean = "pure_water", charge_balance = NULL,
-                                                                           pore_gas_fate = c("retain", "to_ocean")) {
+                                                                           pore_gas_fate = c("retain", "to_ocean"), trace_C_molal = NULL) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
@@ -2485,7 +2531,7 @@ KNOBS
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles, porewater_temp = porewater_temp,
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
                                                                                          initial_ocean = initial_ocean, charge_balance = charge_balance,
-                                                                                         pore_gas_fate = pore_gas_fate)
+                                                                                         pore_gas_fate = pore_gas_fate, trace_C_molal = trace_C_molal)
                                      writeLines(content, filename)
                                      return(filename)
                                    },
@@ -2494,8 +2540,9 @@ KNOBS
                                                                                   CH4_redox_override = NULL,
                                                                                   carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                                   initial_ocean = "pure_water", charge_balance = NULL,
-                                                                                  pore_gas_fate = "retain") {
-                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean, charge_balance = charge_balance)
+                                                                                  pore_gas_fate = "retain", trace_C_molal = NULL) {
+                                     trace_C_line <- trace_C_solution_line(trace_C_molal)
+                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics         <- self$simulator$get_summary_metrics()
                                      orbital_period  <- self$simulator$config$orbital_period
                                      time_step_years <- orbital_period / (365.25 * 24 * 3600)
@@ -2517,7 +2564,7 @@ KNOBS
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
                                      # Temperatures and pressures
-                                     ocean_temp_C <- 274.6 - 273.15
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -2541,6 +2588,10 @@ KNOBS
                                      # Gas phases (see gas_components()): the porewater one, the ocean one, the
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
                                      cometary <- inherits(initial_ocean, "cometary_ice")
+                                     # A cometary ocean with a carbon-free porewater failed ("Cl has not converged",
+                                     # 2026-10-28, every temperature); with trace_C_molal = 1e-14 it runs.
+                                     if (cometary && is.null(trace_C_molal))
+                                       warning("cometary_ice_ocean() in tidal_equil: give trace_C_molal = 1e-14 (without it the run failed to converge in tests)")
                                      gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
                                      gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
@@ -2614,6 +2665,7 @@ TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean, charge_balance)}
+{trace_C_header_line(trace_C_molal)}
 
 KNOBS
    -logfile true
@@ -2646,7 +2698,7 @@ SOLUTION 1 Enceladus porewater
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(pore_pressure_atm, 1)}
+    pressure  {round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
     temp      25
@@ -2679,7 +2731,7 @@ REACTION_PRESSURE 2
 {if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
 
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium each cycle) ---
+# --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -3073,6 +3125,22 @@ KNOBS
                                    # No permeability or fluid-flow parameters are used.
                                    # An inorganic limiting case: no IOM and no Schreibersite (see
                                    # EQUIL_INORGANIC_NOTE, written into the .pqi header).
+                                   # Single-step equilibrium of one solution with the whole rock (inorganic limiting case: no IOM, no
+                                   # schreibersite), with one fixed-pressure gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param water_rock_ratio kg water per kg rock (mode "porewater"; required there).
+                                   # @param water_temp As porewater_temp, for the single solution.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_bulk_equil(mode = "porewater", water_rock_ratio = 1, water_temp = 100)
                                    generate_phreeqc_input_bulk_equil = function(output_dir = "phreeqc_inputs",
                                                                                  mode             = c("hydrosphere", "porewater"),
                                                                                  water_rock_ratio = NULL,
@@ -3110,7 +3178,7 @@ KNOBS
 
                                      # Temperature and pressure (ocean floor, or profile-averaged over the
                                      # layer if water_temp = "profile")
-                                     ocean_temp_C <- 274.6 - 273.15
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -3242,7 +3310,7 @@ REACTION_TEMPERATURE 1
 {gas_phase_block(1, gas_comps, .solution_pressure_atm, water_temp_C, "Gas (fixed pressure, starts empty)")}
 
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium) ---
+# --- Primary minerals (dissolve to equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -3398,6 +3466,26 @@ END
                                      return(filename)
                                    },
 
+                                   # One solution reacting kinetically with the rock (as tidal_kinetic, no ocean) for n_orbital_cycles orbits,
+                                   # with one fixed-pressure gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param water_rock_ratio kg water per kg rock (mode "porewater"; required there).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param rec_eqb_minerals Promote primaries whose half-life (x rec_eqb_margin) is under one orbit to equilibrium. Default FALSE (a modelling choice; not needed for convergence).
+                                   # @param rec_eqb_margin Safety margin for rec_eqb_minerals. Default 2.
+                                   # @param trace_C_molal Numerical C seed in every initial SOLUTION, mol/kgw. Default NULL; production 1e-14 (the smallest tested to converge at 25 C).
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_bulk_kinetic(n_orbital_cycles = 2, mode = "porewater", water_rock_ratio = 1, porewater_temp = 100)
                                    generate_phreeqc_input_bulk_kinetic = function(
                                      output_dir          = "phreeqc_inputs",
                                      n_orbital_cycles    = NULL,
@@ -3437,7 +3525,7 @@ END
                                      }
 
                                      # Temperature and pressure
-                                     ocean_temp_C <- 274.6 - 273.15
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -3567,7 +3655,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -3578,7 +3666,7 @@ END
                                          '\t-start',
                                          '\t1   REM Acid mechanism only (PK04, hexagonal pyrrhotite formulation)',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -3591,7 +3679,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -3604,7 +3692,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -3622,7 +3710,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -3634,7 +3722,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -3646,7 +3734,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -3659,7 +3747,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -3681,7 +3769,8 @@ END
 
                                      # ---- EQUILIBRIUM_PHASES primary lines: Fe/Ni/Lawrencite (always) + equil_primary (promoted) ----
                                      equil_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---",
+                                       c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
+#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          sprintf("   Fe                   0  %.6e          dissolve_only", fe_moles),
                                          sprintf("   Ni                   0  %.6e          dissolve_only", ni_moles),
                                          sprintf("   Lawrencite           0  %.6e          dissolve_only", lawrencite_moles),
@@ -3993,6 +4082,24 @@ END
                                      return(filename)
                                    },
 
+                                   # Continues a bulk_kinetic run from the last row of its CSV: every element the parent punched (15 digits),
+                                   # its equilibrium phases, kinetic reactants, IOM channels and gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param prev_csv The parent run's CSV; its .pqi must be beside it (for the carbon-mode, pressure and fluid checks).
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param orbits_per_step Orbits per KINETICS step; must divide n_orbital_cycles. Default 1.
+                                   # @param equil_minerals Primaries to move from KINETICS to EQUILIBRIUM_PHASES (dissolve_only). Default none; Schreibersite cannot be one.
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param allow_pressure_change TRUE lets a restart run at pressures other than its parent's (with a warning). Default FALSE (an error).
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   f <- ph$generate_phreeqc_input_bulk_kinetic_restart(prev_csv = "phreeqc_inputs/<parent>.csv", n_orbital_cycles = 2, porewater_temp = 100)
                                    generate_phreeqc_input_bulk_kinetic_restart = function(
                                      output_dir          = "phreeqc_inputs",
                                      prev_csv            = NULL,
@@ -4063,7 +4170,7 @@ END
                                      )
 
                                      # Temperature and pressure
-                                     ocean_temp_C <- 274.6 - 273.15
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -4255,7 +4362,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -4266,7 +4373,7 @@ END
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -4279,7 +4386,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -4292,7 +4399,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -4310,7 +4417,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -4322,7 +4429,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -4334,7 +4441,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -4347,7 +4454,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -4393,7 +4500,7 @@ END
                                        collapse = "\n"
                                      )
                                      equil_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium) ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          always_equil_prim_lines,
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
@@ -4564,6 +4671,30 @@ END
                                    # Primary minerals listed in equil_minerals are moved from KINETICS
                                    # to EQUILIBRIUM_PHASES 1 (same as hydrosphere restart).
                                    # ---------------------------------------------------------------
+                                   # Continues a tidal_kinetic run from its last complete orbit (REACT, MIX 4, MIX 1, MIX 2 rows): both
+                                   # solutions (every element, 15 digits), both equilibrium-phase sets, kinetic reactants, IOM channels and both
+                                   # gas phases. Checks the parent's carbon mode and pressures.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param prev_csv The parent run's CSV; its .pqi must be beside it (for the carbon-mode, pressure and fluid checks).
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param substeps KINETICS substeps per step. Default 1.
+                                   # @param equil_minerals Primaries to move from KINETICS to EQUILIBRIUM_PHASES (dissolve_only). Default none; Schreibersite cannot be one.
+                                   # @param mode "ocean_circulations" (default: auto grouping, n_circulations), "ungrouped" (1 orbit per step, n_orbital_cycles) or "grouped" (grouping_factor orbits per step; exchange compounds as 1 - (1 - x_tide)^G).
+                                   # @param grouping_factor Orbits per step (mode "grouped").
+                                   # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param allow_pressure_change TRUE lets a restart run at pressures other than its parent's (with a warning). Default FALSE (an error).
+                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   f <- ph$generate_phreeqc_input_tidal_kinetic_restart(prev_csv = "phreeqc_inputs/<parent>.csv", n_orbital_cycles = 2,
+                                   #                                                         porewater_temp = 160, depletion_mineral = "Troilite")
                                    generate_phreeqc_input_tidal_kinetic_restart = function(
                                      output_dir          = "phreeqc_inputs",
                                      prev_csv            = NULL,
@@ -4692,7 +4823,7 @@ END
                                      ocean_mass_norm     <- self$phreeqc_params$water_mass
 
                                      # ---- Temperature / pressure ----
-                                     ocean_temp_C <- 274.6 - 273.15
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
                                      pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
                                      pore_temp_C        <- pc$pore_temp_C
@@ -4852,7 +4983,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -4863,7 +4994,7 @@ END
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -4876,7 +5007,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -4889,7 +5020,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -4907,7 +5038,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -4919,7 +5050,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -4931,7 +5062,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -4944,7 +5075,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -5046,7 +5177,7 @@ END
                                      # Fe/Ni/Lawrencite always appear here (porewater), recovered via
                                      # get_ep_moles() from their own native EQUILIBRIUM_PHASES output column.
                                      ep1_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium) ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          sapply(always_equil_primary, function(m)
                                            sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_react))),
                                          if (length(equil_primary) > 0)

@@ -914,3 +914,21 @@ One commit per item; each commit message has its pass check.
 - A cometary ocean with a carbon-free porewater (no `trace_C_molal`, no IOM) left the first porewater
   step running for > 20 min without converging (100 C, 1 orbit); with `trace_C_molal = 1e-14` it
   completes. `tidal_kinetic` warns in that case. The cause is not understood.
+
+### gas-ice-docs branch, Stage 5: documentation (2026-10-28)
+
+- `README.md` rewritten for regenerating production: what ENTICES is, requirements, step-by-step
+  running (self-tests first, outputs and their columns, pairs, sweeps, restarts, runtimes, common
+  failures), worked examples, a parameter table (default, units, source, status), model choices
+  with sources, interpreting outputs (rock density, gas, carbon), open decisions, repository map,
+  references (checked against the PDFs; unverifiable ones marked `[citation needed]`).
+- `ENTICES_runs.Rmd` is now the worked examples (25 C smoke test, Lucas's production case, a 100 C
+  pair, the cometary ocean, the pore-gas bracket). Lucas's notebook moved to
+  `examples/ENTICES_runs_lucas_2026-10.Rmd`.
+- Roxygen-style headers on the six generators (purpose, every argument with units, default and
+  justification, return value, example). Surface areas, Fe/Ni instantaneous corrosion and the tidal
+  stress amplitude are tagged UNSOURCED in the code; the ocean temperature carries its source.
+- `profiles/README.md`: the profile's provenance and the verified Styczinski et al. (2023) citation.
+- `tidal_equil` gains `trace_C_molal` (default NULL): with a cometary ocean and no seed every case
+  failed ("Cl has not converged"); with 1e-14 they run, except `to_ocean` + `c4_only`, which crashes
+  PHREEQC (segmentation fault in the ocean step).

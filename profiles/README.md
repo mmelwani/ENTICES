@@ -32,7 +32,6 @@ inputs carry the same 66.7 / 261.2 atm). Which PlanetProfile version and
 input file produced it is not recorded here [citation needed: PlanetProfile
 version and run configuration].
 
-Reference: Styczinski, M.J., Vance, S.D., Melwani Daswani, M. (2023).
-PlanetProfile: Self-consistent interior structure modeling for ocean worlds
-and rocky dwarf planets in Python. *Earth and Space Science*.
-[citation needed: volume, article number and DOI, not verified here]
+Reference: Styczinski, M.J., Vance, S.D., Melwani Daswani, M. (2023). PlanetProfile:
+Self-consistent interior structure modeling for ocean worlds and rocky dwarf planets in Python.
+*Earth and Space Science* 10, e2022EA002748. doi:10.1029/2022EA002748
