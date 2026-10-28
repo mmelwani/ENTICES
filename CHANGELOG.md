@@ -839,3 +839,20 @@ One commit per item; each commit message has its pass check.
   (antigorite −4.16 at 261 atm). Mineral equilibria are now at the database reference pressure
   (~0.1–0.2 log unit omission at 260 bar). Check: the 160 °C production case at 66.7 vs 261.2 atm
   gives byte-identical CSVs, 265 warnings each (was 350 / 641), 116 s (was 481 / 672 s).
+- **Restarts carry every element, at full precision** (mass-balance fix). Both restart paths
+  (`tidal_kinetic_restart`, `bulk_kinetic_restart`) built their SOLUTIONs from a fixed list,
+  Al C Ca Fe Mg N Na P S Si (+ Mtg), from a CSV with 4-5 significant figures: K (K-feldspar), Mn
+  (tephroite), Cl (lawrencite) and Ni were lost at every restart, since no generator punched them
+  (`#K #Mn #Cl` were commented out of `-totals`; the equilibrium generators did not punch Mtg either).
+  Now every generator punches all 36 database elements (`totals_block()`, pseudo-elements included)
+  with `-high_precision true`; restarts take every element the parent punched
+  (`restart_elements()`, warning about any ENTICES element a pre-2026-10-28 parent lacks) and write
+  pH, pe, water, element totals, kinetic and equilibrium-phase amounts with 15 digits. MIX fractions
+  are written with 15 digits too (at 7 they did not sum to 1, losing up to ~5e-8 of the porewater per
+  cycle). `ep_column()` takes the last of a duplicated name (Ni is now both a total and a phase).
+  Note: `-high_precision` also tightens PHREEQC's mole-balance convergence from 1e-8 to 1e-12 of each
+  element's total (KNOBS, Parkhurst & Appelo 2013, p. 112).
+  `system_totals()` and `formula_elements()` (phreeqc_tools.R) sum each element over solution,
+  solids, IOM and gas. `tests/restart_closure_check.R`: 2 orbits vs 1 + restart 1, tidal and bulk,
+  160 C, 15 wt% IOM: every element total agrees within 1e-9 relative or the solver tolerance (max
+  4.8e-13 for the rock-dominated totals).

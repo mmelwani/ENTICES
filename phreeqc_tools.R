@@ -4,7 +4,8 @@
 # And database_names() / restrict_to_database(): the PHASES and species a
 # database defines, and an input text cut down to them (see the database section).
 # And bulk_density(): rock and bulk density through a run, from the mineral and
-# IOM moles in its selected output (see the rock density section at the end).
+# IOM moles in its selected output (see the rock density section), and
+# system_totals(): each element summed over solution, solids, IOM and gas (at the end).
 #
 # ENTICES targets PHREEQC 3.8.6 (PHREEQC_EXPECTED_VERSION). Results from other
 # versions can differ in minor phases and trace species (see
@@ -314,7 +315,7 @@ pqi_initial_solids <- function(pqi) {
   kin <- blk("KINETICS 1"); ep <- blk("EQUILIBRIUM_PHASES 1")
   nm <- character(0); m0 <- numeric(0); fo <- character(0)
   for (s in kin) {
-    if (grepl("^   [A-Za-z]", s) && !grepl("^\\s+-", s)) { nm <- c(nm, trimws(s)); m0 <- c(m0, NA); fo <- c(fo, NA) }
+    if (grepl("^\\s+[A-Za-z]", s)) { nm <- c(nm, trimws(s)); m0 <- c(m0, NA); fo <- c(fo, NA) }  # an entry (any indent)
     else if (grepl("^\\s+-m0\\s", s)) m0[length(m0)] <- as.numeric(sub("^\\s+-m0\\s+", "", s))
     else if (grepl("^\\s+-formula\\s", s)) fo[length(fo)] <- trimws(sub("^\\s+-formula\\s+", "", s))
   }
@@ -323,7 +324,12 @@ pqi_initial_solids <- function(pqi) {
   epm <- stats::setNames(vapply(ept, function(t) as.numeric(t[3]), 0), vapply(ept, `[`, "", 1))
   org <- suppressWarnings(as.numeric(sub(".*: ([0-9.]+) wt.*", "\\1", grep("^# Organic content: ", l, value = TRUE)[1])))
   iom <- grepl("^IOM_", nm)
-  list(minerals = c(stats::setNames(m0[!iom], nm[!iom]), epm[epm > 0]),
+  # the SELECTED_OUTPUT -totals elements (the option line and its continuation lines)
+  ti <- grep("^\\s+-totals\\s", l)[1]; tl <- character(0)
+  if (!is.na(ti)) { j <- ti; repeat { tl <- c(tl, sub("#.*", "", l[j])); j <- j + 1
+    if (j > length(l) || grepl("^\\s*-", l[j]) || !grepl("^\\s", l[j])) break } }
+  totals <- setdiff(unlist(strsplit(trimws(sub("^\\s+-totals", "", tl)), "\\s+")), "")
+  list(totals = totals, minerals = c(stats::setNames(m0[!iom], nm[!iom]), epm[epm > 0]),
        iom = data.frame(name = nm[iom], m0 = m0[iom], formula = fo[iom], stringsAsFactors = FALSE),
        iom_mass0_g = if (is.na(org)) 0 else org / 100 * 1000,
        database = sub("^# Database: ", "", grep("^# Database: ", l, value = TRUE)[1]))
@@ -344,8 +350,12 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   iom_M <- vapply(init$iom$formula, kinetics_formula_mass, 0, gfw = gfw)
   x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
   x$state <- trimws(x$state)
-  totals <- c("Al", "C", "Ca", "Fe", "H", "K", "Mg", "Mn", "N", "Na", "O", "P", "S", "Si", "Cl", "Mtg", "Ntg", "Hdg", "Sg", "Oxg")
-  ep_cols <- setdiff(intersect(names(x), volumes$phase), totals)
+  # Equilibrium-phase columns, by index. A phase named like an element (Ni) shares its name with
+  # that element's -totals column, which comes first: use such a phase only if the name appears
+  # twice, and take the last. Fe metal is in its own Fe_metal column.
+  ep_names <- setdiff(intersect(names(x), volumes$phase), "Fe")
+  ep_names <- ep_names[!ep_names %in% init$totals | vapply(ep_names, function(p) sum(names(x) == p) > 1, logical(1))]
+  ep_idx <- vapply(ep_names, function(p) max(which(names(x) == p)), 0L)
   kin_cols <- grep("^k_", names(x), value = TRUE)
   kin_min <- intersect(sub("^k_", "", kin_cols), volumes$phase)
   rows <- list(); bd <- list()
@@ -360,7 +370,7 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   add("t0", 0, init$minerals, init$iom_mass0_g, if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
   for (r in which(x$state == "react" & trimws(x$soln) == "1")) {
     mol <- c(stats::setNames(as.numeric(x[r, paste0("k_", kin_min)]), kin_min),
-             stats::setNames(as.numeric(x[r, ep_cols]), ep_cols),
+             stats::setNames(as.numeric(unlist(x[r, ep_idx])), ep_names),
              if ("Fe_metal" %in% names(x)) c(Fe = as.numeric(x$Fe_metal[r])))
     if (sum(mol[mol > 0], na.rm = TRUE) == 0) next          # a MIX row: no solids
     n_iom <- if (nrow(init$iom)) as.numeric(x[r, paste0("k_", init$iom$name)]) else numeric(0)
@@ -369,4 +379,73 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
     add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, rho_f)
   }
   list(summary = do.call(rbind, rows), breakdown = do.call(rbind, bd))
+}
+
+# ---- Element totals of the whole system ---------------------------------------
+#
+# system_totals() adds up each element over a row's solution (molality x water mass, plus the water
+# itself for H and O), equilibrium phases, kinetic reactants (minerals, Schreibersite, IOM channels by
+# their -formula) and, where the row has a gas phase, its components. The restart and gas-phase
+# mass-balance checks compare these.
+
+# Element counts of a chemical formula as PHREEQC writes it: "Mg3Si2O5(OH)4", "CaSO4:2H2O",
+# "Na.96Al.96Si2.04O6:H2O", "Mtg:6H2O"; or a KINETICS -formula "C 1 H 1 O 1.3115".
+formula_elements <- function(f) {
+  f <- trimws(f)
+  if (grepl("\\s", f)) {                                   # "El n El n ..."
+    t <- strsplit(f, "\\s+")[[1]]
+    return(tapply(as.numeric(t[c(FALSE, TRUE)]), t[c(TRUE, FALSE)], sum))
+  }
+  add <- function(a, b, k = 1) { for (e in names(b)) a[e] <- (if (is.na(a[e])) 0 else a[e]) + k * b[[e]]; a }
+  group <- function(s) {
+    out <- numeric(0); i <- 1
+    while (i <= nchar(s)) {
+      ch <- substr(s, i, i)
+      if (ch == "(") {
+        depth <- 1; j <- i
+        while (depth > 0) { j <- j + 1; c2 <- substr(s, j, j); depth <- depth + (c2 == "(") - (c2 == ")") }
+        m <- regmatches(substring(s, j + 1), regexpr("^[0-9.]*", substring(s, j + 1)))
+        out <- add(out, group(substr(s, i + 1, j - 1)), if (nzchar(m)) as.numeric(m) else 1); i <- j + 1 + nchar(m)
+      } else {
+        m <- regmatches(substring(s, i), regexpr("^[A-Z][a-z]*[0-9.]*", substring(s, i)))
+        if (!length(m)) stop("cannot parse formula ", f)
+        el <- sub("[0-9.]+$", "", m); n <- sub("^[A-Za-z]+", "", m)
+        out <- add(out, stats::setNames(if (nzchar(n)) as.numeric(n) else 1, el)); i <- i + nchar(m)
+      }
+    }
+    out
+  }
+  tot <- numeric(0)
+  for (part in strsplit(f, ":", fixed = TRUE)[[1]]) {
+    k <- regmatches(part, regexpr("^[0-9.]+", part)); body <- sub("^[0-9.]+", "", part)
+    tot <- add(tot, group(body), if (length(k) && nzchar(k)) as.numeric(k) else 1)
+  }
+  tot
+}
+
+# Element totals (mol) of row i of a selected-output data frame x (read with check.names = FALSE).
+# elements: the -totals elements (pqi_initial_solids(pqi)$totals); iom: pqi_initial_solids(pqi)$iom.
+# The -totals H and O exclude water, so water (mass_H2O / 18.01528 g/mol) is added to both.
+system_totals <- function(x, i, elements, iom = NULL, volumes = utils::read.csv(MINERAL_VOLUMES_CSV, stringsAsFactors = FALSE)) {
+  nm <- names(x); w <- as.numeric(x$mass_H2O[i])
+  tot <- stats::setNames(vapply(elements, function(e) as.numeric(x[i, match(e, nm)]) * w, 0), elements)
+  tot[c("H", "O")] <- tot[c("H", "O")] + c(2, 1) * w / 0.01801528
+  addf <- function(n, f) { if (is.na(n) || n == 0) return(); fe <- formula_elements(f)
+    for (e in names(fe)) tot[e] <<- (if (is.na(tot[e])) 0 else tot[e]) + n * fe[[e]] }
+  form <- stats::setNames(volumes$formula, volumes$phase)
+  # equilibrium phases: the last column of each name (Ni shares its name with the Ni total)
+  for (p in setdiff(intersect(unique(nm), volumes$phase), c("Fe", elements)))
+    addf(as.numeric(x[i, max(which(nm == p))]), form[[p]])
+  for (p in intersect(elements, volumes$phase)) if (sum(nm == p) > 1) addf(as.numeric(x[i, max(which(nm == p))]), form[[p]])
+  # gases listed as equilibrium phases (an infinite reservoir at fixed partial pressure)
+  for (g in nm[grepl("\\(g\\)$", nm) & !grepl("^(g_|d_)", nm)]) addf(as.numeric(x[i, max(which(nm == g))]), sub("\\(g\\)$", "", g))
+  if ("Fe_metal" %in% nm) addf(as.numeric(x$Fe_metal[i]), "Fe")
+  for (k in grep("^k_", nm, value = TRUE)) {
+    p <- sub("^k_", "", k)
+    f <- if (!is.null(iom) && p %in% iom$name) iom$formula[match(p, iom$name)] else if (p %in% names(form)) form[[p]] else NA
+    if (is.na(f)) stop("system_totals: no formula for kinetic reactant ", p)
+    addf(as.numeric(x[i, k]), f)
+  }
+  for (g in grep("^g_", nm, value = TRUE)) addf(as.numeric(x[i, g]), sub("\\(g\\)$", "", sub("^g_", "", g)))
+  tot
 }

@@ -107,7 +107,7 @@ SCHREIBERSITE_RATE_BODY <- paste(
   "\t-end", sep = "\n")
 SCHREIBERSITE_RATE <- paste0("Schreibersite\n", SCHREIBERSITE_RATE_BODY)
 schreibersite_kinetics_entry <- function(m0) {
-  sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.6e\n      -step_divide 1", m0)
+  sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.15e\n      -step_divide 1", m0)
 }
 
 # USER_PUNCH columns every generator ends with. Fe metal is punched as Fe_metal / d_Fe_metal rather
@@ -146,6 +146,35 @@ parent_fluid_header_lines <- function(prev_csv) {
     else sub(sprintf("^# (parent )?%s: ", k), "", l[1])
   }, character(1))
   paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
+}
+
+# Every element a database defines: its element-level SOLUTION_MASTER_SPECIES, pseudo-elements
+# (Mtg, Ntg, Hdg, Oxg, Sg) included, E and Alkalinity not. The three coreclath databases define the
+# same 36. Every generator punches all of them (totals_block()), so a restart can carry every element
+# whatever the run contained; before 2026-10-28 the totals were a fixed list without K, Mn, Cl, Ni
+# and (in the equilibrium generators) Mtg, so restarts dropped those elements.
+database_elements <- function(database) {
+  g <- names(element_gfw(database))
+  g[grepl("^[A-Z][a-z]*$", g) & !g %in% c("E", "Alkalinity")]
+}
+# The SELECTED_OUTPUT -totals option listing database_elements(database).
+totals_block <- function(database) {
+  el <- database_elements(database)
+  rows <- vapply(split(el, ceiling(seq_along(el) / 16)), paste, "", collapse = " ")
+  paste0("    -totals              ", paste(rows, collapse = "\n                         "))
+}
+# Elements that ENTICES inputs can contain (rock, IOM, initial fluids): a restart warns if its parent
+# CSV has no column for one of them (a parent generated before 2026-10-28), since it cannot carry it.
+ENTICES_ELEMENTS <- c("Al", "C", "Ca", "Cl", "Fe", "K", "Mg", "Mn", "N", "Na", "Ni", "P", "S", "Si", "Mtg", "Ntg")
+# The elements a restart sets in its SOLUTIONs: every database element but H and O (which come from
+# the water mass, pH and pe) that the parent CSV has a column for.
+restart_elements <- function(database, csv_names, prev_csv) {
+  el <- setdiff(database_elements(database), c("H", "O"))
+  miss <- setdiff(intersect(ENTICES_ELEMENTS, el), csv_names)
+  if (length(miss))
+    warning("restart: the parent CSV has no total for ", paste(miss, collapse = ", "), " (", prev_csv,
+            "; generated before 2026-10-28): these elements are not carried into the restart")
+  intersect(el, csv_names)
 }
 
 # A parent run's carbon mode, from the database its .pqi header names ("# Database:", else
@@ -232,7 +261,10 @@ ep_column <- function(phase, col_names) {
     hits <- which(col_names == "Fe" | grepl("^Fe\\.[0-9]+$", col_names))
     return(if (length(hits) > 1) tail(hits, 1) else NA_integer_)
   }
-  hits <- which(make.names(col_names) == make.names(phase))
+  # A phase named like an element (Ni) shares its name with that element's -totals column, which comes
+  # first; read.delim's default check.names renames the second "Ni.1". Either way, take the last.
+  mn <- make.names(col_names); mp <- make.names(phase)
+  hits <- which(mn == mp | startsWith(mn, paste0(mp, ".")) & grepl("^\\.[0-9]+$", substring(mn, nchar(mp) + 1)))
   if (length(hits) > 0) tail(hits, 1) else NA_integer_
 }
 
@@ -1426,9 +1458,6 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -2071,6 +2100,7 @@ EQUILIBRIUM_PHASES 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state True
     -solution True
@@ -2080,9 +2110,7 @@ SELECTED_OUTPUT
     -alkalinity           true
     -ionic_strength       true
     -water                true
-    -totals              Al C Ca Fe H #K 
-                         Mg #Mn 
-                         N Na O P S Si{mtg_totals} #Cl
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2 
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2 #K+ 
                          Mg+2 #Mn+2 Mn+3 
@@ -2198,7 +2226,7 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 2\n",
                                          "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                          sprintf("  1  %.6e\n", x_step),
+                                          sprintf("  1  %.15e\n", x_step),
                                           "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
@@ -2212,8 +2240,8 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 1\n",
                                          "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                          sprintf("  1  %.6e\n", 1 - x_step),
-                                          sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
+                                          sprintf("  1  %.15e\n", 1 - x_step),
+                                          sprintf("  4  %.15e\n", f_x / (f_ocean + f_x)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          # Simulation 4: update ocean from combined ocean, fractional mass = f_ocean
@@ -2221,7 +2249,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                          sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_x)),
+                                          sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
                                          # Early-exit: delay STOP by one full tidal cycle after Fayalite depletion.
@@ -2732,6 +2760,7 @@ EQUILIBRIUM_PHASES 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state True
     -solution True
@@ -2741,7 +2770,7 @@ SELECTED_OUTPUT
     -alkalinity           true
     -ionic_strength       true
     -water                true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -2814,7 +2843,7 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 2\n",
                                          "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                         sprintf("  1  %.6e\n", f_fluid / f_pore),
+                                         sprintf("  1  %.15e\n", f_fluid / f_pore),
                                          "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
@@ -2826,8 +2855,8 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 1\n",
                                          "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                         sprintf("  1  %.6e\n", (f_pore - f_fluid) / f_pore),
-                                         sprintf("  4  %.6e\n", f_fluid / (f_ocean + f_fluid)),
+                                         sprintf("  1  %.15e\n", (f_pore - f_fluid) / f_pore),
+                                         sprintf("  4  %.15e\n", f_fluid / (f_ocean + f_fluid)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          # Simulation 4: update ocean
@@ -2835,7 +2864,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                         sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_fluid)),
+                                         sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_fluid)),
                                          "SAVE solution 2\n",
                                          "END\n"
                                        )
@@ -3112,6 +3141,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -3120,7 +3150,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -3227,9 +3257,6 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -3711,6 +3738,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -3719,7 +3747,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -3823,9 +3851,11 @@ END
                                        ))
                                      }
 
-                                     elements  <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
-                                     # Mtg (decoupled methane) when the parent punched it.
-                                     if ("Mtg" %in% names(last_row)) elements <- c(elements, "Mtg")
+                                     # Every element the parent punched (restart_elements(); the three
+                                     # databases define the same elements, so the coupled one is used here,
+                                     # before this restart's carbon mode is resolved).
+                                     elements  <- restart_elements(file.path("databases", CARBON_MODE_DATABASES[["coupled"]]),
+                                                                   names(last_row), prev_csv)
                                      elem_vals <- sapply(elements, function(el) {
                                        val <- suppressWarnings(as.numeric(last_row[[el]]))
                                        if (!is.na(val) && val > 0) val else NA_real_
@@ -3833,7 +3863,7 @@ END
                                      elem_lines <- paste(
                                        Filter(Negate(is.null), lapply(seq_along(elements), function(i) {
                                          if (is.na(elem_vals[i])) return(NULL)
-                                         sprintf("    %-4s  %.6e", elements[i], elem_vals[i])
+                                         sprintf("    %-4s  %.15e", elements[i], elem_vals[i])
                                        })),
                                        collapse = "\n"
                                      )
@@ -3856,9 +3886,6 @@ END
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
                                                                                      allow_pressure_change)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -3972,7 +3999,7 @@ END
 
                                        iom_kinetics_restart <- paste0(apply(self$iom_pools, 1, function(p) {
                                          m0 <- get_iom_moles(p[["name"]])
-                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1",
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.15e\n      -step_divide 1",
                                                  p[["name"]], trimws(p[["formula"]]), m0)
                                        }), collapse = "\n")
 
@@ -4146,7 +4173,7 @@ END
                                      # ---- KINETICS block ----
                                      .primary_kin_entries <- if (length(kinetic_minerals) > 0)
                                        paste(sapply(kinetic_minerals, function(m)
-                                         if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                         if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.15e\n      -step_divide 1", m, get_k_moles(m))),
                                          collapse = "\n")
                                      else ""
                                      .all_kin_entries <- paste(
@@ -4166,7 +4193,7 @@ END
                                      # PHREEQC writes natively (same mechanism as secondary_minerals).
                                      always_equil_prim_lines <- paste(
                                        sapply(always_equil_primary, function(m)
-                                         sprintf("   %-20s 0 %.6e  dissolve_only", m, get_equil_moles(m))),
+                                         sprintf("   %-20s 0 %.15e  dissolve_only", m, get_equil_moles(m))),
                                        collapse = "\n"
                                      )
                                      equil_prim_lines <- paste(
@@ -4174,14 +4201,14 @@ END
                                          always_equil_prim_lines,
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
-                                             sprintf("   %-20s 0 %.6e  dissolve_only", m, get_k_moles(m)))
+                                             sprintf("   %-20s 0 %.15e  dissolve_only", m, get_k_moles(m)))
                                          else character(0)),
                                        collapse = "\n")
 
                                      secondary_eq_lines <- paste(
                                        c("# --- Secondary minerals ---",
                                          sapply(secondary_minerals, function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_equil_moles(m)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_equil_moles(m)))),
                                        collapse = "\n"
                                      )
 
@@ -4260,12 +4287,12 @@ KNOBS
 
 SOLUTION 1 {.soln_label}
     temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.4f", ph_val)}
-    pe        {sprintf("%.4f", pe_val)}
+    pH        {sprintf("%.15g", ph_val)}
+    pe        {sprintf("%.15g", pe_val)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", water_kg)}
+    water     {sprintf("%.15g", water_kg)}
     pressure  {round(.solution_pressure_atm, 1)}
 {elem_lines}
 
@@ -4281,6 +4308,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -4289,7 +4317,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -4463,9 +4491,6 @@ END
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
                                      parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
                                                                                      allow_pressure_change)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
@@ -4545,16 +4570,14 @@ END
                                      }
 
                                      # ---- Solution chemistry ----
-                                     elements <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
-                                     # Mtg (decoupled methane) when the parent punched it.
-                                     if ("Mtg" %in% names(row_mix1)) elements <- c(elements, "Mtg")
-                                     if ("Mtg" %in% elements) mtg_totals <- " Mtg"   # punch what is carried, whatever the database
+                                     # Every element the parent punched (restart_elements()).
+                                     elements <- restart_elements(ch4_mode$database, names(row_mix1), prev_csv)
 
                                      make_soln_lines <- function(row) {
                                        vals <- get_chem(row, elements)
                                        paste(Filter(Negate(is.null), lapply(seq_along(elements), function(i) {
                                          if (is.na(vals[i])) return(NULL)
-                                         sprintf("    %-4s  %.6e", elements[i], vals[i])
+                                         sprintf("    %-4s  %.15e", elements[i], vals[i])
                                        })), collapse = "\n")
                                      }
 
@@ -4749,7 +4772,7 @@ END
 
                                        iom_kinetics_block <- paste0(apply(self$iom_pools, 1, function(p) {
                                          m_remaining <- get_iom_moles(p[["name"]])
-                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1\n",
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.15e\n      -step_divide 1\n",
                                                  p[["name"]], trimws(p[["formula"]]), m_remaining)
                                        }), collapse = "")
 
@@ -4784,7 +4807,7 @@ END
                                      kinetics_block <- if (length(kinetic_minerals) > 0 || nzchar(iom_kinetics_block)) {
                                        min_entries <- if (length(kinetic_minerals) > 0)
                                          paste(sapply(kinetic_minerals, function(m)
-                                           if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                           if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.15e\n      -step_divide 1", m, get_k_moles(m))),
                                            collapse = "\n")
                                        else ""
                                        all_entries <- paste(Filter(nzchar, c(min_entries, iom_kinetics_block)),
@@ -4801,17 +4824,17 @@ END
                                      ep1_prim_lines <- paste(
                                        c("# --- Primary minerals (equilibrium) ---",
                                          sapply(always_equil_primary, function(m)
-                                           sprintf("   %-20s 0 %.6e  dissolve_only", m, get_ep_moles(m, row_react))),
+                                           sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_react))),
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
-                                             sprintf("   %-20s 0 %.6e  dissolve_only", m, get_k_moles(m)))
+                                             sprintf("   %-20s 0 %.15e  dissolve_only", m, get_k_moles(m)))
                                          else character(0)),
                                        collapse = "\n")
 
                                      ep1_sec_lines <- paste(
                                        c("# --- Secondary minerals (porewater, from previous run) ---",
                                          sapply(c(secondary_minerals, extra_pw_minerals), function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_ep_moles(m, row_react)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_react)))),
                                        collapse = "\n"
                                      )
 
@@ -4822,14 +4845,14 @@ END
                                      ep2_prim_lines <- if (length(equil_primary) > 0)
                                        paste(c("# --- Primary minerals (equilibrium, ocean) ---",
                                                sapply(equil_primary, function(m)
-                                                 sprintf("   %-20s 0 %.6e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
+                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
                                              collapse = "\n")
                                      else ""
                                      ep2_minerals <- c(secondary_minerals, extra_ocean_minerals)
                                      ep2_sec_lines <- paste(
                                        c("# --- Secondary minerals (ocean, from previous run) ---",
                                          sapply(ep2_minerals, function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_ep_moles(m, row_mix4)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_mix4)))),
                                        collapse = "\n"
                                      )
                                      ep2_block <- paste0("EQUILIBRIUM_PHASES 2\n",
@@ -4934,23 +4957,23 @@ KNOBS
 
 SOLUTION 1 Enceladus porewater (restarted)
     temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.4f", soln1_pH)}
-    pe        {sprintf("%.4f", soln1_pe)}
+    pH        {sprintf("%.15g", soln1_pH)}
+    pe        {sprintf("%.15g", soln1_pe)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", soln1_h2o)}
+    water     {sprintf("%.15g", soln1_h2o)}
     pressure  {round(pore_pressure_atm, 1)}
 {soln1_elem_lines}
 
 SOLUTION 2 Enceladus ocean (restarted)
     temp      {round(ocean_temp_C, 2)}
-    pH        {sprintf("%.4f", soln2_pH)}
-    pe        {sprintf("%.4f", soln2_pe)}
+    pH        {sprintf("%.15g", soln2_pH)}
+    pe        {sprintf("%.15g", soln2_pe)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", soln2_h2o)}
+    water     {sprintf("%.15g", soln2_h2o)}
     pressure  {round(ocean_pressure_atm, 1)}
 {soln2_elem_lines}
 
@@ -4980,6 +5003,7 @@ REACTION_PRESSURE 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state true
     -solution true
@@ -4989,7 +5013,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -5041,7 +5065,7 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 2\n",
                                          "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                         sprintf("  1  %.6e\n", x_step),
+                                         sprintf("  1  %.15e\n", x_step),
                                          "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
@@ -5052,15 +5076,15 @@ SELECTED_OUTPUT
                                          "USE reaction_temperature 1\n",
                                          "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                         sprintf("  1  %.6e\n", 1 - x_step),
-                                         sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
+                                         sprintf("  1  %.15e\n", 1 - x_step),
+                                         sprintf("  4  %.15e\n", f_x / (f_ocean + f_x)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                         sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_x)),
+                                         sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
                                          if (i < kinetic_cycles &&
