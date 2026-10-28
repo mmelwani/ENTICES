@@ -219,6 +219,10 @@ check_restart_carbon_mode <- function(prev_csv, ch4_mode) {
 # total PHREEQC then adjusts to balance SOLUTION 2's charge.
 # Returns the SOLUTION lines, each with its leading newline ("" for "pure_water").
 initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL, charge_balance = NULL) {
+  if (inherits(initial_ocean, "cometary_ice")) {           # SOLUTION 2 is pure water; the ices enter by REACTION
+    if (!is.null(charge_balance)) stop("charge_balance is not used with cometary_ice_ocean()")
+    return("")
+  }
   check_ocean_charge_balance(initial_ocean, charge_balance)
   if (identical(initial_ocean, "pure_water")) return("")
   nm <- names(initial_ocean)
@@ -245,6 +249,10 @@ ocean_pH_charge <- function(charge_balance) if (identical(charge_balance, "pH"))
 initial_ocean_header_line <- function(initial_ocean, charge_balance = NULL) {
   cb <- if (is.null(charge_balance)) "" else sprintf("; charge balance on %s", charge_balance)
   if (identical(initial_ocean, "pure_water")) return(paste0("# initial_ocean: pure_water", cb))
+  if (inherits(initial_ocean, "cometary_ice"))
+    return(sprintf("# initial_ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s): %s mol/kgw, reacted into the pure-water ocean at ocean T and P (Miller et al. 2026 Table 5; Rubin et al. 2019)",
+                   initial_ocean$v, initial_ocean$include_NH3, initial_ocean$include_O2,
+                   paste(sprintf("%s=%.4e", names(initial_ocean$mol_per_kgw), initial_ocean$mol_per_kgw), collapse = ", ")))
   sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only%s",
           paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "), cb)
 }
@@ -351,6 +359,71 @@ gas_punch <- function(comps, vpore_L, put = FALSE) {
   list(headings = " Vgas_L P_gas_atm Vgas_Vpore",
        lines = paste0(c("   930 ng = 0\n", sum_lines, "   950 vg = 0\n", "   951 IF ng > 0 THEN vg = GAS_VM * ng\n",
                         sprintf("   960 PUNCH vg, GAS_P, vg / %.15g\n", vpore_L), put_lines), collapse = ""))
+}
+
+# Cometary-ice initial ocean (an option; the default ocean is pure water). Miller et al. (2026),
+# Icarus 449, 116961, Table 5, "molar abundance used (volatile depleted)": comet 67P ice from ROSINA
+# (Rubin et al. 2019, MNRAS 489, 594-607, the "67P" column below, mol per 100 mol H2O), with every
+# ice more volatile than NH3 at 273 K (Fray & Schmitt 2009) depleted by v_NH3 = 0.02. v_NH3 comes
+# from Titan's atmospheric N budget (Miller et al. 2026, eqs. 21-24): it is not an Enceladus
+# constraint. NH3 (0.67 per 100 H2O, Rubin et al. 2019 Table 4) is not in Miller's Table 5, whose
+# "Total N" (2 x N2) excludes it, while their text says v_NH3 applies to NH3 too: include_NH3
+# (default FALSE, Table 5 as printed) is pending the PI. include_O2 exists because O2 decides the
+# redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound (2.6 molal CO2 + 1.7 molal
+# CO, far above CO2-clathrate dissociation at 1.45 C).
+COMET_67P_PER_100_H2O <- c(CO2 = 4.7, CO = 3.1, O2 = 3.1, H2S = 1.1, CH4 = 0.34, C2H6 = 0.29, N2 = 8.9e-2, NH3 = 0.67)
+cometary_ice_ocean <- function(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE) {
+  if (!is.numeric(v) || length(v) != 1 || !isTRUE(v > 0 && v <= 1)) stop("v must be one number in (0, 1]")
+  sp <- setdiff(names(COMET_67P_PER_100_H2O), c(if (!include_NH3) "NH3", if (!include_O2) "O2"))
+  # mol per 100 mol H2O x v -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
+  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v / 100 / 0.0180153, v = v,
+                 include_NH3 = include_NH3, include_O2 = include_O2), class = "cometary_ice")
+}
+# REACTION lines for the ices, by carbon mode: CO2, CO, O2, H2S and NH3 are coupled (equilibrium
+# decides CO's fate; under c4_only C can only be +4, so CO + H2O -> CO2 + H2);
+# CH4 is Mtg and C2H6 is "Mtg 2 H -2" (the electron-count rule, as IOM_CHn) when methane is
+# decoupled, CH4 and C2H6 when coupled; N2 is Ntg (kinetically inert at ocean temperature) in every
+# mode. Amounts are mol/kgw x the ocean's water mass (kg). "Mtg 2 H -2" reduces ethane's C from -3
+# to -4, drawing 2 e- per C2H6 from the coupled system (0.0064 eq at v = 0.02): it oxidises 0.0008
+# molal more H2S to sulfate when O2 is present (tests/cometary_ocean_check.R).
+cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
+  m <- ice$mol_per_kgw * water_kg; g <- function(n) if (n %in% names(m)) m[[n]] else 0
+  dec <- ch4_mode$decoupled
+  # CO enters as CO2 minus O: REACTION matches phase names first, case-insensitively, and "CO" is
+  # the cobalt phase Co (tested 2026-10-28: it added 0.034 molal Co).
+  r <- c(CO2 = g("CO2") + g("CO"), O = -g("CO"), O2 = g("O2"), H2S = g("H2S"), Ntg = g("N2"), NH3 = g("NH3"),
+         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0, H = if (dec) -2 * g("C2H6") else 0,
+         CH4 = if (dec) 0 else g("CH4"), C2H6 = if (dec) 0 else g("C2H6"))
+  r <- r[r != 0]
+  c(sprintf("    %-5s %.15e", names(r), r), "    1 mol")
+}
+# The simulation that reacts the ices into the pure-water ocean SOLUTION 2 at ocean temperature and
+# pressure, with the ocean's gas phase (which it saves, so a bubble would be kept), and writes the
+# resulting ocean to <base>_initial_ocean.csv (SELECTED_OUTPUT 2, switched off afterwards).
+cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, base_name, database) {
+  comps <- gas_components(ch4_mode, "Ntg(g)")
+  paste(c("END",
+          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s), in mol/kgw: %s.",
+                  ice$v, ice$include_NH3, ice$include_O2,
+                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", ")),
+          "# Entered as a REACTION into pure water at ocean T and P, not as SOLUTION totals: the ice mixture",
+          "# is out of redox equilibrium (O2 with CO and H2S), and equilibrium decides the outcome. That is",
+          "# an assumption at 1.45 C, where the CO shift and O2 oxidation are kinetically slow.",
+          ocean_gas_block,
+          "USE solution 2",
+          "REACTION 9 Cometary ices", cometary_reaction_lines(ice, ch4_mode, water_kg),
+          "USE reaction_temperature 2", "USE reaction_pressure 2",
+          "SAVE solution 2", "SAVE gas_phase 2",
+          "SELECTED_OUTPUT 2",
+          sprintf("    -file %s_initial_ocean.csv", base_name),
+          "    -high_precision true", "    -state true", "    -solution true", "    -reaction true", "    -ph true", "    -pe true", "    -alkalinity true", "    -water true",
+          totals_block(database),
+          "    -molalities CO2 HCO3- CO3-2 Mtg H2 O2 HS- H2S SO4-2 HSO4- Ntg NH3 NH4+ HCOO- CO CH3COO- C2H6",
+          gas_so_line(comps),
+          "USER_PUNCH 2", "    -headings H_total_mol O_total_mol Vgas_L", "    10 PUNCH TOT(\"H\") * TOT(\"water\"), TOT(\"O\") * TOT(\"water\")",
+          "    20 ng = 0", sprintf("    %d ng = ng + GAS(\"%s\")", 20 + seq_along(comps), comps), "    90 PUNCH GAS_VM * ng",
+          "END",
+          "SELECTED_OUTPUT 2", "    -active false"), collapse = "\n")
 }
 
 #===============================================================================
@@ -1549,12 +1622,24 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      ch4_override_note <- ch4_mode$note
                                      # Gas phases (see gas_components()): the porewater one, the ocean one, the
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
-                                     gas_comps <- gas_components(ch4_mode)
+                                     cometary <- inherits(initial_ocean, "cometary_ice")
+                                     # Tested 2026-10-28: a cometary ocean with a carbon-free porewater (no seed, no IOM)
+                                     # left the first porewater step running for > 20 min without converging; with
+                                     # trace_C_molal = 1e-14 it completes.
+                                     if (cometary && is.null(trace_C_molal) && self$organic_wt_percent == 0)
+                                       warning("cometary_ice_ocean() with a carbon-free porewater: give trace_C_molal = 1e-14 (without it the first porewater step did not converge in tests)")
+                                     gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
                                      gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
                                                                         "Ocean gas (fixed pressure, starts empty, never removed)")
+                                     # A cometary-ice ocean: the ices react into the pure-water ocean in a simulation of their
+                                     # own, before any reactant is defined (cometary_ocean_simulation()), which also defines
+                                     # and saves GAS_PHASE 2; otherwise GAS_PHASE 2 is defined empty with the others.
+                                     cometary_block <- if (cometary) paste0(cometary_ocean_simulation(initial_ocean, ch4_mode, ocean_mass_norm,
+                                                                            ocean_gas_block, base_name, ch4_mode$database), "\n") else ""
+                                     ocean_main_block <- if (cometary) "# GAS_PHASE 2 (ocean): defined, and saved with the cometary ices, above" else ocean_gas_block
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -1735,9 +1820,9 @@ REACTION_PRESSURE 1
 REACTION_PRESSURE 2
     {round(ocean_pressure_atm, 1)}
 
-{pore_gas_block}
+{cometary_block}{pore_gas_block}
 
-{ocean_gas_block}
+{ocean_main_block}
 {if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
 
 # Define rate equations for each mineral
@@ -2455,12 +2540,19 @@ KNOBS
                                      ch4_override_note <- ch4_mode$note
                                      # Gas phases (see gas_components()): the porewater one, the ocean one, the
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
-                                     gas_comps <- gas_components(ch4_mode)
+                                     cometary <- inherits(initial_ocean, "cometary_ice")
+                                     gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
                                      gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
                                                                         "Ocean gas (fixed pressure, starts empty, never removed)")
+                                     # A cometary-ice ocean: the ices react into the pure-water ocean in a simulation of their
+                                     # own, before any reactant is defined (cometary_ocean_simulation()), which also defines
+                                     # and saves GAS_PHASE 2; otherwise GAS_PHASE 2 is defined empty with the others.
+                                     cometary_block <- if (cometary) paste0(cometary_ocean_simulation(initial_ocean, ch4_mode, ocean_mass_norm,
+                                                                            ocean_gas_block, base_name, ch4_mode$database), "\n") else ""
+                                     ocean_main_block <- if (cometary) "# GAS_PHASE 2 (ocean): defined, and saved with the cometary ices, above" else ocean_gas_block
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -2581,9 +2673,9 @@ REACTION_PRESSURE 1
 REACTION_PRESSURE 2
     {round(ocean_pressure_atm, 1)}
 
-{pore_gas_block}
+{cometary_block}{pore_gas_block}
 
-{ocean_gas_block}
+{ocean_main_block}
 {if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
 
 EQUILIBRIUM_PHASES 1
@@ -4617,7 +4709,8 @@ END
                                      ch4_override_note <- ch4_mode$note
                                      # Gas phases (see gas_components()): the porewater one, the ocean one, the
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
-                                     gas_comps <- gas_components(ch4_mode)
+                                     # Ntg(g) when the parent carried it (a cometary-ice ocean)
+                                     gas_comps <- gas_components(ch4_mode, if ("g_Ntg(g)" %in% names(row_mix4)) "Ntg(g)" else character(0))
                                      gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")

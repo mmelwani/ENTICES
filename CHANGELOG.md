@@ -894,3 +894,23 @@ One commit per item; each commit message has its pass check.
   run time has no simple PHREEQC route (see PROGRESS).
 - `tests/gas_mass_balance_check.R`: whole-system element totals per orbit, both fates (≤ 1e-11);
   the no-bubble identity (25 °C, no metal).
+
+### gas-ice-docs branch, Stage 3: cometary-ice initial ocean (option) (2026-10-28)
+
+- **`initial_ocean = cometary_ice_ocean(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE)`**
+  (tidal_kinetic, tidal_equil). Miller et al. (2026) Table 5: comet 67P ice (Rubin et al. 2019) with
+  ices more volatile than NH3 depleted by v = 0.02 (from Titan's N budget, not an Enceladus
+  constraint). The default ocean stays pure water. The ices react into the pure-water ocean at
+  ocean T and P in a simulation of their own before the first orbit (REACTION, not SOLUTION totals:
+  the mixture is out of redox equilibrium), with the ocean's gas phase, which is saved;
+  `<base>_initial_ocean.csv` records the result. Methane and ethane enter as Mtg (`Mtg 2 H -2` for
+  ethane) unless carbon is coupled; N2 as Ntg (and Ntg(g) joins the gas components); CO as CO2
+  minus O (REACTION reads "CO" as the cobalt phase Co).
+- Result (c4_only, v = 0.02): coupled C 0.0866 molal, all C(+4); Mtg 0.0102; pH 1.85; H2 ~5e-14;
+  S(+6) 0.0094, S(-2) 0.0028 molal; no bubble at 66.7 atm. The hand estimate (0.0086 / 0.0036)
+  left out the ethane term (2 e- per C2H6 drawn from the coupled system). Without O2: no sulfate,
+  H2 0.031 molal, pH 3.80. With NH3: 7.44e-3 molal N(-3), pH 2.08. `tests/cometary_ocean_check.R`.
+- `include_NH3` defaults to FALSE (Table 5 as printed); pending the PI.
+- A cometary ocean with a carbon-free porewater (no `trace_C_molal`, no IOM) left the first porewater
+  step running for > 20 min without converging (100 C, 1 orbit); with `trace_C_molal = 1e-14` it
+  completes. `tidal_kinetic` warns in that case. The cause is not understood.

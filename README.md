@@ -155,6 +155,7 @@ Rscript tests/bulk_density_check.R  # molar volumes, bulk_density(), t = 0 vs th
 Rscript tests/restart_closure_check.R # restarts conserve every element (runs PHREEQC, ~6 min)
 Rscript tests/gas_eos_check.R        # Peng-Robinson constants; H2 PR vs ideal
 Rscript tests/gas_mass_balance_check.R # gas phases conserve mass, both pore_gas_fate options (~15 min)
+Rscript tests/cometary_ocean_check.R # the cometary-ice initial ocean
 ```
 
 Each prints `SUMMARY: 0 failure(s)` when passing. `db_load_check.R` and `c4only_db_check.R` need PHREEQC; set
