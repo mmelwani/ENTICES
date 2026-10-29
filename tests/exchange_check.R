@@ -6,8 +6,8 @@
 #     as read off the figure (within 15%); and at mu = 1e10 the 1e-5 contour meets eta ~ 1.6e12 (within 25%).
 #     The 3/5 factor written in their section 2.2 text and Appendix A misses these by ~1.6x.
 #  2. The degree-2 dilatation factor: 0.19245 x 3/5 for a full core, -> 0.19245 for a thin layer.
-#  3. Exchange per half-orbit = min(poro, darcy, pore_volume) at k = 1e-14, 1e-11, 1e-7 m2 (production phi,
-#     full core): the binding limit is darcy, darcy, poro respectively; x_half <= 1; x_orbit = 1 - (1 - x_half)^2;
+#  3. Exchange per half-orbit = min(poro, darcy, pore_volume) at k = 1e-14, 1e-13, 1e-12, 1e-11, 1e-7 m2
+#     (production phi, full core, Darcy over the skin depth): darcy binds below k ~ 1.2e-11, poro at 1e-7; x_half <= 1; x_orbit = 1 - (1 - x_half)^2;
 #     exchanging_fluid_mass = x_orbit * porewater mass; circulation time = ocean mass / exchange per orbit.
 #  4. The pore-volume limit: the poroelastic term can never reach it at real porosities (a fluid matrix gives
 #     k2 -> 3/2, so eps0 <= ~1.5e-4 and alpha eps_v <= ~1.7e-5 of V_layer), so it is exercised with phi = 1e-7
@@ -44,8 +44,8 @@ check(abs(f_full - 0.19245 * 0.6) < 1e-5 && abs(f_thin - 0.19245) < 1e-4,
 
 # 3. The three limits.
 cfg <- EnceladusConfig$new()
-expect <- c("1e-14" = "darcy", "1e-11" = "darcy", "1e-07" = "poro")
-for (k in c(1e-14, 1e-11, 1e-7)) {
+expect <- c("1e-14" = "darcy", "1e-13" = "darcy", "1e-12" = "darcy", "1e-11" = "darcy", "1e-07" = "poro")
+for (k in c(1e-14, 1e-13, 1e-12, 1e-11, 1e-7)) {
   sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
   x <- sim$exchange; m <- quiet(sim$get_summary_metrics())
   pw <- 1000 * sim$params$porosity * x$V_layer
@@ -55,6 +55,22 @@ for (k in c(1e-14, 1e-11, 1e-7)) {
     abs(m$circulation_time_years / circ - 1) < 1e-9
   check(ok, sprintf("k = %.0e: poro %.3e, darcy %.3e, pore_volume %.3e m3 -> %s; x_half %.3e; circulation %.3g yr",
                     k, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$binding, x$x_half, m$circulation_time_years))
+}
+
+# 3b. The skin depth: delta = sqrt(c / omega) with Liao et al. (2020) Table A1's c, recomputed here from the
+#     moduli; the Darcy volume over L_eff = min(L, delta), (k/mu)(dP/L_eff) A T/pi, equals the code's; and the
+#     storage cross-check S dP delta A is the Darcy volume / (2/f), f = (K_m + 4/3 mu)/(K_u + 4/3 mu).
+for (k in c(1e-14, 1e-7)) {
+  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
+  a <- cfg$biot_alpha; phi <- 0.32; Ks <- 10e9; Kf <- 2.2e9; mu <- cfg$core_rigidity
+  Km <- (1 - a) * Ks; Ku <- Km + a^2 * Ks * Kf / (phi * Ks + (a - phi) * Kf)
+  c_liao <- k / 1.8e-3 * (Km + 4/3 * mu) * (Ku - Km) / (a^2 * (Ku + 4/3 * mu))
+  delta <- sqrt(c_liao / (2 * pi / cfg$orbital_period)); Leff <- min(194200, delta)
+  darcy <- k / 1.8e-3 * cfg$max_tidal_stress / Leff * 4 * pi * cfg$core_radius^2 * cfg$orbital_period / pi
+  f <- (Km + 4/3 * mu) / (Ku + 4/3 * mu); x <- sim$exchange
+  check(abs(x$delta / delta - 1) < 1e-9 && abs(x$dV_darcy / darcy - 1) < 2e-3 && abs(x$dV_darcy / x$dV_storage - 2 / f) < 0.01,
+        sprintf("k = %.0e: skin depth %.4g m (Table A1: %.4g); darcy %.4g m3 (by hand %.4g); darcy / storage %.3f (2/f = %.3f)",
+                k, x$delta, delta, x$dV_darcy, darcy, x$dV_darcy / x$dV_storage, 2 / f))
 }
 
 # 4. Pore-volume limit.

@@ -631,6 +631,10 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  core_rigidity = 17e9,    # [Pa]
                                  core_viscosity = 1e12,   # [Pa s]
                                  biot_alpha = 0.2,        # [-]
+                                 # Bulk moduli of the pore water and the rock grains, for the poroelastic skin depth:
+                                 # Liao et al. (2020) Table A1.
+                                 water_bulk_modulus = 2.2e9,  # [Pa] K_f
+                                 rock_bulk_modulus = 10e9,    # [Pa] K_s
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 
@@ -941,7 +945,9 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              stress <- self$calculate_tidal_stress(t)
                              print(sprintf("Got stress vector of length %d", length(stress)))
                              
-                             pressure_gradient <- stress / self$params$layer_thickness
+                             # The tidal pressure perturbation diffuses only a skin depth delta into the rock, so the
+                             # gradient acts over L_eff = min(layer_thickness, delta) (skin_depth(); README section 6).
+                             pressure_gradient <- stress / self$skin_depth()$L_eff
                              print(sprintf("Pressure gradient vector length: %d", length(pressure_gradient)))
                              
                              # Calculate flow parameters
@@ -1031,19 +1037,39 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              dV      <- min(vols)
                              x_half  <- dV / V_pore
                              x_orbit <- 1 - (1 - x_half)^2
+                             sd      <- self$skin_depth()
                              list(eps0 = eps0, eps_v = eps_v, V_layer = V_layer, V_pore = V_pore,
+                                  delta = sd$delta, L_eff = sd$L_eff, storage = sd$S,
+                                  # cross-check: the volume the pressure change stores in the skin, S * dP * delta * A
+                                  dV_storage = sd$S * cfg$max_tidal_stress * sd$L_eff * 4 * pi * R^2,
                                   dV_poro = vols[["poro"]], dV_darcy = vols[["darcy"]], dV_pore_volume = V_pore,
                                   dV = dV, binding = names(vols)[which.min(vols)],
                                   x_half = x_half, x_orbit = x_orbit,
                                   mass_per_orbit = x_orbit * V_pore * CONSTANTS$FLUID$density)
                            },
 
+                           # Poroelastic skin depth, Liao et al. (2020) Table A1 and Fig. B4: delta = sqrt(c / omega), with
+                           #   c = (k / eta_f) (K_m + 4/3 mu)(K_u - K_m) / (alpha^2 (K_u + 4/3 mu)),
+                           #   K_m = (1 - alpha) K_s, K_u = K_m + alpha^2 K_s K_f / (phi K_s + (alpha - phi) K_f).
+                           # (K_u - K_m) / alpha^2 is the Biot modulus M = 1/S, S = phi/K_f + (alpha - phi)/K_s the storage, so
+                           # c = (k / eta_f) M (K_m + 4/3 mu)/(K_u + 4/3 mu), the diffusivity k/(eta_f S) times a factor <= 1.
+                           # mu is the matrix rigidity (core_rigidity), as in their table. L_eff = min(layer_thickness, delta).
+                           skin_depth = function() {
+                             cfg <- self$config; a <- cfg$biot_alpha; phi <- self$params$porosity
+                             Ks <- cfg$rock_bulk_modulus; Kf <- cfg$water_bulk_modulus; mu <- cfg$core_rigidity
+                             S  <- phi / Kf + (a - phi) / Ks
+                             Km <- (1 - a) * Ks; Ku <- Km + a^2 / S
+                             c  <- self$params$k / CONSTANTS$FLUID$viscosity / S * (Km + 4/3 * mu) / (Ku + 4/3 * mu)
+                             delta <- sqrt(c / (2 * pi / cfg$orbital_period))
+                             list(S = S, c = c, delta = delta, L_eff = min(self$params$layer_thickness, delta))
+                           },
+
                            # One header line on the exchange, for the generated inputs.
                            exchange_header_line = function() {
                              x <- self$exchange
                              sprintf(paste0("# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
-                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.2f)"),
-                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$eps0,
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.2f)"),
+                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0,
                                      self$config$core_rigidity / 1e9, self$config$core_viscosity, self$config$biot_alpha)
                            },
 

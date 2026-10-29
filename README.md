@@ -277,8 +277,9 @@ Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close t
 Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
 7.8e7–7.8e9 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
 2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
-faster than Choblet et al. (This table is the Darcy term alone; the exchange is now the smallest of
-three volumes, see Exchange below: at production k the poroelastic term binds.)
+faster than Choblet et al. (This table is the Darcy term alone with the gradient over the whole layer; the exchange is now the
+smallest of three volumes with the Darcy gradient over the skin depth, see Exchange below: at
+production k the poroelastic term binds.)
 
 **The sweep (N6; designed, not run).**
 1. Treat the driving term as one quantity, reported three ways: k·ΔP/L, the mean Darcy flux, and
@@ -300,7 +301,8 @@ Liao et al. 2020). Per half-orbit the exchanged volume is ΔV = min(ΔV_poro, Δ
 1. **ΔV_poro = α·ε_v·V_layer**, the fluid the tidal volumetric strain expels (drained limit); α is
    the Biot coefficient (`biot_alpha`, 0.2; Liao et al. explore 0–1).
 2. **ΔV_Darcy**, what drains through the rock in half an orbit: half the |q|·A integral over the
-   orbit, i.e. (k/μ)(ΔP/L)·A·T/π. (Written with the amplitude, (k/μ)(ΔP/L)·A·T/2, it would be π/2
+   orbit, i.e. (k/μ)(ΔP/L_eff)·A·T/π, with the pressure gradient over L_eff = min(L, δ), the skin
+   depth below. (Written with the amplitude, (k/μ)(ΔP/L)·A·T/2, it would be π/2
    larger; the integral of the sinusoid is what the code has always used.)
 3. **V_pore = φ·V_layer**, saturation.
 
@@ -329,6 +331,20 @@ volume mean is ε_v = 0.19245 × (3/5)(1 − x⁵)/(1 − x³) × ε₀, x = (R 
 core, 0.192·ε₀ for a thin layer. If the matrix is nearly incompressible the dilatation is smaller,
 so ΔV_poro is an upper estimate.
 
+**The skin depth.** The tidal pressure change diffuses into the rock only a skin depth δ = √(c/ω)
+(Liao et al. 2020, Table A1 and Fig. B4), with their poroelastic diffusivity
+c = (k/η_f)·(K_m + 4µ/3)(K_u − K_m) / (α²(K_u + 4µ/3)), K_m = (1 − α)K_s, K_u = K_m + α²K_sK_f/(φK_s +
+(α − φ)K_f), K_f = 2.2 GPa and K_s = 10 GPa (their Table A1; `water_bulk_modulus`,
+`rock_bulk_modulus`) and µ the matrix rigidity. (K_u − K_m)/α² is the Biot modulus M = 1/S, S =
+φ/K_f + (α − φ)/K_s the storage (1.33e-10 Pa⁻¹ here), so c is k/(η_f S) times (K_m + 4µ/3)/(K_u + 4µ/3)
+= 0.99. Their convention has no factor 2 (δ = √(c/ω), not √(2D/ω)); this code follows it. δ is
+28 m at k = 1e-14 m², 0.9 km at 1e-11 and 88 km at 1e-7: **δ is the depth the exchange actually
+reaches**, which is what makes the well-mixed porewater box an approximation (below). Cross-check:
+the volume the pressure change stores in the skin, S·ΔP·δ·A, is the δ-based Darcy volume divided by
+2/f = 2.02 at every k (exactly: (ωT/π)/f), so the two agree to a factor 2.
+Note: α = 0.2 is below φ = 0.32, which a real porous solid does not allow (α = 1 − K_m/K_s ≥ φ);
+S stays positive, but the pair should be revisited with the placeholders.
+
 **Rigidity and viscosity** come from Bagheri et al. (2025) Table 5, "dissipation in the core" (µ 4–70
 GPa, η 4.4e11–2.3e12 Pa·s; the scenario consistent with tidally driven flow in the core), with
 **placeholders at the geometric means**, `core_rigidity` = 17 GPa and `core_viscosity` = 1e12 Pa·s,
@@ -349,14 +365,20 @@ is where the viscous knee above was checked. Bagheri's core radius and density r
 
 **Which limit binds** (production φ = 0.32, full core, placeholders):
 
-| k (m²) | ΔV_poro (m³) | ΔV_Darcy (m³) | V_pore (m³) | binds | x per half-orbit | circulation time |
-|---|---|---|---|---|---|---|
-| 1e-14 | 1.2e10 | 5.1e4 | 9.8e15 | darcy | 5.2e-12 | 7.8e8 yr |
-| 1e-11 | 1.2e10 | 5.1e7 | 9.8e15 | darcy | 5.2e-9 | 7.8e5 yr |
-| 1e-7 (production) | 1.2e10 | 5.1e11 | 9.8e15 | **poro** | 1.25e-6 | 3,250 yr |
+| k (m²) | δ | ΔV_poro (m³) | ΔV_Darcy (m³) | S·ΔP·δ·A (m³) | V_pore (m³) | binds | x per half-orbit | circulation time |
+|---|---|---|---|---|---|---|---|---|
+| 1e-14 | 28 m | 1.2e10 | 3.6e8 | 1.8e8 | 9.8e15 | darcy | 3.6e-8 | 1.1e5 yr |
+| 1e-13 | 88 m | 1.2e10 | 1.1e9 | 5.6e8 | 9.8e15 | darcy | 1.1e-7 | 3.5e4 yr |
+| 1e-12 | 279 m | 1.2e10 | 3.6e9 | 1.8e9 | 9.8e15 | darcy | 3.6e-7 | 1.1e4 yr |
+| 1e-11 | 883 m | 1.2e10 | 1.1e10 | 5.6e9 | 9.8e15 | darcy | 1.1e-6 | 3,530 yr |
+| 1e-7 (production) | 88 km | 1.2e10 | 1.1e12 | 5.6e11 | 9.8e15 | **poro** | 1.25e-6 | 3,250 yr |
 
-Darcy and poro cross at k ≈ 2.4e-9 m²: above it the exchange no longer depends on k. The production
-case exchanges ~42× less than the Darcy term alone (3,250 yr against 78 yr). **The pore-volume limit
+With the skin depth the Darcy volume grows as √k, not k. Darcy and poro cross at k ≈ 1.2e-11 m²
+(2.4e-9 with the gradient over the whole layer): above it the exchange no longer depends on k, and
+within Fisher et al.'s and Liao et al.'s permeabilities it is set by the strain. Choblet et al.'s
+preferred 1e-14–1e-13 m² gives circulation times of 3.5e4–1.1e5 yr (7.8e8–7.8e9 without δ), still
+far below their 25–250 Myr. The production case exchanges ~42× less than the Darcy term over the
+whole layer (3,250 yr against 78 yr). **The pore-volume limit
 cannot bind at real porosities:** even a fluid matrix (k₂ → 3/2) gives ε₀ ≈ 1.5e-4, so α·ε_v ≤ 1.7e-5
 of V_layer per half-orbit, against φ = 0.1–0.3.
 
@@ -365,7 +387,8 @@ of V_layer per half-orbit, against φ = 0.1–0.3.
   expelled (bottom currents disperse that), but it is not fresh either: the ocean box carries the
   products of every earlier cycle. That is what MIX with the evolving ocean does.
 - **The porewater is one well-mixed box.** Real exchange penetrates about the displacement distance
-  per tide (centimetres in Liao et al.'s case) and spreads by dispersion. Over Myr runs this is an
+  per tide (centimetres in Liao et al.'s case), the pressure change reaches only the skin depth δ
+  (28 m to 88 km over k = 1e-14 to 1e-7 m²), and both spread by dispersion. Over Myr runs this is an
   approximation.
 
 **Fe/Ni metal: UNSOURCED instantaneous corrosion** (`dissolve_only` equilibrium phases), so the

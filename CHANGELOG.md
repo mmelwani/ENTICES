@@ -1004,3 +1004,9 @@ One commit per item; each commit message has its pass check.
   in is ~1e-6 (3.3e-6 fails, 3.3e-7 and 3.3e-5 run; the pre-branch code fails the same way at k
   1e-8). The new production exchange (2.5e-6 per orbit) falls in this window: the 25 C smoke run
   now gives 18 errors; 100 and 160 C (1 orbit) run with 0 errors.
+- **Darcy term over the poroelastic skin depth** (PI): the pressure gradient acts over L_eff =
+  min(layer_thickness, delta), delta = sqrt(c/omega) with Liao et al. (2020) Table A1's c (K_f 2.2 GPa,
+  K_s 10 GPa; new config fields). delta: 28 m (k 1e-14), 0.9 km (1e-11), 88 km (1e-7). The Darcy volume
+  now grows as sqrt(k); Darcy/poro crossover 2.4e-9 -> 1.2e-11 m2. Circulation: 1.1e5 yr (1e-14), 3.5e4
+  (1e-13), 1.1e4 (1e-12), 3,530 (1e-11); production unchanged (poro binds, 3,250 yr). Cross-check:
+  S dP delta A = Darcy / 2.02 at every k. Note alpha 0.2 < phi 0.32 (not physical for a porous solid).
