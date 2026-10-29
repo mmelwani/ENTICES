@@ -956,3 +956,8 @@ One commit per item; each commit message has its pass check.
   (K0 = 10.2 GPa: 0.25% at 26 MPa). Summary gains `iom_HC` and `iom_density`.
 - **`bulk_density()` flags Vgas > Vpore** (PI): new `Vgas_Vpore` and `gas_exceeds_pores` summary
   columns and a warning; gas beyond the pore volume is not counted (s_g capped at 1, as before).
+- **Core density sources** (PI): README section 7 compares rho_bulk with Bagheri et al. (2025) Table 5
+  (core 2160-2400 kg/m3, 183-213 km): 2.305 g/cm3 at t = 0 and 2.255 at orbit 12 (`"to_ocean"`) are
+  inside, 1.880 (`"retain"`) below. Iess et al. (2014)'s ~2.4 g/cm3 is an example structure for
+  C/MR2 = 0.335, not a measurement. The config's radius, mass, core radius and core density are the
+  PlanetProfile profile's; its [citation needed] now says so (neither paper gives those values).

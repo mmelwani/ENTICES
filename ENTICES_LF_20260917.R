@@ -605,7 +605,11 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  mass = 1.0802e20,        # Total mass [kg] 
                                  
                                  # Material properties
-                                 core_density = 2353,     # Core bulk density [kg/m³]; the profile's rhoSil_kgm3 is 2353.19. [citation needed: the source of radius, core_radius, mass and core_density]
+                                 # radius, mass, core_radius and core_density are the PlanetProfile profile's, rounded (profiles/: R_m 252100,
+                                 # M_kg 1.08022e20, RsilMean_m 194243.7, rhoSil_kgm3 2353.19; Styczinski et al. 2023), a structure fitted
+                                 # to C/MR2 = 0.335 (Iess et al. 2014). Neither Iess et al. 2014 nor Bagheri et al. 2025 gives these
+                                 # values; both bracket them (Bagheri Table 5: core 2160-2400 kg/m3, 183-213 km). README section 7.
+                                 core_density = 2353,     # Core bulk density [kg/m³]
                                  core_porosity = 0.32,    # Core porosity [volume fraction] #Default assumed value from Stycinski et al 2023
                                  
                                  # Orbital properties

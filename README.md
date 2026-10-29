@@ -304,8 +304,21 @@ of 150 g is released), so its density stays 1.3197 g/cm³. Lizardite (26% of the
 silicate-layer density is 2353 kg/m³ (`rhoSil_kgm3`).
 
 **Comparing with Enceladus.** A published core density is a bulk density (porosity and pore fluid
-included), so compare it with `rho_bulk`. The usual reference is Iess et al. (2014) [citation
-needed: the core density and its uncertainty, to be taken from the paper; the PDF was not available].
+included), so compare it with `rho_bulk`. Bagheri et al. (2025, Table 5) fit Enceladus's libration,
+shape, heat flux, gravity and mass and find a core density of 2160–2400 kg/m³ and a core radius of
+183–213 km (their priors were 2000–2800 kg/m³ and 120–220 km), in both their core- and
+shell-dissipation cases. Against that range:
+- the model's ρ_bulk is 2.305 g/cm³ at t = 0 and 2.255 at orbit 12 under `"to_ocean"`: inside it;
+- 1.880 under `"retain"` (pores full of gas) is below it, one more sign that `"retain"` is a bound,
+  not a state;
+- the profile's own silicate-layer density, 2353 kg/m³ (`rhoSil_kgm3`, the config's
+  `core_density`), and its core radius, 194.2 km, are inside it.
+
+Iess et al. (2014) measured the gravity field and inferred a moment of inertia of ~0.335 MR². Their
+"relatively low core density of ~2.4 g/cm³" is an example structure compatible with that moment
+of inertia (with a 60 km, 1 g/cm³ H₂O layer), not a measured core density. The profile is fitted to
+C/MR² = 0.335 ± 0.001. `EnceladusConfig`'s radius, mass, core radius and core density are the
+profile's (R_m, M_kg, RsilMean_m, rhoSil_kgm3), not values from either paper.
 
 ### Gas
 
@@ -355,6 +368,9 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
 - Alexander, C.M.O'D., et al. (2022). Sulfur abundances and isotopic compositions in bulk
   carbonaceous chondrites and insoluble organic matter. *Meteorit. Planet. Sci.* 57, 334–351.
   doi:10.1111/maps.13746
+- Bagheri, A., Simons, M., Park, R.S., Berne, A., Hemingway, D., Melwani Daswani, M., Vance, S.D.
+  (2025). Exploring the interior structure and mode of tidal heating in Enceladus. *Planet. Sci. J.*
+  6, 245. doi:10.3847/PSJ/ae0cab
 - Burnham, A.K. (2019). Kinetic models of vitrinite, kerogen, and bitumen reflectance. *Org.
   Geochem.* 131, 50–59. doi:10.1016/j.orggeochem.2019.03.007
 - Casey, W.H., et al. (1993). *Geochim. Cosmochim. Acta* 57, 785–793 [citation needed: authors and
@@ -369,7 +385,9 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   title and the DIC estimate, from the paper].
 - Green, E.C.R., Holland, T.J.B., Powell, R., Weller, O.M., Riel, N. (2025). *J. Petrol.*,
   doi:10.1093/petrology/egae079 (its `tc-ds636` dataset cross-checks the molar volumes).
-- Iess, L., et al. (2014) [citation needed: the Enceladus gravity paper, for the core density].
+- Iess, L., Stevenson, D.J., Parisi, M., Hemingway, D., Jacobson, R.A., Lunine, J.I., Nimmo, F.,
+  Armstrong, J.W., Asmar, S.W., Ducci, M., Tortora, P. (2014). The gravity field and interior
+  structure of Enceladus. *Science* 344(6179), 78–80. doi:10.1126/science.1250551
 - King, A.J., et al. (2015). Modal mineralogy of CI and CI-like carbonaceous chondrites by X-ray
   diffraction. *Geochim. Cosmochim. Acta* 165, 148–160.
 - Lodders, K., et al. (2025). Solar system elemental abundances from the solar photosphere and
