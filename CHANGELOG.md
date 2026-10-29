@@ -1024,3 +1024,11 @@ One commit per item; each commit message has its pass check.
   near-seafloor rock at low k. Header "Reacting box" line; pressure stamp "(profile mean over the
   reacting box)". pressure_check and initial_fluid_check use reactive_depth = "layer" for their
   full-layer pressures; exchange_check gains skin-box checks.
+- **Porosity and the Biot coefficient** (PI): `Simulator$new(phi0 = 0.32, phi_c = 0.5, alpha = NULL)`
+  (`porosity` still accepted). alpha = min(1, phi/phi_c) from the critical-porosity model (Nur et al. 1998,
+  The Leading Edge 17, 357-362; cited via Dvorkin & Nur 2000); `alpha =` overrides, below phi is an error.
+  The config's free `biot_alpha` (0.2, below phi) is removed. The box's solid mass is V (rho_core -
+  phi rho_water). `phi_from_core_density()`; `bulk_density()` flags (`core_density_ok`) and warns when
+  the final rho_bulk is outside Bagheri's 2.16-2.40 g/cm3. At phi0 0.32 (alpha 0.64): skin 23 m-74 km;
+  production circulation 1,117 yr (skin box); x_half 6.66e-6 at low k for any phi0 (= eps_v/phi_c).
+  Bagheri gives no frame/grain moduli (one fixed core bulk modulus), so alpha is not computed from them.

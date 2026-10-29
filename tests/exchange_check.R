@@ -62,7 +62,7 @@ for (k in c(1e-14, 1e-13, 1e-12, 1e-11, 1e-7)) {
 #     storage cross-check S dP delta A is the Darcy volume / (2/f), f = (K_m + 4/3 mu)/(K_u + 4/3 mu).
 for (k in c(1e-14, 1e-7)) {
   sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
-  a <- cfg$biot_alpha; phi <- 0.32; Ks <- 10e9; Kf <- 2.2e9; mu <- cfg$core_rigidity
+  a <- sim$biot_alpha(); phi <- 0.32; Ks <- 10e9; Kf <- 2.2e9; mu <- cfg$core_rigidity
   Km <- (1 - a) * Ks; Ku <- Km + a^2 * Ks * Kf / (phi * Ks + (a - phi) * Kf)
   c_liao <- k / 1.8e-3 * (Km + 4/3 * mu) * (Ku - Km) / (a^2 * (Ku + 4/3 * mu))
   delta <- sqrt(c_liao / (2 * pi / cfg$orbital_period)); Leff <- min(194200, delta)
@@ -81,7 +81,7 @@ for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
   x <- sim$exchange; R <- cfg$core_radius; Le <- min(194200, x$delta)
   Vs <- 4 / 3 * pi * (R^3 - (R - Le)^3)
   ok <- abs(sim$reactive_thickness() / Le - 1) < 1e-12 && abs(x$V_pore / (0.32 * Vs) - 1) < 1e-12 &&
-    abs(x$dV_poro / (cfg$biot_alpha * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs) - 1) < 1e-12 && x$binding == "poro"
+    abs(x$dV_poro / (sim$biot_alpha() * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs) - 1) < 1e-12 && x$binding == "poro"
   check(ok, sprintf("skin box, k = %.0e: L_eff %.4g m; x_half %.3e (%s)", k, Le, x$x_half, x$binding))
 }
 
@@ -89,10 +89,25 @@ for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
 eps_fluid <- FlowUtils$tidal_strain_amplitude(1e10, 1, cfg$core_density, cfg$core_radius, cfg$eccentricity, cfg$orbital_period)
 cat(sprintf("       (fluid-matrix limit: eps0 = %.3g; alpha = 1 gives %.3g of V_layer per half-orbit)\n",
             eps_fluid, eps_fluid * FlowUtils$degree2_dilatation_factor(194.2e3, 194.2e3)))
-big <- EnceladusConfig$new(list(core_viscosity = 1, biot_alpha = 1))
-sim <- quiet({ s <- Simulator$new(k = 1, layer_thickness = 194200, porosity = 1e-7, config = big); s$run_simulation(); s })
+big <- EnceladusConfig$new(list(core_viscosity = 1))
+sim <- quiet({ s <- Simulator$new(k = 1, layer_thickness = 194200, porosity = 1e-7, config = big, alpha = 1); s$run_simulation(); s })
 check(sim$exchange$binding == "pore_volume" && sim$exchange$x_half == 1 && sim$exchange$x_orbit == 1,
       sprintf("pore-volume limit: %s, x_half %g, x_orbit %g", sim$exchange$binding, sim$exchange$x_half, sim$exchange$x_orbit))
+
+# 6. Porosity and the Biot coefficient (D, 2026-10-29): alpha = min(1, phi/phi_c) (critical porosity, Nur et al.
+#    1998); an override below phi is an error; the box's solid mass is V (rho_core - phi rho_water).
+s <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg)
+s2 <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, phi0 = 0.2)
+s4 <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, phi0 = 0.4, phi_c = 0.4)
+so <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, alpha = 0.5)
+e <- tryCatch({ Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, alpha = 0.2); "no error" }, error = function(e) conditionMessage(e))
+check(abs(s$biot_alpha() - 0.64) < 1e-12 && abs(s2$biot_alpha() - 0.4) < 1e-12 && s4$biot_alpha() == 1 && so$biot_alpha() == 0.5 &&
+        grepl("must be >= the porosity", e),
+      sprintf("alpha: %.3g (phi 0.32), %.3g (phi 0.2), %.3g (phi 0.4 = phi_c), override 0.5; override 0.2 < phi errors", s$biot_alpha(), s2$biot_alpha(), s4$biot_alpha()))
+p2 <- quiet({ s2$run_simulation(); ph2 <- PhreeqcIntegrator$new(s2); ph2$calculate_phreeqc_parameters(organic_wt_percent = 15) })
+Vb <- 4 / 3 * pi * (cfg$core_radius^3 - (cfg$core_radius - s2$reactive_thickness())^3)
+check(abs(p2$layer_mass / (Vb * (cfg$core_density - 0.2 * 1000)) - 1) < 1e-12 && abs(p2$porewater_mass / (1000 * 0.2 * Vb) - 1) < 1e-12,
+      sprintf("phi0 = 0.2: box solid mass %.4g kg = V (rho_core - 0.2 rho_w); porewater %.4g kg = 0.2 V rho_w", p2$layer_mass, p2$porewater_mass))
 
 # 5. The header.
 od <- file.path(tempdir(), "exchange_check"); unlink(od, recursive = TRUE)

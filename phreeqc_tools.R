@@ -425,8 +425,23 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   if (any(s$gas_exceeds_pores))
     warning(sprintf("bulk_density: the pore gas exceeds the pore volume on %d of %d rows (Vgas/Vpore up to %.2f); gas saturation is capped at 1 and the excess is not counted (see gas_exceeds_pores)",
                     sum(s$gas_exceeds_pores), nrow(s), max(s$Vgas_Vpore)))
+  # End-state check against the present-day core density (Bagheri et al. 2025 Table 5): a check on the
+  # final state, not an input.
+  s$core_density_ok <- s$rho_bulk >= BAGHERI_CORE_DENSITY_G_CM3[1] & s$rho_bulk <= BAGHERI_CORE_DENSITY_G_CM3[2]
+  if (!s$core_density_ok[nrow(s)])
+    warning(sprintf("bulk_density: the final rho_bulk %.3f g/cm3 is outside Bagheri et al. (2025)'s core density %.2f-%.2f g/cm3",
+                    s$rho_bulk[nrow(s)], BAGHERI_CORE_DENSITY_G_CM3[1], BAGHERI_CORE_DENSITY_G_CM3[2]))
   list(summary = s, breakdown = do.call(rbind, bd))
 }
+
+# Present-day core bulk density, Bagheri et al. (2025) Table 5 (both dissipation scenarios), g/cm3.
+BAGHERI_CORE_DENSITY_G_CM3 <- c(2.160, 2.400)
+
+# Porosity that gives a core bulk density rho_core from a solid of density rho_solid and a pore fluid of
+# rho_fluid (all g/cm3): rho_core = (1 - phi) rho_solid + phi rho_fluid, so phi = (rho_solid - rho_core) /
+# (rho_solid - rho_fluid). Vectorised. At t = 0 with 15 wt% IOM (rho_solid 2.920) Bagheri's 2.16-2.40 gives
+# phi 0.271-0.396; less IOM means a denser solid and a higher phi for the same core density.
+phi_from_core_density <- function(rho_solid, rho_core, rho_fluid = 1.0) (rho_solid - rho_core) / (rho_solid - rho_fluid)
 
 # ---- Element totals of the whole system ---------------------------------------
 #

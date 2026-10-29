@@ -149,15 +149,17 @@ for (tidal in c(TRUE, FALSE)) {
         sprintf("%-15s -logfile false by default, true with logfile = TRUE", kind))
 }
 
-# 6. The default skin box (reactive_depth = "skin"): at k = 1e-7 the box is the top skin depth (88.3 km),
-#    and the porewater pressure is the profile mean over it, 177.3 atm (the ocean pressure is unchanged).
+# 6. The default skin box (reactive_depth = "skin"): at k = 1e-7 the box is the top skin depth delta (73.8 km
+#    with alpha = phi/phi_c = 0.64), and the porewater pressure is the profile mean over it (161.3 atm); the
+#    ocean pressure is unchanged.
 sk <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new()); quiet(sk$run_simulation())
 phs <- quiet(PhreeqcIntegrator$new(sk)); invisible(quiet(phs$calculate_phreeqc_parameters(organic_wt_percent = 15)))
 fs <- quiet(phs$generate_phreeqc_input_tidal_kinetic(output_dir = file.path(od, "skin"), mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 100))
 ps <- pressure_lines(fs)
-check(abs(sk$reactive_thickness() / 88288 - 1) < 1e-3 && identical(ps$s1, "177.3") && identical(ps$s2, "66.7") &&
-        any(grepl("^# Reacting box: top 8.829e\\+04 m of the 1.942e\\+05 m layer", readLines(fs))),
-      sprintf("skin box: top %.4g m; SOLUTION 1 %s atm, SOLUTION 2 %s atm", sk$reactive_thickness(), ps$s1, ps$s2))
+p_skin <- sprintf("%.1f", quiet(profile_conditions(profile, sk$skin_depth()$delta))$pore_pressure_atm)
+check(sk$reactive_thickness() == sk$skin_depth()$delta && sk$reactive_thickness() < 194200 && identical(ps$s1, p_skin) &&
+        identical(ps$s2, "66.7") && any(grepl(sprintf("# Reacting box: top %.4g m of the 1.942e+05 m layer", sk$reactive_thickness()), readLines(fs), fixed = TRUE)),
+      sprintf("skin box: top %.4g m (= delta); SOLUTION 1 %s atm (profile mean over it: %s), SOLUTION 2 %s atm", sk$reactive_thickness(), ps$s1, p_skin, ps$s2))
 
 unlink(od, recursive = TRUE)
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))

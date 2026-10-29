@@ -635,10 +635,10 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
 
                                  # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
                                  # (2025) Table 5, "dissipation in the core" (mu 4-70 GPa, eta 4.4e11-2.3e12 Pa s); PLACEHOLDERS at
-                                 # the geometric means until the PI picks values. Biot coefficient: Liao et al. (2020) explore 0-1.
+                                 # the geometric means until the PI picks values. (The Biot coefficient is the Simulator's,
+                                 # from porosity: Simulator$biot_alpha().)
                                  core_rigidity = 17e9,    # [Pa]
                                  core_viscosity = 1e12,   # [Pa s]
-                                 biot_alpha = 0.2,        # [-]
                                  # Bulk moduli of the pore water and the rock grains, for the poroelastic skin depth:
                                  # Liao et al. (2020) Table A1.
                                  water_bulk_modulus = 2.2e9,  # [Pa] K_f
@@ -901,13 +901,20 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # reactive_depth: "skin" (default) makes the reacting box the top L_eff = min(layer_thickness,
                            # delta) of the layer, delta the poroelastic skin depth (skin_depth()); "layer" uses the whole
                            # layer (the behaviour before 2026-10-29). See reactive_thickness().
-                           initialize = function(k, layer_thickness, porosity = 0.32, config = NULL,
-                                                 reactive_depth = c("skin", "layer")) {
+                           # phi0: initial porosity (default 0.32, the PlanetProfile profile's phiRockMax: ONE fit, Styczinski
+                           # et al. 2023; N6 sweep 0.1-0.4). `porosity` is the older name for it and, if given, wins.
+                           # phi_c: critical porosity of the critical-porosity model (Nur et al. 1998), default 0.5 (PLACEHOLDER;
+                           # 0.4-0.6 for granular media); the Biot coefficient is then min(1, phi / phi_c) (biot_alpha()).
+                           # alpha: a number overrides that; it must be >= the porosity.
+                           initialize = function(k, layer_thickness, porosity = NULL, config = NULL,
+                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.5, alpha = NULL) {
                              self$params <- list(
                                k = k,
                                layer_thickness = layer_thickness,
-                               porosity = porosity,
-                               reactive_depth = match.arg(reactive_depth)
+                               porosity = if (is.null(porosity)) phi0 else porosity,
+                               reactive_depth = match.arg(reactive_depth),
+                               phi_c = phi_c,
+                               alpha = alpha
                              )
                              self$config <- config  # Store configuration
                              if(is.null(self$config)) {
@@ -923,6 +930,12 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              if(self$params$porosity <= 0 || self$params$porosity >= 1) {
                                stop("Porosity must be between 0 and 1")
                              }
+                             if (!(is.numeric(self$params$phi_c) && self$params$phi_c > 0 && self$params$phi_c <= 1))
+                               stop("phi_c must be in (0, 1]")
+                             if (!is.null(self$params$alpha) && (!is.numeric(self$params$alpha) || self$params$alpha > 1 ||
+                                                                 self$params$alpha < self$params$porosity))
+                               stop(sprintf("alpha = %s: the Biot coefficient must be >= the porosity (%g) and <= 1",
+                                            format(self$params$alpha), self$params$porosity))
                            },
                            
                            # Calculate tidal stress variation
@@ -1044,7 +1057,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              eps0    <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
                                                                       R, cfg$eccentricity, cfg$orbital_period)
                              eps_v   <- eps0 * FlowUtils$degree2_dilatation_factor(R, L)
-                             vols    <- c(poro = cfg$biot_alpha * eps_v * V_layer,
+                             vols    <- c(poro = self$biot_alpha() * eps_v * V_layer,
                                           darcy = sum(self$results$fluid_volume) / 2,
                                           pore_volume = V_pore)
                              dV      <- min(vols)
@@ -1059,6 +1072,14 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                   dV = dV, binding = names(vols)[which.min(vols)],
                                   x_half = x_half, x_orbit = x_orbit,
                                   mass_per_orbit = x_orbit * V_pore * CONSTANTS$FLUID$density)
+                           },
+
+                           # Biot coefficient. Critical-porosity model (Nur et al. 1998): the frame's bulk modulus falls
+                           # linearly to zero at the critical porosity, K_frame = K_grain (1 - phi/phi_c), so
+                           # alpha = 1 - K_frame/K_grain = min(1, phi/phi_c); alpha >= phi whenever phi_c <= 1. A number given
+                           # as `alpha` overrides it.
+                           biot_alpha = function() {
+                             if (!is.null(self$params$alpha)) self$params$alpha else min(1, self$params$porosity / self$params$phi_c)
                            },
 
                            # Thickness (m) of the box that reacts and exchanges: the top min(layer_thickness, delta) under
@@ -1076,7 +1097,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # c = (k / eta_f) M (K_m + 4/3 mu)/(K_u + 4/3 mu), the diffusivity k/(eta_f S) times a factor <= 1.
                            # mu is the matrix rigidity (core_rigidity), as in their table. L_eff = min(layer_thickness, delta).
                            skin_depth = function() {
-                             cfg <- self$config; a <- cfg$biot_alpha; phi <- self$params$porosity
+                             cfg <- self$config; a <- self$biot_alpha(); phi <- self$params$porosity
                              Ks <- cfg$rock_bulk_modulus; Kf <- cfg$water_bulk_modulus; mu <- cfg$core_rigidity
                              S  <- phi / Kf + (a - phi) / Ks
                              Km <- (1 - a) * Ks; Ku <- Km + a^2 / S
@@ -1090,10 +1111,10 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              x <- self$exchange
                              sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
                                             "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
-                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.2f)"),
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
                                      x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0,
-                                     self$config$core_rigidity / 1e9, self$config$core_viscosity, self$config$biot_alpha)
+                                     self$config$core_rigidity / 1e9, self$config$core_viscosity, self$biot_alpha(), self$params$porosity)
                            },
 
                            # Generate summary metrics
@@ -1263,7 +1284,11 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      print(sprintf("Circulation time: %.2f years", metrics$circulation_time_years))
                                      
                                      # Solid rock mass of the permeable layer (same density assumption as core)
-                                     layer_mass <- layer_fraction * props$core_mass
+                                     # Its solid mass at the core's bulk density and the Simulator's porosity (phi0):
+                                     # V (rho_core - phi rho_water). Equals layer_fraction * props$core_mass when phi0 is the
+                                     # config's core_porosity (0.32).
+                                     layer_mass <- layer_vol * (self$simulator$config$core_density -
+                                                                self$simulator$params$porosity * CONSTANTS$FLUID$density)
 
                                      # All PHREEQC quantities normalised to layer_mass so that mineral m0 = 2.8833
                                      # (not 2.8833 * layer_fraction) and water masses are ~0.2 kg for every layer size.
