@@ -134,10 +134,12 @@ Run everything from the repo root.
       `-convergence_tolerance 1e-8` after SELECTED_OUTPUT; at 25 °C, or with a cometary ocean, give
       `trace_C_molal = 1e-14`.
     - *The version warning:* rerun on PHREEQC 3.8.6.
-    - *A cometary ocean with a carbon-free porewater:* `tidal_kinetic` stalled and `tidal_equil` failed
-      ("Cl has not converged"); give `trace_C_molal = 1e-14` (both warn). Known failure:
+    - *A cometary ocean with a carbon-free porewater:* `tidal_kinetic` is ~4× slower (and stalls
+      outright with a CO₂-only ocean), and `tidal_equil` fails ("Cl has not converged", the Cl being
+      the porewater's lawrencite); give `trace_C_molal = 1e-14` (both warn). Known failure:
       `tidal_equil` + `pore_gas_fate = "to_ocean"` + cometary ocean + `c4_only` crashes PHREEQC 3.8.6
       (segmentation fault in the ocean step, all temperatures); `tidal_kinetic` runs that combination.
+      A 20-line reproducer is in `tests/known_failures/`. Details: `docs/MATRIX_2026-10-28.md`.
     - *SIs in the `.out` file:* the printed SI tables are offset by n(H₂O) × Δlog a_w (0.143 per H₂O
       at 25 °C in the brine); use the CSV's `si_` columns.
     - *B-dot activities above ~1 molal:* the 25 °C NaOH porewater brine reaches I ≈ 2.4 for the

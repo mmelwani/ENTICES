@@ -976,3 +976,10 @@ One commit per item; each commit message has its pass check.
   dP, and flags production k = 1e-7 m2 (top of Liao's range; 243 yr ocean circulation against
   Choblet's 25-250 Myr). Open for the PI: oscillatory flow as net exchange, and the porosity
   factor in the Simulator's flow rate.
+- **Matrix follow-up** (PI): 87 of the 90 distinct cases converge counting the seeded `tidal_equil`
+  reruns (the 102 rows include 12 reruns); the 3 failures are the PHREEQC 3.8.6 segfault, now
+  reduced to a 20-line reproducer in `tests/known_failures/` (crashes with the stock llnl.dat). The
+  unseeded cases' 0.019125 mol Cl is the porewater's lawrencite (2 x 0.0095625). Correction: the
+  full cometary ocean with a carbon-free porewater is slow, not stuck (1,459 s unseeded vs 394 s
+  seeded; the earlier "> 20 min" was a timeout); a CO2-only ocean does stall unseeded (no progress
+  in 3,000 s) and completes in 267 s seeded. `docs/MATRIX_2026-10-28.md`.
