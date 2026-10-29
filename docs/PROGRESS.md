@@ -1207,6 +1207,7 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D9 | **Spin-up** before tidal cycling; doubles as the King et al. forward check (reconstruction §8 item 8) | 10-06 review §4 | Worth doing as a modelling option; not needed for convergence |
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
+| D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | README §6 (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 243 yr against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange), and the ×φ in the flow rate |
 
 ## Next actions (code and tests), in order
 
@@ -1227,7 +1228,10 @@ rate, rock table and `rec_eqb` default have all changed since.
   - surface areas (D7);
   - formate re-admitted (cuts ocean H₂ ~5× at 100 °C via H₂ + HCO₃⁻ →
     HCOO⁻);
-  - `carbon_mode = "coupled"` as the methanation bound.
+  - `carbon_mode = "coupled"` as the methanation bound;
+  - flow driving (D12): k·ΔP/L over ΔP 1e4–1e5 Pa and k 1e-15–1e-7 m², each
+    case reported as k·ΔP/L, mean Darcy flux and exchange per orbit, with its
+    ocean circulation time (README §6 has the design and the equivalents).
 - **N7.** Spin-up and the King et al. comparison (D9).
 - **N8.** Confirm in a long grouped run that the 25 °C porewater brine flushes
   as expected (Part 5).

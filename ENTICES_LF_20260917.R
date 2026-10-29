@@ -622,7 +622,7 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
-                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED: tidal stress amplitude, README section 5
+                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED as a value: tidal pressure amplitude, ~3x Liao et al. (2020) Fig. B3 peak; swept with k (README section 6, Flow driving; PROGRESS D12)
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 

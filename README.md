@@ -168,9 +168,9 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 
 | Name | Default | Units | What it does | Justification / source | Status | Sensitivity planned |
 |---|---|---|---|---|---|---|
-| `k` | none (production 1e-7) | m² | permeability; sets Darcy flow and exchange | production choice | — | yes (sweeps) |
+| `k` | none (production 1e-7) | m² | permeability; sets Darcy flow and exchange | literature ranges (§6, Flow driving) | **production value at the top of Liao et al.'s range** | yes (D12 sweep) |
 | `layer_thickness` | none (production 194200) | m | permeable layer; 194.2 km is the whole core | production choice | — | yes |
-| `max_tidal_stress` (`EnceladusConfig`) | 1e5 | Pa | tidal stress amplitude driving the flow | none | **UNSOURCED** | yes |
+| `max_tidal_stress` (`EnceladusConfig`) | 1e5 | Pa | tidal pressure amplitude ΔP driving the flow | Liao et al. 2020 Fig. B3 (~3e4 Pa peak) | **UNSOURCED** as a value; ~3× Liao's peak; to be swept with k (D12) | yes |
 | `porosity` (`Simulator`) | 0.32 | — | pore volume, porewater mass | profile `phiRockMax`; Styczinski et al. 2023 | sourced | — |
 | `profile_file` | the Enceladus profile | — | porewater and ocean P, porewater T | PlanetProfile (Styczinski et al. 2023) | sourced | other profiles |
 | ocean temperature | 274.6 K (1.45 °C) | K | ocean SOLUTION and seafloor steps | profile, top of the rock layer (274.566 K) | sourced | — |
@@ -219,6 +219,69 @@ branch: the rate at pH > 7 is held at its pH-7 value.
 **Surface areas: UNSOURCED.** Forsterite, enstatite, diopside and tephroite are at 0.1 m²/g; albite,
 anorthite, K-feldspar and troilite at 5 m²/g, so the feldspars react against 50× the area of the
 mafic silicates (D7).
+
+**Flow driving: UNSOURCED as a single value; to be swept (D12, N6).** The Simulator's Darcy flux is
+q = (k/μ)·ΔP/L, with ΔP = `max_tidal_stress`·sin(2πt/P), L = `layer_thickness` and μ = 1.8e-3 Pa·s,
+so only k·ΔP/L matters. The exchanged fluid per orbit is |q| integrated over the orbit (times the
+core's surface area and the porosity), and every orbit's volume is treated as fluid that leaves the
+rock and is replaced by ocean water: **the oscillating flow is assumed to give net exchange** (open
+question below). Production uses k = 1e-7 m², ΔP = 1e5 Pa, L = 194.2 km. The literature constrains
+ranges, each with its own limitation:
+- **Liao et al. (2020)**, poroviscoelastic tidal model of the core. They consider k from 1e-12 to
+  1e-7 m². Their Fig. B3 has a maximum pore pressure of ~3×10⁴ Pa at the poles and ~0 at
+  mid-latitudes, with mean pore velocities of 3.8e-6 m/s (radial) and 2.2e-6 m/s (tangential). That
+  is one case (η = 1e16 Pa·s, μ = 1 GPa, α = 0.1, κ = 1e-8 m², φ = 0.2). The 1e5 Pa default is ~3×
+  their plotted peak.
+- **Choblet et al. (2017)**, 3-D thermal convection in a tidally heated porous core. They explore k
+  from 1e-15 to 1e-12 m² and prefer 1e-14 to 1e-13 m², with φ 0.1–0.3 and 10–30 GW of tidal power.
+  Upwellings exceed 363 K, and the ocean is processed through the core above 363 K in 25–250 Myr.
+  Limitation: steady buoyancy-driven convection, no tidal pumping, no chemistry.
+- **Zandanel et al. (2021)**, 1-D reactive-transport columns of olivine only, with water velocities
+  of 1, 10 and 100 cm/yr (which they take from Choblet et al. for k from 1e-15 to 1e-12 m²), at 1, 25,
+  90 and 150 °C. Olivine alteration lasts up to ~75 Myr, and H₂ production (> 1e12 mol/yr) is far
+  above the ≥ 1e9 mol/yr inferred from the plume. Their 0.1 mm olivine grains have a geometric
+  surface area of ~0.01 m²/g, 10× below ours (D7), and their short lifetimes support a spin-up (D9).
+- **Fisher et al. (2024)**, 3-D outcrop-to-outcrop hydrothermal siphons scaled to ocean-world
+  gravity. Aquifer k is 1e-13 to 1e-10 m², and a siphon at Enceladus's gravity needs ~1e-11 to 1e-10
+  m². W/R is 4.9–150 per Gyr at Enceladus's gravity. Limitation: an Earth ridge-flank analogue
+  covering only the upper 4–5 km.
+
+**Production k = 1e-7 m² is the top of Liao et al.'s range**, 3–6 orders of magnitude above Fisher
+et al.'s aquifers and ~6 above Choblet et al.'s preferred range. Its flow, as the code computes it
+(`Simulator$run_simulation()` with each k and `max_tidal_stress`, 2026-10-29):
+
+| k (m²) | ΔP (Pa) | mean \|q\| (cm/yr) | fluid per orbit / porewater | pore displacement amplitude | ocean circulation time |
+|---|---|---|---|---|---|
+| 1e-15 | 1e5 | 5.8e-4 | 3.3e-13 | 1.7e-8 m | 2.4e10 yr |
+| 1e-14 | 1e5 | 5.8e-3 | 3.3e-12 | 1.7e-7 m | 2.4e9 yr |
+| 1e-13 | 1e5 | 5.8e-2 | 3.3e-11 | 1.7e-6 m | 2.4e8 yr |
+| 1e-12 | 1e5 | 0.58 | 3.3e-10 | 1.7e-5 m | 2.4e7 yr |
+| 1e-10 | 1e5 | 58 | 3.3e-8 | 1.7e-3 m | 2.4e5 yr |
+| 1e-8 | 3e4 | 1.7e3 | 1.0e-6 | 5.1 cm | 8.1e3 yr |
+| 1e-7 | 1e5 (production) | 5.8e4 | 3.3e-5 | 1.7 m | 243 yr |
+
+The circulation time is the ocean's mass over the exchange per orbit, as
+`sim$get_summary_metrics()$circulation_time_years` reports it. Everything scales with k·ΔP: ΔP = 1e4
+Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close to the ~7 cm implied by
+Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
+2.4e8–2.4e10 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
+2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
+faster than Choblet et al.
+
+**The sweep (N6; designed, not run).**
+1. Treat the driving term as one quantity, reported three ways: k·ΔP/L, the mean Darcy flux, and
+   the fluid exchanged per orbit as a fraction of the porewater. k, `max_tidal_stress` and
+   `layer_thickness` already set it.
+2. Ranges: ΔP 1e4–1e5 Pa (Liao et al.); k 1e-15–1e-7 m², marking the Choblet (1e-14–1e-13), Fisher
+   (1e-13–1e-10) and Liao (1e-12–1e-7) sub-ranges. This brackets Zandanel et al.'s 1–100 cm/yr.
+3. Report each case's ocean circulation time, for comparison with Choblet et al.'s 25–250 Myr.
+4. **Open question for the PI:** how the oscillating flow becomes net exchange. Liao et al.'s
+   velocities imply ~7 cm of pore-fluid displacement per tide, back and forth. The code counts
+   |q| over the whole orbit as one-way exchange, an upper bound, if back-and-forth flow brings the
+   same fluid back. Two code details belong to the same question. The flow is |q| × area × φ, though
+   a Darcy flux is already per unit total area (×φ makes it 3.1× smaller). And L, the layer
+   thickness (194.2 km), sets the pressure gradient, where Liao et al.'s pressure varies with
+   latitude over the core's radius.
 
 **Fe/Ni metal: UNSOURCED instantaneous corrosion** (`dissolve_only` equilibrium phases), so the
 metal's ~2.6 mol H₂ arrives at t = 0 (D6). Every gas result is dominated by this pulse until D6 is
@@ -394,6 +457,12 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   Ferreiro Mählmann, R. (2026). Metamorphic and density evolution of carbonaceous matter: a
   potential cometary composition of Titan. *Earth Planet. Sci. Lett.* 691, 120227 (Eq. 10: IOM
   density from H/C).
+- Choblet, G., Tobie, G., Sotin, C., Běhounková, M., Čadek, O., Postberg, F., Souček, O. (2017).
+  Powering prolonged hydrothermal activity inside Enceladus. *Nature Astron.* 1, 841–847.
+  doi:10.1038/s41550-017-0289-8
+- Fisher, A.T., Dickerson, K.L., Blackman, D.K., Randolph-Flagg, N.G., German, C.R., Sotin, C.
+  (2024). Sustaining hydrothermal circulation with gravity relevant to ocean worlds. *J. Geophys.
+  Res. Planets* 129, e2023JE008202. doi:10.1029/2023JE008202
 - Fray, N., Schmitt, B. (2009). Sublimation of ices of astrophysical interest: a bibliographic
   review. *Planet. Space Sci.* 57, 2053–2080.
 - Glein, C.R., Waite, J.H. (2020). The carbonate geochemistry of Enceladus' ocean. *Geophys. Res.
@@ -405,6 +474,9 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   structure of Enceladus. *Science* 344(6179), 78–80. doi:10.1126/science.1250551
 - King, A.J., et al. (2015). Modal mineralogy of CI and CI-like carbonaceous chondrites by X-ray
   diffraction. *Geochim. Cosmochim. Acta* 165, 148–160.
+- Liao, Y., Nimmo, F., Neufeld, J.A. (2020). Heat production and tidally driven fluid flow in the
+  permeable core of Enceladus. *J. Geophys. Res. Planets* 125, e2019JE006209.
+  doi:10.1029/2019JE006209
 - Lodders, K., et al. (2025). Solar system elemental abundances from the solar photosphere and
   CI-chondrites. *Space Sci. Rev.* 221, 23. doi:10.1007/s11214-025-01146-w
 - Miller, K.E., Foustoukos, D.I., Cody, G.D., Alexander, C.M.O'D. (2025). Experimental heating of
@@ -436,3 +508,6 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
 - White, A.F., Brantley, S.L. (2003). The effect of time on the weathering of silicate minerals:
   why do weathering rates differ in the laboratory and field? *Chem. Geol.* 202, 479–506.
   doi:10.1016/j.chemgeo.2003.03.001
+- Zandanel, A., Truche, L., Hellmann, R., Myagkiy, A., Choblet, G., Tobie, G. (2021). Short
+  lifespans of serpentinization in the rocky core of Enceladus: implications for hydrogen
+  production. *Icarus* 364, 114461. doi:10.1016/j.icarus.2021.114461

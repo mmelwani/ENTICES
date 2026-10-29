@@ -969,3 +969,10 @@ One commit per item; each commit message has its pass check.
 - **KNOBS `-logfile` off by default** (PI): every generator takes `logfile = FALSE`; `TRUE` writes
   `phreeqc.log` (258-346 MB per 12-orbit production run; 11.9 GB from one stalled run).
   tests/pressure_check.R checks all six generators.
+- **Flow driving documented as a decision (D12) and a sweep design** (PI; not run, N6): README section 6
+  cites Liao et al. (2020), Choblet et al. (2017), Zandanel et al. (2021) and Fisher et al. (2024)
+  as range constraints with their limitations (checked against the PDFs), tabulates the flow
+  equivalents (mean Darcy flux, exchange per orbit, displacement, circulation time) over k and
+  dP, and flags production k = 1e-7 m2 (top of Liao's range; 243 yr ocean circulation against
+  Choblet's 25-250 Myr). Open for the PI: oscillatory flow as net exchange, and the porosity
+  factor in the Simulator's flow rate.
