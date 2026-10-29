@@ -623,6 +623,14 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
                                  max_tidal_stress = 1e5,  # [Pa] UNSOURCED as a value: tidal pressure amplitude, ~3x Liao et al. (2020) Fig. B3 peak; swept with k (README section 6, Flow driving; PROGRESS D12)
+                                 eccentricity = 0.0047,   # Enceladus's orbital eccentricity (the value with which Liao et al. 2020's Fig. 2a is reproduced)
+
+                                 # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
+                                 # (2025) Table 5, "dissipation in the core" (mu 4-70 GPa, eta 4.4e11-2.3e12 Pa s); PLACEHOLDERS at
+                                 # the geometric means until the PI picks values. Biot coefficient: Liao et al. (2020) explore 0-1.
+                                 core_rigidity = 17e9,    # [Pa]
+                                 core_viscosity = 1e12,   # [Pa s]
+                                 biot_alpha = 0.2,        # [-]
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 
@@ -816,6 +824,28 @@ GeometricUtils <- list(
 
 FlowUtils <- list(
   # Calculate Darcy flow
+  # Polar tidal strain amplitude of the core, Liao et al. (2020) section 2.2 and Fig. 2 caption:
+  #   eps0 = 9/(4 pi) e w^2/(rho G) (5/3) |k2|,  k2 = (3/2) / (1 + 19 mu* / (2 rho g R)),
+  #   mu* = mu i w tau / (1 + i w tau), tau = eta / mu (Maxwell), g = (4/3) pi G rho R.
+  # Their section 2.2 text and Appendix A write k2 with an extra factor 3/5; the caption's form is the one
+  # that reproduces their Fig. 2a contours (checked 2026-10-29, README section 6), so it is used here.
+  tidal_strain_amplitude = function(mu, eta, rho, R, e, period) {
+    w <- 2 * pi / period; tau <- eta / mu
+    mus <- mu * (1i * w * tau) / (1 + 1i * w * tau)
+    g <- 4 / 3 * pi * CONSTANTS$G * rho * R
+    9 / (4 * pi) * e * w^2 / (rho * CONSTANTS$G) * 5 / 3 * Mod(1.5 / (1 + 19 * mus / (2 * rho * g * R)))
+  },
+
+  # Volume mean of the positive part of a degree-2 dilatation field (r/R)^2 P2(cos theta), amplitude 1 at
+  # the pole surface, over the shell R - L to R: the angular mean of max(P2, 0), 0.19245 (P2 > 0 for
+  # |cos theta| > 1/sqrt(3)), times the radial mean of (r/R)^2, (3/5)(1 - x^5)/(1 - x^3), x = (R - L)/R.
+  # The negative part is equal (a degree-2 field has zero mean): this is the fraction of eps0 * V_layer
+  # compressed (expelling pore fluid) while an equal volume expands (drawing it in), each half-orbit.
+  degree2_dilatation_factor = function(R, L) {
+    x <- max(0, (R - L) / R)
+    (1 / sqrt(3) - 1 / (3 * sqrt(3))) / 2 * 3 / 5 * (1 - x^5) / (1 - x^3)
+  },
+
   # q is the Darcy flux (volume per unit TOTAL area per unit time), so the volumetric flow through
   # area A is q * A; porosity enters only in the pore velocity q / porosity. (Not called.)
   calculate_darcy_flow = function(k, grad_P, area,
@@ -852,7 +882,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # Class fields
                            params = NULL,
                            results = NULL,
-                           config = NULL, 
+                           exchange = NULL,
+                           config = NULL,
                            
                            # Initialize simulator with parameters and configuration
                            initialize = function(k, layer_thickness, porosity = 0.32, config = NULL) {
@@ -970,38 +1001,80 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              print("Added rock reactions")
                              
                              self$results <- results
+                             self$exchange <- self$calculate_exchange()
                              print("Stored results")
                              print(sprintf("Final results tibble rows: %d", nrow(self$results)))
                              
                              return(results)
                            },
                            
+                           # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; README section 6):
+                           #   poro:        alpha * eps_v * V_layer, the fluid the tidal volumetric strain expels from the
+                           #                matrix (drained limit). eps_v = eps0 * degree2_dilatation_factor(): the
+                           #                compressed part of a degree-2 dilatation field whose pole amplitude is eps0,
+                           #                Liao et al. (2020)'s polar strain (an assumption, README).
+                           #   darcy:       what drains through the rock in half an orbit, the |q| A integral of
+                           #                run_simulation() over the orbit, halved.
+                           #   pore_volume: phi * V_layer.
+                           # x_half = dV / V_pore per half-orbit; per orbit the two halves compound, x_orbit = 1 - (1 - x_half)^2,
+                           # and exchanging_fluid_mass = x_orbit * the porewater mass, so x <= 1 by construction.
+                           calculate_exchange = function() {
+                             cfg <- self$config; R <- cfg$core_radius; L <- self$params$layer_thickness
+                             V_layer <- (4/3) * pi * (R^3 - max(0, R - L)^3)
+                             V_pore  <- self$params$porosity * V_layer
+                             eps0    <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
+                                                                      R, cfg$eccentricity, cfg$orbital_period)
+                             eps_v   <- eps0 * FlowUtils$degree2_dilatation_factor(R, L)
+                             vols    <- c(poro = cfg$biot_alpha * eps_v * V_layer,
+                                          darcy = sum(self$results$fluid_volume) / 2,
+                                          pore_volume = V_pore)
+                             dV      <- min(vols)
+                             x_half  <- dV / V_pore
+                             x_orbit <- 1 - (1 - x_half)^2
+                             list(eps0 = eps0, eps_v = eps_v, V_layer = V_layer, V_pore = V_pore,
+                                  dV_poro = vols[["poro"]], dV_darcy = vols[["darcy"]], dV_pore_volume = V_pore,
+                                  dV = dV, binding = names(vols)[which.min(vols)],
+                                  x_half = x_half, x_orbit = x_orbit,
+                                  mass_per_orbit = x_orbit * V_pore * CONSTANTS$FLUID$density)
+                           },
+
+                           # One header line on the exchange, for the generated inputs.
+                           exchange_header_line = function() {
+                             x <- self$exchange
+                             sprintf(paste0("# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.2f)"),
+                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$eps0,
+                                     self$config$core_rigidity / 1e9, self$config$core_viscosity, self$config$biot_alpha)
+                           },
+
                            # Generate summary metrics
                            get_summary_metrics = function() {
                              if (is.null(self$results)) stop("Must run simulation first")
                              
-                             circ_time <- FlowUtils$calculate_circulation_time(
-                               flow_rate = mean(self$results$flow_rate_m3s),
+                             if (is.null(self$exchange)) self$exchange <- self$calculate_exchange()
+                             # The exchanged mass per orbit is the min-of-three exchange (calculate_exchange()), which
+                             # is <= the pore volume by construction; the circulation time is the ocean's mass over it.
+                             fluid_mass <- self$exchange$mass_per_orbit
+                             circ_time  <- FlowUtils$calculate_circulation_time(
+                               flow_rate = fluid_mass / CONSTANTS$FLUID$density / self$config$orbital_period,
                                ocean_mass = self$config$get_derived_properties()$ocean_mass
                              )
                              orbital_period_years <- self$config$orbital_period / (365.25 * 24 * 3600)
                              n_orb <- circ_time / orbital_period_years  # orbital cycles per ocean circulation
-
-                             r_core       <- self$config$core_radius
-                             layer_thick  <- self$params$layer_thickness
-                             layer_vol    <- (4/3) * pi * (r_core^3 - (r_core - layer_thick)^3)
-                             porewater_mass_est <- 1000 * self$params$porosity * layer_vol
-
-                             fluid_mass        <- sum(self$results$fluid_volume) * CONSTANTS$FLUID$density
-                             eff_fluid_mass    <- min(fluid_mass, porewater_mass_est)
-                             corr_circ_time    <- circ_time * (fluid_mass / eff_fluid_mass)
-                             corr_n_orb        <- corr_circ_time / orbital_period_years
+                             # (The "corrected" times once capped a Darcy volume at the pore volume; the cap is now
+                             # one of the three limits, so they equal the plain ones. Kept for the headers.)
+                             corr_circ_time <- circ_time
+                             corr_n_orb     <- n_orb
 
                              metrics <- list(
                                max_flow_rate_Ls = max(self$results$flow_rate_Ls),
                                mean_flow_rate_Ls = mean(self$results$flow_rate_Ls),
                                total_fluid_volume_m3 = sum(self$results$fluid_volume),
                                exchanging_fluid_mass = fluid_mass,
+                               darcy_fluid_mass_per_orbit = sum(self$results$fluid_volume) * CONSTANTS$FLUID$density,
+                               exchange_fraction_per_half_orbit = self$exchange$x_half,
+                               exchange_fraction_per_orbit = self$exchange$x_orbit,
+                               exchange_limit = self$exchange$binding,
                                total_rock_reacted = sum(self$results$rock_mass_reacted),
                                circulation_time_years = circ_time,
                                complete_circulation_time = (n_orb * log(n_orb) + 0.577 * n_orb) * orbital_period_years,
@@ -1822,7 +1895,8 @@ KNOBS
 # Complete circulation time: {sprintf("%.2e", metrics$complete_circulation_time)} years
 # Corrected circulation time (f_fluid capped at f_pore): {sprintf("%.2e", metrics$corrected_circulation_time)} years
 # Corrected complete circulation time: {sprintf("%.2e", metrics$corrected_complete_circulation_time)} years
-# Flowing fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+# Exchanged fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+{self$simulator$exchange_header_line()}
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
@@ -2704,7 +2778,8 @@ KNOBS
 # Complete circulation time: {sprintf("%.2e", metrics$complete_circulation_time)} years
 # Corrected circulation time (f_fluid capped at f_pore): {sprintf("%.2e", metrics$corrected_circulation_time)} years
 # Corrected complete circulation time: {sprintf("%.2e", metrics$corrected_complete_circulation_time)} years
-# Flowing fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+# Exchanged fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+{self$simulator$exchange_header_line()}
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
@@ -5327,6 +5402,7 @@ KNOBS
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
+{self$simulator$exchange_header_line()}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}

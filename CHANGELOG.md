@@ -991,3 +991,16 @@ One commit per item; each commit message has its pass check.
   made the exchange 1/porosity (3.125x) too small. Lucas's production case (k 1e-7, full core):
   exchange per orbit 3.342e-5 -> 1.044e-4 of the porewater; circulation time 243 -> 78 yr; auto
   grouping factor 242 -> 77. Every tidal run's exchange changes; earlier results need rerunning.
+- **Exchange per half-orbit = min(poroelastic, Darcy, pore volume)** (PI): replaces the Darcy-only
+  exchange (`Simulator$calculate_exchange()`, `sim$exchange`). The poroelastic term is
+  alpha * eps_v * V_layer with eps0 from Liao et al. (2020) (Fig. 2 caption form, reproduces their Fig.
+  2a; the 3/5 in their text does not) and a degree-2 dilatation factor (0.115 for the full core); core
+  rigidity and viscosity are Bagheri et al. (2025) placeholders (17 GPa, 1e12 Pa s); biot_alpha 0.2.
+  Per orbit the halves compound, so x <= 1. At production k the poroelastic limit binds: exchange
+  1.25e-6 of the pore volume per half-orbit, circulation 3,250 yr (78 yr Darcy-only); Darcy binds
+  below k ~ 2.4e-9. The pore-volume limit cannot bind at real porosities. Header line and metrics
+  report the binding limit. `tests/exchange_check.R`.
+- **Known failure (open):** at 25 C the ocean step fails to converge when the porewater fraction mixed
+  in is ~1e-6 (3.3e-6 fails, 3.3e-7 and 3.3e-5 run; the pre-branch code fails the same way at k
+  1e-8). The new production exchange (2.5e-6 per orbit) falls in this window: the 25 C smoke run
+  now gives 18 errors; 100 and 160 C (1 orbit) run with 0 errors.

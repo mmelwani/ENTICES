@@ -134,6 +134,11 @@ Run everything from the repo root.
       `-convergence_tolerance 1e-8` after SELECTED_OUTPUT; at 25 °C, or with a cometary ocean, give
       `trace_C_molal = 1e-14`.
     - *The version warning:* rerun on PHREEQC 3.8.6.
+    - *25 °C, small exchange (open, 10-29):* at 25 °C the ocean step (MIX 4) fails to converge when
+      it takes ~1e-6 of the porewater: "has not converged" for Al, C, S, P and others at ~1e-15 mol.
+      It is not monotonic in the fraction (3.3e-6 fails, 3.3e-7 and 3.3e-5 run; seen on the
+      pre-`exchange-physics` code too) and it is not the gas transfer (`retain` fails the same way).
+      The new production exchange (2.5e-6 per orbit) falls in it; 100 and 160 °C run.
     - *A cometary ocean with a carbon-free porewater:* `tidal_kinetic` is ~4× slower (and stalls
       outright with a CO₂-only ocean), and `tidal_equil` fails ("Cl has not converged", the Cl being
       the porewater's lawrencite); give `trace_C_molal = 1e-14` (both warn). Known failure:
@@ -172,6 +177,9 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 |---|---|---|---|---|---|---|
 | `k` | none (production 1e-7) | m² | permeability; sets Darcy flow and exchange | literature ranges (§6, Flow driving) | **production value at the top of Liao et al.'s range** | yes (D12 sweep) |
 | `layer_thickness` | none (production 194200) | m | permeable layer; 194.2 km is the whole core | production choice | — | yes |
+| `core_rigidity`, `core_viscosity` (`EnceladusConfig`) | 17e9, 1e12 | Pa, Pa·s | the tidal strain (exchange) | Bagheri et al. 2025 Table 5, core dissipation | **placeholders** at the geometric means of 4–70 GPa and 4.4e11–2.3e12 | yes (range ends) |
+| `biot_alpha` (`EnceladusConfig`) | 0.2 | — | fluid expelled per unit volumetric strain | Liao et al. 2020 (0–1) | chosen in their range | yes |
+| `eccentricity` (`EnceladusConfig`) | 0.0047 | — | tidal strain | Enceladus's orbit | — | — |
 | `max_tidal_stress` (`EnceladusConfig`) | 1e5 | Pa | tidal pressure amplitude ΔP driving the flow | Liao et al. 2020 Fig. B3 (~3e4 Pa peak) | **UNSOURCED** as a value; ~3× Liao's peak; to be swept with k (D12) | yes |
 | `porosity` (`Simulator`) | 0.32 | — | pore volume, porewater mass | profile `phiRockMax`; Styczinski et al. 2023 | sourced | — |
 | `profile_file` | the Enceladus profile | — | porewater and ocean P, porewater T | PlanetProfile (Styczinski et al. 2023) | sourced | other profiles |
@@ -269,7 +277,8 @@ Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close t
 Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
 7.8e7–7.8e9 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
 2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
-faster than Choblet et al. (This table is the Darcy term alone; item 2 of `exchange-physics` caps it.)
+faster than Choblet et al. (This table is the Darcy term alone; the exchange is now the smallest of
+three volumes, see Exchange below: at production k the poroelastic term binds.)
 
 **The sweep (N6; designed, not run).**
 1. Treat the driving term as one quantity, reported three ways: k·ΔP/L, the mean Darcy flux, and
@@ -284,6 +293,80 @@ faster than Choblet et al. (This table is the Darcy term alone; item 2 of `excha
    same fluid back. (The extra ×φ in the flow rate was a bug, fixed 2026-10-29.) L, the layer
    thickness (194.2 km), sets the pressure gradient, where Liao et al.'s pressure varies with
    latitude over the core's radius.
+
+**Exchange: the smallest of three volumes per half-orbit (PI, 2026-10-29).** The core is a sponge:
+tides squeeze and expand the matrix, expelling and drawing in pore water (the poroelastic coupling of
+Liao et al. 2020). Per half-orbit the exchanged volume is ΔV = min(ΔV_poro, ΔV_Darcy, V_pore):
+1. **ΔV_poro = α·ε_v·V_layer**, the fluid the tidal volumetric strain expels (drained limit); α is
+   the Biot coefficient (`biot_alpha`, 0.2; Liao et al. explore 0–1).
+2. **ΔV_Darcy**, what drains through the rock in half an orbit: half the |q|·A integral over the
+   orbit, i.e. (k/μ)(ΔP/L)·A·T/π. (Written with the amplitude, (k/μ)(ΔP/L)·A·T/2, it would be π/2
+   larger; the integral of the sinusoid is what the code has always used.)
+3. **V_pore = φ·V_layer**, saturation.
+
+The exchange fraction is x = ΔV/V_pore per half-orbit; per orbit the two halves compound, x_orbit =
+1 − (1 − x)², and the grouped steps compound that again, x_step = 1 − (1 − x_orbit)^G. Since x ≤ 1
+by construction, the old cap at the pore volume is no longer needed. `sim$exchange` holds all three
+volumes and the binding limit (`poro`, `darcy` or `pore_volume`); `get_summary_metrics()` reports
+`exchange_fraction_per_half_orbit`, `exchange_limit` and the circulation time (ocean mass ÷ exchange
+per orbit); every generated input stamps one header line with them. They are constant through a
+run (they will change per orbit once φ evolves, PROGRESS N13).
+
+**The strain.** ε₀ is Liao et al. (2020)'s polar strain amplitude (§2.2, Fig. 2a):
+ε₀ = (9/4π)·e·ω²/(ρG)·(5/3)·|k₂*|, k₂* = (3/2)/(1 + 19μ*/(2ρgR)), with the Maxwell rigidity μ* =
+μ·iωτ/(1 + iωτ), τ = η/μ, g = (4/3)πGρR. Their §2.2 text and Appendix A write k₂ with an extra factor
+3/5; the Fig. 2 caption's form (without it) is the one that reproduces Fig. 2a: the elastic contours
+at μ = 2.1e7, 8.0e7, 8.6e8 and 8.6e9 Pa against 2.1e7, 7.5e7, 8e8 and 8.6e9 read off the figure, and
+the 10⁻⁵ contour meeting μ = 1e10 at η = 1.6e12 as in the figure (with their R₀ = 186 km, 33 h,
+e = 0.0047, ρ = 2400 kg/m³); the 3/5 version is ~1.6× off. `tests/exchange_check.R` checks this.
+
+ε₀ is a polar *radial* strain; the fluid is expelled by the *volumetric* strain. Liao et al.'s
+simplified model does not give the dilatation (with a Laplace displacement potential it is zero in
+their viscoelastic end-member). **Assumption:** the dilatation has the degree-2 pattern
+(r/R)²·P₂(cos θ) with amplitude ε₀ at the pole. A degree-2 field has zero mean, so each half-orbit
+an equal volume compresses (expelling fluid) and expands (drawing it in); the compressed part's
+volume mean is ε_v = 0.19245 × (3/5)(1 − x⁵)/(1 − x³) × ε₀, x = (R − L)/R: 0.115·ε₀ for the full
+core, 0.192·ε₀ for a thin layer. If the matrix is nearly incompressible the dilatation is smaller,
+so ΔV_poro is an upper estimate.
+
+**Rigidity and viscosity** come from Bagheri et al. (2025) Table 5, "dissipation in the core" (µ 4–70
+GPa, η 4.4e11–2.3e12 Pa·s; the scenario consistent with tidally driven flow in the core), with
+**placeholders at the geometric means**, `core_rigidity` = 17 GPa and `core_viscosity` = 1e12 Pa·s,
+until the PI picks values. At these viscosities the Maxwell time η/µ is seconds to minutes against a
+33 h tide, so the matrix responds viscously, |µ*| ≈ ωη, and **ε₀ depends on η, not on µ**:
+
+| η (Pa·s) | ε₀ | ε_v (full core) | ΔV_poro / V_pore per half-orbit |
+|---|---|---|---|
+| 4.4e11 | 3.8e-5 | 4.4e-6 | 2.8e-6 |
+| 1e12 (placeholder) | 1.7e-5 | 2.0e-6 | 1.25e-6 |
+| 2.3e12 | 7.6e-6 | 8.7e-7 | 5.5e-7 |
+
+(any µ in 4–70 GPa; α = 0.2, φ = 0.32). Bagheri's rigidities lie above Liao's explored 0.01–10 GPa,
+and Liao's viscosities (1e12–1e18) only touch Bagheri's at 1–2.3e12; the overlap (µ 4–10 GPa, η 1–2.3e12)
+is where the viscous knee above was checked. Bagheri's core radius and density range (183–213 km,
+2160–2400 kg/m³) move ε₀ between 1.4e-5 and 2.1e-5 at the placeholders; the profile's 194.2 km and
+2353 kg/m³, which the code uses, are inside both ranges.
+
+**Which limit binds** (production φ = 0.32, full core, placeholders):
+
+| k (m²) | ΔV_poro (m³) | ΔV_Darcy (m³) | V_pore (m³) | binds | x per half-orbit | circulation time |
+|---|---|---|---|---|---|---|
+| 1e-14 | 1.2e10 | 5.1e4 | 9.8e15 | darcy | 5.2e-12 | 7.8e8 yr |
+| 1e-11 | 1.2e10 | 5.1e7 | 9.8e15 | darcy | 5.2e-9 | 7.8e5 yr |
+| 1e-7 (production) | 1.2e10 | 5.1e11 | 9.8e15 | **poro** | 1.25e-6 | 3,250 yr |
+
+Darcy and poro cross at k ≈ 2.4e-9 m²: above it the exchange no longer depends on k. The production
+case exchanges ~42× less than the Darcy term alone (3,250 yr against 78 yr). **The pore-volume limit
+cannot bind at real porosities:** even a fluid matrix (k₂ → 3/2) gives ε₀ ≈ 1.5e-4, so α·ε_v ≤ 1.7e-5
+of V_layer per half-orbit, against φ = 0.1–0.3.
+
+**Two assumptions, stated, not swept.**
+- **Ingested water has the bulk-ocean composition.** The water drawn in is not the fluid just
+  expelled (bottom currents disperse that), but it is not fresh either: the ocean box carries the
+  products of every earlier cycle. That is what MIX with the evolving ocean does.
+- **The porewater is one well-mixed box.** Real exchange penetrates about the displacement distance
+  per tide (centimetres in Liao et al.'s case) and spreads by dispersion. Over Myr runs this is an
+  approximation.
 
 **Fe/Ni metal: UNSOURCED instantaneous corrosion** (`dissolve_only` equilibrium phases), so the
 metal's ~2.6 mol H₂ arrives at t = 0 (D6). Every gas result is dominated by this pulse until D6 is
