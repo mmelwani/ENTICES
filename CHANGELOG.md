@@ -948,3 +948,9 @@ One commit per item; each commit message has its pass check.
   pores (an upper bound on retention); carbon attribution is the same in both (to 3 significant
   figures); `"to_ocean"` without plume loss is an upper bound on ocean H2. `"retain_to_pore_volume"`
   is planned after D6.
+- **IOM density from Delarue et al. (2026) Eq. 10** (PI): `bulk_density(iom_density = "delarue2026")`,
+  the default, evaluates rho = 1472 - 345 (H/C) + 94 / ((H/C) + 0.122) kg/m3 at the residual IOM's
+  H/C on each row (bulk IOM less the channels' releases; 1.320 g/cm3 at t = 0); a number fixes it.
+  Replaces the UNSOURCED 1.4 g/cm3. Lucas's 160 C case: rho_solid 2.977 -> 2.920 g/cm3 at t = 0
+  (-1.9%), 2.806 -> 2.759 at orbit 12; rho_bulk 2.344 -> 2.305 at t = 0. Compression left out
+  (K0 = 10.2 GPa: 0.25% at 26 MPa). Summary gains `iom_HC` and `iom_density`.

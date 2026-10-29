@@ -186,7 +186,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | Fe, Ni metal | `dissolve_only` equilibrium | — | corrodes completely in step 1 | none (D6) | **UNSOURCED** | yes (D6) |
 | schreibersite rate | 1.370e-7 | s⁻¹ | bulk first-order | one 1-day lab measurement (RECONSTRUCTION_STATUS §4, §8) | placeholder | — |
 | IOM kinetics | A = 2e15 s⁻¹, distributed Ea | — | IOM channels | Burnham 2019; Miller et al. 2025 | sourced; `Ea_N` a one-point fit; `IOM_S` uncalibrated | Ea width, CHn m0 |
-| IOM density | 1.4 | g/cm³ | `bulk_density()` only | none | **UNSOURCED** | — |
+| IOM density | Delarue Eq. 10 at the residual IOM's H/C (1.320 at t = 0) | g/cm³ | `bulk_density()` only | Delarue et al. 2026 | sourced (PI, 10-29); a fixed number is an option | — |
 | `ch4_cutoff_C` | 150 | °C | only for `carbon_mode = "temperature"` | the old default | — | — |
 
 ## 6. Model choices and justifications
@@ -277,17 +277,25 @@ d$breakdown   # per phase: mass and volume, and their fractions
   thermal expansion and compression costs about 1% for silicates at 160 °C and 26 MPa, less than the
   porosity and IOM-density uncertainty.
 - Remaining IOM mass = initial IOM − Σ (m0ᵢ − nᵢ) × M(formulaᵢ) over the IOM channels (each
-  channel's `-formula` is what the solid loses). Its density, `IOM_DENSITY_G_CM3` = 1.4 g/cm³, is
-  **UNSOURCED** [citation needed: a measured density of chondritic IOM or kerogen].
+  channel's `-formula` is what the solid loses). Its density (default `iom_density =
+  "delarue2026"`) is Delarue et al. (2026) Eq. 10, ρ = 1472 − 345 (H/C) + 94 / ((H/C) + 0.122)
+  kg/m³, evaluated on each row at the residual IOM's atomic H/C: the bulk IOM's C and H
+  (`iom_bulk_formula()`, H/C 0.753) less what the channels have released (Mtg counted as CH₄).
+  At t = 0 that is 1.320 g/cm³. The fit is to kerogens and coals and is within 100 kg/m³ for H/C
+  below 1 (Delarue et al. Fig. 5). `iom_density = 1.4` (any number) fixes it instead. Compression
+  is left out: their bulk modulus K0 = 10.2 GPa gives 0.25% at the core's 26 MPa.
 - `rho_bulk` = (1 − φ) ρ_solid + φ ρ_pore, with φ the model's porosity (0.32) and
   ρ_pore = (1 − s_g) ρ_fluid + s_g ρ_gas, s_g = min(Vgas/Vpore, 1) the pore gas saturation. ρ_fluid
   is PHREEQC's solution density (`Rho_soln`): under the LLNL aqueous model PHREEQC does not compute
   water's density from T and P, so it is ~1 g/cm³ for water at any temperature (give
   `fluid_density =` to override).
 
-For Lucas's 160 °C case (15 wt% IOM, φ = 0.32): ρ_solid 2.977 g/cm³ and ρ_bulk 2.344 g/cm³ at t = 0;
-at orbit 12, ρ_solid 2.806 and ρ_bulk 1.91 (`"retain"`, the bubble filling the pores) or 2.29
-(`"to_ocean"`). Lizardite (26% of the solid volume by orbit 12) takes up water. The profile's own
+For Lucas's 160 °C case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
+at orbit 12, ρ_solid 2.759 and ρ_bulk 2.255 (`"to_ocean"`) or 1.880 (`"retain"`, the bubble filling
+the pores). With the old fixed 1.4 g/cm³ these were 2.977 and 2.344 at t = 0 and 2.806 and 2.287 or
+1.912 at orbit 12: the Delarue density lowers ρ_solid by 1.9% at t = 0 and 1.7% at orbit 12, and
+ρ_bulk by 1.4–1.7%. The residual IOM's H/C hardly moves in 12 orbits (0.75298 to 0.75298; 0.01 g
+of 150 g is released), so its density stays 1.3197 g/cm³. Lizardite (26% of the solid volume by orbit 12) takes up water. The profile's own
 silicate-layer density is 2353 kg/m³ (`rhoSil_kgm3`).
 
 **Comparing with Enceladus.** A published core density is a bulk density (porosity and pore fluid
@@ -346,6 +354,10 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   Geochem.* 131, 50–59. doi:10.1016/j.orggeochem.2019.03.007
 - Casey, W.H., et al. (1993). *Geochim. Cosmochim. Acta* 57, 785–793 [citation needed: authors and
   title; cited via Pincus et al. 2026].
+- Delarue, C., Reynard, B., Sotin, C., Fellah, C., Cardon, H., Montagnac, G., Confortini, G.,
+  Ferreiro Mählmann, R. (2026). Metamorphic and density evolution of carbonaceous matter: a
+  potential cometary composition of Titan. *Earth Planet. Sci. Lett.* 691, 120227 (Eq. 10: IOM
+  density from H/C).
 - Fray, N., Schmitt, B. (2009). Sublimation of ices of astrophysical interest: a bibliographic
   review. *Planet. Space Sci.* 57, 2053–2080.
 - Glein, C.R., Waite, J.H. (2020). *Geophys. Res. Lett.* 47, e2019GL085885 [citation needed: the

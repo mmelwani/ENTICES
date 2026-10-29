@@ -1223,7 +1223,9 @@ rate, rock table and `rec_eqb` default have all changed since.
   gas up to the available pore volume and send the excess to the ocean. Build it
   once D6 is fixed, because the bubble is metal H₂.
 - **N11.** Fluorite and Fluorapatite have no molar volume (not production
-  phases); the IOM density for `bulk_density()` is UNSOURCED.
+  phases). ~~The IOM density for `bulk_density()` is UNSOURCED~~: **sourced 10-29**,
+  Delarue et al. (2026) Eq. 10 at the residual IOM's H/C (1.320 g/cm³ at t = 0;
+  README §7).
 
 ## Still open (science), unchanged from 09-20
 

@@ -38,6 +38,21 @@ check(abs(s$mass_g - m) < 1e-9 * m && abs(s$volume_cm3 - vol) < 1e-9 * vol && ab
 e <- tryCatch({ solid_density(c(Unobtainium = 1), volumes = v); "no error" }, error = function(e) conditionMessage(e))
 check(grepl("no molar volume", e), "a phase with no molar volume is an error, not dropped")
 
+# 2b. IOM density, Delarue et al. (2026) Eq. 10, and the IOM C/H bookkeeping.
+check(abs(iom_density_delarue2026(0) - (1472 + 94 / 0.122) / 1000) < 1e-12 &&
+        abs(iom_density_delarue2026(0.7) - (1472 - 345 * 0.7 + 94 / 0.822) / 1000) < 1e-12,
+      sprintf("Eq. 10: %.4f g/cm3 at H/C 0 (graphite-like), %.4f at 0.7, %.4f at the bulk IOM's %.4f",
+              iom_density_delarue2026(0), iom_density_delarue2026(0.7),
+              iom_density_delarue2026(IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]), IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]))
+source("iom_module.R")
+check(isTRUE(all.equal(IOM_BULK_C_H, iom_bulk_formula()[c("C", "H")], tolerance = 0)),
+      "IOM_BULK_C_H (phreeqc_tools.R) equals iom_bulk_formula()[C, H] (iom_module.R)")
+check(isTRUE(all.equal(iom_formula_CH("Mtg 1 H 0.435"), c(C = 1, H = 4.435))) &&
+        isTRUE(all.equal(iom_formula_CH("Mtg 1 H -2.2"), c(C = 1, H = 1.8))) &&
+        isTRUE(all.equal(iom_formula_CH("C 1 H 1 O 1.3115"), c(C = 1, H = 1))) &&
+        isTRUE(all.equal(iom_formula_CH("Sg 1 H 1"), c(C = 0, H = 1))),
+      "channel -formula C and H: Mtg counts as CH4; Sg as S")
+
 # 3. t = 0 against the reconstruction's phase library.
 rock <- utils::read.csv("reconstruction/rock_mol_per_kg.csv", comment.char = "#", stringsAsFactors = FALSE)
 rmd <- paste(readLines("reconstruction/Primordial_CI_chondrite_mineralogy.Rmd"), collapse = "\n")

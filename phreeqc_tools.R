@@ -257,7 +257,7 @@ restrict_to_database <- function(text, database, base = NULL) {
 #
 #   rho_solid = sum(n_i M_i) / sum(n_i V_i) over every mineral with nonzero moles (equilibrium
 #               phases, kinetic primaries, schreibersite, Fe/Ni metal, clathrates) plus the
-#               remaining IOM at IOM_DENSITY_G_CM3
+#               remaining IOM, at the density Delarue et al. (2026) Eq. 10 gives for its H/C
 #   rho_bulk  = (1 - porosity) rho_solid + porosity rho_pore, where the pores hold the fluid and, since
 #               the gas phases of 2026-10-28, the pore gas bubble: rho_pore = (1 - s_g) rho_fluid +
 #               s_g rho_gas, with gas saturation s_g = min(Vgas / Vpore, 1) (Vgas_Vpore column) and
@@ -265,9 +265,23 @@ restrict_to_database <- function(text, database, base = NULL) {
 #               capped at 1: a bubble larger than the pores (pore_gas_fate = "retain") is not physical.
 
 MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
-# Density of the remaining IOM (g/cm3). UNSOURCED, see README section 7 (Rock density):
-# a measured density for chondritic IOM or kerogen is needed. 1.4 g/cm3 is a placeholder.
-IOM_DENSITY_G_CM3 <- 1.4
+# IOM density (g/cm3) from its atomic H/C: Delarue et al. (2026), EPSL 691, 120227, Eq. 10,
+# rho = 1472 - 345 (H/C) + 94 / ((H/C) + 0.122) kg/m3, a fit to kerogens and coals (within 100 kg/m3
+# for H/C below 1; the bulk IOM's H/C is 0.753, 1.320 g/cm3). Compression is left out: their
+# K0 = 10.2 GPa gives 0.25% at the core's 26 MPa. See README section 7 (Rock density).
+iom_density_delarue2026 <- function(hc) (1472 - 345 * hc + 94 / (hc + 0.122)) / 1000
+# The bulk IOM's C and H (mol per kg of IOM): iom_bulk_formula() in iom_module.R
+# (tests/bulk_density_check.R checks they agree).
+IOM_BULK_C_H <- c(C = 60.611, H = 45.639)
+# C and H (mol per mol) of a KINETICS -formula, pseudo-elements resolved as the IOM channels use
+# them: Mtg is CH4 ("Mtg 1 H 0.435" = C 1 H 4.435), Sg is S ("Sg 1 H 1" = S 1 H 1, iom_module.R).
+iom_formula_CH <- function(formula) {
+  tk <- strsplit(trimws(formula), "\\s+")[[1]]
+  el <- tk[c(TRUE, FALSE)]; n <- as.numeric(tk[c(FALSE, TRUE)])
+  bad <- setdiff(el, c("C", "H", "O", "N", "S", "Mtg", "Sg"))
+  if (length(bad)) stop("iom_formula_CH: unknown element in an IOM -formula: ", paste(bad, collapse = ", "))
+  c(C = sum(n[el %in% c("C", "Mtg")]), H = sum(n[el == "H"]) + 4 * sum(n[el == "Mtg"]))
+}
 
 # The volumes table: phase, formula, molar mass (g/mol), Vm (cm3/mol).
 read_mineral_volumes <- function(file = MINERAL_VOLUMES_CSV) {
@@ -295,7 +309,8 @@ kinetics_formula_mass <- function(formula, gfw) {
 # Solid density from phase moles (named numeric, mol) and a mass of IOM (g). Returns
 # list(rho_solid, mass_g, volume_cm3, breakdown: phase, mol, mass_g, volume_cm3, mass_frac, vol_frac).
 # A phase with moles but no molar volume is an error (so nothing is silently dropped).
-solid_density <- function(moles, iom_g = 0, iom_density = IOM_DENSITY_G_CM3, volumes = read_mineral_volumes()) {
+solid_density <- function(moles, iom_g = 0, iom_density = iom_density_delarue2026(IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]),
+                          volumes = read_mineral_volumes()) {
   moles <- moles[!is.na(moles) & moles > 0]
   miss <- setdiff(names(moles), volumes$phase)
   if (length(miss)) stop("no molar volume in ", MINERAL_VOLUMES_CSV, " for: ", paste(miss, collapse = ", "))
@@ -344,14 +359,24 @@ pqi_initial_solids <- function(pqi) {
 # (Simulator$params$porosity, 0.32 by default). Rows: t = 0 (from the .pqi) and every porewater
 # row that holds the rock (solution 1 with nonzero solids: each REACT step). fluid_density: NULL
 # uses the run's Rho_soln column (PHREEQC's RHO; under the LLNL aqueous model this is ~1 g/cm3 for
-# water at any T and P, see README), else a number in g/cm3. Returns list(summary, breakdown).
-bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_density = IOM_DENSITY_G_CM3,
+# water at any T and P, see README), else a number in g/cm3. iom_density: "delarue2026" (default)
+# evaluates Delarue et al. (2026) Eq. 10 at the remaining IOM's H/C on each row (the bulk IOM less
+# what the channels have released); a number fixes it (g/cm3). Returns list(summary, breakdown).
+bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_density = "delarue2026",
                          fluid_density = NULL, volumes = read_mineral_volumes()) {
   if (missing(porosity) || !is.numeric(porosity) || porosity < 0 || porosity >= 1)
     stop("porosity: give the model's porosity (Simulator$params$porosity)")
   init <- pqi_initial_solids(pqi)
   gfw <- element_gfw(init$database)
   iom_M <- vapply(init$iom$formula, kinetics_formula_mass, 0, gfw = gfw)
+  if (identical(iom_density, "delarue2026")) {
+    iom_CH <- if (nrow(init$iom)) t(vapply(init$iom$formula, iom_formula_CH, c(C = 0, H = 0))) else matrix(0, 0, 2, dimnames = list(NULL, c("C", "H")))
+    CH0 <- IOM_BULK_C_H * init$iom_mass0_g / 1000           # mol in the rock at t = 0
+    iom_hc <- function(n_iom) { ch <- CH0 - colSums((init$iom$m0 - n_iom) * iom_CH); ch[["H"]] / ch[["C"]] }
+    iom_rho <- function(hc) iom_density_delarue2026(hc)
+  } else if (is.numeric(iom_density) && length(iom_density) == 1 && iom_density > 0) {
+    iom_hc <- function(n_iom) NA_real_; iom_rho <- function(hc) iom_density
+  } else stop('iom_density: "delarue2026" or a density in g/cm3')
   x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
   x$state <- trimws(x$state)
   # Equilibrium-phase columns, by index. A phase named like an element (Ni) shares its name with
@@ -363,17 +388,19 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   kin_cols <- grep("^k_", names(x), value = TRUE)
   kin_min <- intersect(sub("^k_", "", kin_cols), volumes$phase)
   rows <- list(); bd <- list()
-  add <- function(label, time, moles, iom_g, rho_f, s_g = 0, rho_g = 0) {
-    s <- solid_density(moles, iom_g, iom_density, volumes)
+  add <- function(label, time, moles, iom_g, hc, rho_f, s_g = 0, rho_g = 0) {
+    rho_iom <- iom_rho(hc)
+    s <- solid_density(moles, iom_g, rho_iom, volumes)
     rho_p <- (1 - s_g) * rho_f + s_g * rho_g
     rows[[length(rows) + 1]] <<- data.frame(row = label, Time_Years = time, rho_solid = s$rho_solid,
                                              rho_fluid = rho_f, gas_saturation = s_g, rho_gas = rho_g,
                                              rho_bulk = (1 - porosity) * s$rho_solid + porosity * rho_p,
-                                             solid_mass_g = s$mass_g, solid_volume_cm3 = s$volume_cm3, iom_g = iom_g)
+                                             solid_mass_g = s$mass_g, solid_volume_cm3 = s$volume_cm3, iom_g = iom_g,
+                                             iom_HC = hc, iom_density = rho_iom)
     bd[[length(bd) + 1]] <<- cbind(row = label, s$breakdown)
   }
   rho_col <- if ("Rho_soln" %in% names(x)) "Rho_soln" else NULL
-  add("t0", 0, init$minerals, init$iom_mass0_g, if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  add("t0", 0, init$minerals, init$iom_mass0_g, iom_hc(init$iom$m0), if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
   for (r in which(x$state == "react" & trimws(x$soln) == "1")) {
     mol <- c(stats::setNames(as.numeric(x[r, paste0("k_", kin_min)]), kin_min),
              stats::setNames(as.numeric(unlist(x[r, ep_idx])), ep_names),
@@ -389,7 +416,7 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
       fe <- formula_elements(sub("\\(g\\)$", "", sub("^g_", "", k)))
       as.numeric(x[r, k]) * sum(gfw[names(fe)] * fe) }, 0))  # g
     rho_g <- if (vg > 0) mg / (vg * 1000) else 0           # g / cm3
-    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, rho_f, s_g, rho_g)
+    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, iom_hc(n_iom), rho_f, s_g, rho_g)
   }
   list(summary = do.call(rbind, rows), breakdown = do.call(rbind, bd))
 }
