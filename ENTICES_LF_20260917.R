@@ -123,6 +123,14 @@ SHARED_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n 
 # NULL = pure water). A numerical seed, not a composition: the science case is pure water, so that
 # all ocean carbon can be attributed to the organics. Returns the SOLUTION line, with its leading
 # newline, to append to the block's last line ("" for NULL).
+# KNOBS around every ocean step (MIX 4) of the tidal generators. At 25 C the ocean step fails to converge
+# for scattered porewater fractions ("Numerical method failed on all combinations": 3e-8, 2e-6 and 5e-6
+# fail, neighbouring fractions run; 2026-10-29). -diagonal_scale true converges all fractions tested
+# (1e-8 to 1e-3) and leaves converging runs unchanged (a 160 C orbit agrees to 1e-8 relative). It is
+# switched off after the ocean step: set globally it shifted the porewater step's m_H2S by 0.9%.
+OCEAN_STEP_KNOBS_ON  <- "KNOBS\n    -diagonal_scale true\n"
+OCEAN_STEP_KNOBS_OFF <- "KNOBS\n    -diagonal_scale false\n"
+
 trace_C_solution_line <- function(trace_C_molal) {
   if (is.null(trace_C_molal)) return("")
   if (!is.numeric(trace_C_molal) || length(trace_C_molal) != 1 || !isTRUE(trace_C_molal > 0))
@@ -2543,6 +2551,7 @@ KNOBS
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
+                                         OCEAN_STEP_KNOBS_ON,
                                          if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
@@ -2556,6 +2565,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          # Simulation 3: resample porewater — replace flowing fluid with combined ocean water
                                          # (f_pore-f_x)/f_pore of reacted porewater + f_x/(f_ocean+f_x) of combined ocean
                                          # fractional mass = f_pore
@@ -3203,6 +3213,7 @@ KNOBS
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
+                                         OCEAN_STEP_KNOBS_ON,
                                          if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
@@ -3216,6 +3227,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          # Simulation 3: resample porewater
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
@@ -5561,6 +5573,7 @@ KNOBS
                                          iom_punch_lines_tidal,
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_ON,
                                          if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
@@ -5574,6 +5587,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",

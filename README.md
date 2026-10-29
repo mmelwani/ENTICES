@@ -134,11 +134,15 @@ Run everything from the repo root.
       `-convergence_tolerance 1e-8` after SELECTED_OUTPUT; at 25 °C, or with a cometary ocean, give
       `trace_C_molal = 1e-14`.
     - *The version warning:* rerun on PHREEQC 3.8.6.
-    - *25 °C, small exchange (open, 10-29):* at 25 °C the ocean step (MIX 4) fails to converge when
-      it takes ~1e-6 of the porewater: "has not converged" for Al, C, S, P and others at ~1e-15 mol.
-      It is not monotonic in the fraction (3.3e-6 fails, 3.3e-7 and 3.3e-5 run; seen on the
-      pre-`exchange-physics` code too) and it is not the gas transfer (`retain` fails the same way).
-      The new production exchange (2.5e-6 per orbit) falls in it; 100 and 160 °C run.
+    - *25 °C ocean step (fixed 10-29):* at 25 °C the ocean step (MIX 4) failed to converge
+      ("Numerical method failed on all combinations"; Al, C, Ca, Cl, Fe, K, Mg, Mn, Na, Ni, P, S and
+      Si "not converged" at ~1e-15–1e-8 mol) for scattered porewater fractions: of 1e-8 to 1e-3,
+      3e-8, 2e-6 and 5e-6 failed and their neighbours ran (the pre-`exchange-physics` code failed at
+      3.3e-6 too; `retain` fails the same way, so it is not the gas transfer). Every ocean step now
+      runs with KNOBS `-diagonal_scale true`, switched off after it (`OCEAN_STEP_KNOBS_ON/OFF`): all
+      fractions tested converge, and a converging 160 °C orbit is unchanged (1e-8 relative). Set for
+      the whole run instead, it shifted the porewater step's m_H₂S by 0.9%. Trace seeds were not
+      needed.
     - *A cometary ocean with a carbon-free porewater:* `tidal_kinetic` is ~4× slower (and stalls
       outright with a CO₂-only ocean), and `tidal_equil` fails ("Cl has not converged", the Cl being
       the porewater's lawrencite); give `trace_C_molal = 1e-14` (both warn). Known failure:

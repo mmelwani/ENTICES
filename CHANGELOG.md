@@ -1010,3 +1010,9 @@ One commit per item; each commit message has its pass check.
   now grows as sqrt(k); Darcy/poro crossover 2.4e-9 -> 1.2e-11 m2. Circulation: 1.1e5 yr (1e-14), 3.5e4
   (1e-13), 1.1e4 (1e-12), 3,530 (1e-11); production unchanged (poro binds, 3,250 yr). Cross-check:
   S dP delta A = Darcy / 2.02 at every k. Note alpha 0.2 < phi 0.32 (not physical for a porous solid).
+- **25 C ocean-step convergence fixed** (PI): KNOBS -diagonal_scale true around every ocean step (MIX 4)
+  of tidal_kinetic, tidal_equil and the tidal restart, off after it. Without it the 25 C ocean step
+  failed at scattered porewater fractions (3e-8, 2e-6, 5e-6 of 12 tested from 1e-8 to 1e-3, and the
+  production 2.5e-6); with it all converge. A 160 C orbit is unchanged (1e-8 relative); set globally
+  it moved the porewater m_H2S by 0.9%, so it is ocean-step only. The 25 C 1-orbit and 2-orbit runs
+  give 0 errors. Trace seeds were not tried (not needed).
