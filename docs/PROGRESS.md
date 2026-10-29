@@ -977,16 +977,23 @@ H₂ at 160 °C, 261 atm: PR dissolves 8.3% more than ideal at saturation, and
 its bubble's molar volume is 8.7% larger (`tests/gas_eos_check.R`).
 
 **`pore_gas_fate`** (tidal generators):
-- `"retain"` (default, closest to before): the bubble stays with the
-  porewater; MIX moves solution only. **When `Vgas_Vpore` > 1 this is an upper
+- `"retain"`: the bubble stays with the porewater; MIX moves solution only. **When `Vgas_Vpore` > 1 this is an upper
   bound on retention, not a physical state.**
-- `"to_ocean"`: after each porewater step the bubble's moles go to the ocean
+- `"to_ocean"` (**default**, PI 2026-10-29): after each porewater step the bubble's moles go to the ocean
   step, and the porewater starts the next orbit with an empty phase. PHREEQC
   has no keyword that adds one gas phase to another, so the porewater step's
   USER_PUNCH stores the component moles (`PUT`) and `KINETICS 3` adds them to
   the ocean solution at a constant rate over 1 s (exact: a constant rate
   integrates exactly); they then partition with GAS_PHASE 2 at the ocean
   pressure. Only one gas reservoir is ever in contact with a solution.
+
+Why `"to_ocean"` is the default (PI, 2026-10-29): under `"retain"` the pores hold about 2.2 pore
+volumes of gas, which is physically impossible, so `"retain"` is an upper bound on retention.
+Carbon attribution is the same in both fates (organic − blank ocean C agrees to 3 significant
+figures at 150 and 160 °C). `"to_ocean"` without plume loss saturates the ocean in H₂, so it is an
+upper bound on ocean H₂. A third fate, `"retain_to_pore_volume"` (keep gas up to the pore volume,
+send the excess to the ocean), is planned once the metal corrosion rate (D6) is decided, since the
+bubble is metal H₂.
 
 **`ocean_gas_loss_fraction_per_orbit`** was not added: removing a fraction of a
 gas phase at run time would need the same PUT/GET route plus a negative
@@ -1174,7 +1181,7 @@ rate, rock table and `rec_eqb` default have all changed since.
 
 | # | Decision | Evidence | Recommendation |
 |---|---|---|---|
-| D1 | ~~Gas handling~~ | Part 7 | **Decided and implemented 10-28:** fixed-pressure GAS_PHASEs, ocean gas kept; `pore_gas_fate` bracket run (Part 7). **Open:** the PI picks the default fate |
+| D1 | ~~Gas handling~~ | Part 7 | **Decided and implemented 10-28:** fixed-pressure GAS_PHASEs, ocean gas kept; `pore_gas_fate` bracket run (Part 7). **Default `"to_ocean"`** (PI, 10-29) |
 | D2 | ~~Porewater pressure~~ | Part 6 | **Decided and implemented 10-27:** the profile everywhere |
 | D3 | ~~Carbon decoupling mechanism~~ | Part 3 | **Decided 10-27:** `c4_only` at every temperature; coupled runs are the methanation upper bound |
 | D4 | ~~`IOM_S` coupled or `Sg 1 H 1`~~ | Part 3 | **Decided:** coupled (H₂ stays coupled, so sulfide is stable) |
@@ -1212,6 +1219,9 @@ rate, rock table and `rec_eqb` default have all changed since.
 - ~~N9. pH 11 with 2e-4 molal Na~~ **Closed 10-27** (Part 5: pKw at 1.45 °C).
 - **N10.** D6 (metal corrosion rate): until it is decided, every gas-phase
   result is dominated by the t = 0 metal pulse (Part 7).
+- **N12 (after D6).** A third `pore_gas_fate`, `"retain_to_pore_volume"`: keep
+  gas up to the available pore volume and send the excess to the ocean. Build it
+  once D6 is fixed, because the bubble is metal H₂.
 - **N11.** Fluorite and Fluorapatite have no molar volume (not production
   phases); the IOM density for `bulk_density()` is UNSOURCED.
 

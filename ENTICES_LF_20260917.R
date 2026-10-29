@@ -290,7 +290,8 @@ ep_column <- function(phase, col_names) {
 #
 # GAS_PHASE 1: porewater, at pore_pressure_atm; GAS_PHASE 2: ocean, at ocean_pressure_atm (tidal
 # generators; never emptied: the PI's default, plume loss being unknown). Both start empty. The bulk
-# generators have one, GAS_PHASE 1, at their solution's pressure. pore_gas_fate (tidal):
+# generators have one, GAS_PHASE 1, at their solution's pressure. pore_gas_fate (tidal; default "to_ocean",
+# PI 2026-10-29):
 #   "retain"   -- the pore bubble stays with the porewater and is carried to the next orbit (MIX
 #                 moves solution only). When the bubble is larger than the pore space (Vgas_Vpore > 1)
 #                 this is an upper bound on retention, not a physical state.
@@ -1442,7 +1443,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # @param trace_C_molal Numerical C seed in every initial SOLUTION, mol/kgw. Default NULL; production 1e-14 (the smallest tested to converge at 25 C).
                                    # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
                                    # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
-                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
                                    # @return The path of the .pqi written.
                                    # @examples
                                    #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
@@ -1454,7 +1455,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
-                                                                     pore_gas_fate = c("retain", "to_ocean")) {
+                                                                     pore_gas_fate = c("to_ocean", "retain")) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
@@ -1537,7 +1538,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      return(filename)
                                    },
                                    
-                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL, pore_gas_fate = "retain") {
+                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL, pore_gas_fate = "to_ocean") {
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics <- self$simulator$get_summary_metrics()
@@ -2499,7 +2500,7 @@ KNOBS
                                    # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
                                    # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
                                    # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
-                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
                                    # @param trace_C_molal Numerical C seed in both initial SOLUTIONs, mol/kgw. Default NULL; give 1e-14 with a cometary ocean.
                                    # @return The path of the .pqi written.
                                    # @examples
@@ -2516,7 +2517,7 @@ KNOBS
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                            initial_ocean = "pure_water", charge_balance = NULL,
-                                                                           pore_gas_fate = c("retain", "to_ocean"), trace_C_molal = NULL) {
+                                                                           pore_gas_fate = c("to_ocean", "retain"), trace_C_molal = NULL) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
@@ -2540,7 +2541,7 @@ KNOBS
                                                                                   CH4_redox_override = NULL,
                                                                                   carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                                   initial_ocean = "pure_water", charge_balance = NULL,
-                                                                                  pore_gas_fate = "retain", trace_C_molal = NULL) {
+                                                                                  pore_gas_fate = "to_ocean", trace_C_molal = NULL) {
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics         <- self$simulator$get_summary_metrics()
@@ -4690,7 +4691,7 @@ END
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
                                    # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
                                    # @param allow_pressure_change TRUE lets a restart run at pressures other than its parent's (with a warning). Default FALSE (an error).
-                                   # @param pore_gas_fate "retain" (default: the pore bubble stays with the porewater; an upper bound on retention when Vgas_Vpore > 1) or "to_ocean" (moved to the ocean step each orbit). Bracketed; the PI picks the default.
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
                                    # @return The path of the .pqi written.
                                    # @examples
                                    #   f <- ph$generate_phreeqc_input_tidal_kinetic_restart(prev_csv = "phreeqc_inputs/<parent>.csv", n_orbital_cycles = 2,
@@ -4711,7 +4712,7 @@ END
                                      carbon_mode         = NULL,
                                      ch4_cutoff_C        = 150,
                                      allow_pressure_change = FALSE,
-                                     pore_gas_fate       = c("retain", "to_ocean")
+                                     pore_gas_fate       = c("to_ocean", "retain")
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))

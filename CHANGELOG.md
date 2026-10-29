@@ -941,3 +941,10 @@ One commit per item; each commit message has its pass check.
   ocean x 25/100/160 C, 1 orbit, plus restarts): 87 converge; the failures are the unseeded cometary
   `tidal_equil` cases (rerun with the seed: converge) and `tidal_equil` + `to_ocean` + cometary +
   `c4_only`, which crashes PHREEQC 3.8.6.
+
+### gas-ice-docs branch: decisions and sources, 2026-10-29
+
+- **`pore_gas_fate` defaults to `"to_ocean"`** (PI): `"retain"` puts ~2.2 pore volumes of gas in the
+  pores (an upper bound on retention); carbon attribution is the same in both (to 3 significant
+  figures); `"to_ocean"` without plume loss is an upper bound on ocean H2. `"retain_to_pore_volume"`
+  is planned after D6.

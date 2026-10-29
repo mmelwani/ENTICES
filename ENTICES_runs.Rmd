@@ -69,9 +69,10 @@ data.frame(orbit = 1:12, pH = ocean$pH, H2 = ocean$m_H2, DIC = ocean$C, bubble_L
 bulk_density(sub("\\.pqi$", ".csv", f), porosity = sim$params$porosity)$summary[c(1, 13), ]
 ```
 
-Expect at orbit 12 (`pore_gas_fate = "retain"`): ocean pH 11.3, H₂ 1.5e-5 molal, DIC 1.3e-7 molal;
-a pore bubble of 0.36 L, 2.3× the pore volume (so "retain" is an upper bound on retention); ρ_solid
-2.81 g/cm³. The bubble is the metal's H₂: Fe and Ni corrode completely in the first step (D6).
+Expect at orbit 12 (the default `pore_gas_fate = "to_ocean"`): ocean pH 11.3, H₂ 6.5e-2 molal
+(saturated at 66.7 atm), DIC 1.3e-7 molal, 0.82 L of ocean gas; a pore bubble of 0.34 L after the
+first orbit (2.1× the pore volume) that has gone to the ocean by orbit 12 (3e-4 L); ρ_solid 2.81
+g/cm³. The bubble is the metal's H₂: Fe and Ni corrode completely in the first step (D6).
 
 ## 3. A 100 °C organic vs blank pair
 

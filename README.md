@@ -151,8 +151,9 @@ Run everything from the repo root.
 
 1. **A 25 °C smoke test** (minutes): `tidal_kinetic`, 2 orbits, 15 wt% IOM, `trace_C_molal = 1e-14`.
 2. **Lucas's production case:** k = 1e-7 m², full-core layer, 12 orbits, 160 °C, 15 wt% IOM. Expect
-   (`pore_gas_fate = "retain"`, orbit 12): ocean pH 11.3, ocean H₂ 1.5e-5 molal, ocean DIC 1.3e-7
-   molal (the seed is 1e-14), a pore bubble of 0.36 L (2.3× the pore volume).
+   (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 11.3, ocean H₂ 6.5e-2 molal
+   (saturated), ocean DIC 1.3e-7 molal (the seed is 1e-14), 0.82 L of ocean gas; the pore bubble
+   0.34 L after the first orbit, 3e-4 L by orbit 12.
 3. **A 100 °C organic vs blank pair** with `pair_organic_run()`.
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()`; the ocean starts at pH 1.85
    with 0.087 molal DIC.
@@ -174,7 +175,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `porewater_temp` | `"ocean"` | °C or `"profile"` | porewater reaction temperature | production uses 150 and 160 °C | — | yes |
 | `organic_wt_percent` | 0 (production 15) | wt% | IOM in the rock | deliberate, to be swept | — | yes |
 | `carbon_mode` | `"c4_only"` | — | carbon redox treatment and database | §6 | decided (PI, 10-27) | `"coupled"` as the bound |
-| `pore_gas_fate` | `"retain"` | — | the pore bubble's fate | §6; PROGRESS Part 7 | bracketed; default open (PI) | yes (the bracket) |
+| `pore_gas_fate` | `"to_ocean"` | — | the pore bubble's fate | §6; PROGRESS Part 7 | decided (PI, 10-29); `"retain"` is the other bound | yes (the bracket) |
 | `initial_ocean` | `"pure_water"` | — | ocean start; `cometary_ice_ocean()` option | attribution; Miller et al. 2026 | sourced | the cometary option |
 | `cometary_ice_ocean(v)` | 0.02 | — | volatile depletion of 67P ice | Miller et al. 2026 (from Titan's N budget) | sourced, not for Enceladus | v |
 | `include_NH3` | FALSE | — | NH₃ in the cometary ocean | Table 5 lists none | **pending the PI** | — |
@@ -227,7 +228,16 @@ mindat unit-cell data.
 **Gas.** A fixed-pressure GAS_PHASE in each reservoir (Parkhurst & Appelo 2013, GAS_PHASE): a bubble
 forms only when the partial pressures exceed the pressure. All gases Peng–Robinson (Peng & Robinson
 1976); decoupled gases with their analogues' constants (phreeqc.dat). `pore_gas_fate` brackets the
-pore bubble's fate: `"retain"` (an upper bound on retention when `Vgas_Vpore` > 1) or `"to_ocean"`.
+pore bubble's fate: `"to_ocean"` (default) or `"retain"` (an upper bound on retention when
+`Vgas_Vpore` > 1).
+
+Why `"to_ocean"` is the default (PI, 2026-10-29): under `"retain"` the pores hold about 2.2 pore
+volumes of gas, which is physically impossible, so `"retain"` is an upper bound on retention.
+Carbon attribution is the same in both fates (organic − blank ocean C agrees to 3 significant
+figures at 150 and 160 °C). `"to_ocean"` without plume loss saturates the ocean in H₂, so it is an
+upper bound on ocean H₂. A third fate, `"retain_to_pore_volume"` (keep gas up to the pore volume,
+send the excess to the ocean), is planned once the metal corrosion rate (D6) is decided, since the
+bubble is metal H₂.
 
 **Pressure** from the profile. Pressure acts only through gases: under the LLNL aqueous model
 aqueous molar volumes are inactive, and the minerals' were stripped (`databases/README.md`), so
