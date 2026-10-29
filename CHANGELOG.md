@@ -983,3 +983,11 @@ One commit per item; each commit message has its pass check.
   full cometary ocean with a carbon-free porewater is slow, not stuck (1,459 s unseeded vs 394 s
   seeded; the earlier "> 20 min" was a timeout); a CO2-only ocean does stall unseeded (no progress
   in 3,000 s) and completes in 267 s seeded. `docs/MATRIX_2026-10-28.md`.
+
+### exchange-physics branch, 2026-10-29
+
+- **Darcy flow no longer multiplied by porosity** (PI): `flow_velocity` is the Darcy flux, per unit
+  total area, and `flow_area` is the core's whole surface, so the flow is q * A. The extra factor
+  made the exchange 1/porosity (3.125x) too small. Lucas's production case (k 1e-7, full core):
+  exchange per orbit 3.342e-5 -> 1.044e-4 of the porewater; circulation time 243 -> 78 yr; auto
+  grouping factor 242 -> 77. Every tidal run's exchange changes; earlier results need rerunning.

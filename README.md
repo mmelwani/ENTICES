@@ -224,8 +224,9 @@ mafic silicates (D7).
 
 **Flow driving: UNSOURCED as a single value; to be swept (D12, N6).** The Simulator's Darcy flux is
 q = (k/μ)·ΔP/L, with ΔP = `max_tidal_stress`·sin(2πt/P), L = `layer_thickness` and μ = 1.8e-3 Pa·s,
-so only k·ΔP/L matters. The exchanged fluid per orbit is |q| integrated over the orbit (times the
-core's surface area and the porosity), and every orbit's volume is treated as fluid that leaves the
+so only k·ΔP/L matters. The exchanged fluid per orbit is |q| integrated over the orbit times the
+core's surface area (q is per unit total area; until 2026-10-29 it was also multiplied by the
+porosity, 3.1× too small), and every orbit's volume is treated as fluid that leaves the
 rock and is replaced by ocean water: **the oscillating flow is assumed to give net exchange** (open
 question below). Production uses k = 1e-7 m², ΔP = 1e5 Pa, L = 194.2 km. The literature constrains
 ranges, each with its own limitation:
@@ -254,21 +255,21 @@ et al.'s aquifers and ~6 above Choblet et al.'s preferred range. Its flow, as th
 
 | k (m²) | ΔP (Pa) | mean \|q\| (cm/yr) | fluid per orbit / porewater | pore displacement amplitude | ocean circulation time |
 |---|---|---|---|---|---|
-| 1e-15 | 1e5 | 5.8e-4 | 3.3e-13 | 1.7e-8 m | 2.4e10 yr |
-| 1e-14 | 1e5 | 5.8e-3 | 3.3e-12 | 1.7e-7 m | 2.4e9 yr |
-| 1e-13 | 1e5 | 5.8e-2 | 3.3e-11 | 1.7e-6 m | 2.4e8 yr |
-| 1e-12 | 1e5 | 0.58 | 3.3e-10 | 1.7e-5 m | 2.4e7 yr |
-| 1e-10 | 1e5 | 58 | 3.3e-8 | 1.7e-3 m | 2.4e5 yr |
-| 1e-8 | 3e4 | 1.7e3 | 1.0e-6 | 5.1 cm | 8.1e3 yr |
-| 1e-7 | 1e5 (production) | 5.8e4 | 3.3e-5 | 1.7 m | 243 yr |
+| 1e-15 | 1e5 | 5.8e-4 | 1.0e-12 | 1.7e-8 m | 7.8e9 yr |
+| 1e-14 | 1e5 | 5.8e-3 | 1.0e-11 | 1.7e-7 m | 7.8e8 yr |
+| 1e-13 | 1e5 | 5.8e-2 | 1.0e-10 | 1.7e-6 m | 7.8e7 yr |
+| 1e-12 | 1e5 | 0.58 | 1.0e-9 | 1.7e-5 m | 7.8e6 yr |
+| 1e-10 | 1e5 | 58 | 1.0e-7 | 1.7e-3 m | 7.8e4 yr |
+| 1e-8 | 3e4 | 1.7e3 | 3.1e-6 | 5.1 cm | 2.6e3 yr |
+| 1e-7 | 1e5 (production) | 5.8e4 | 1.0e-4 | 1.7 m | 78 yr |
 
 The circulation time is the ocean's mass over the exchange per orbit, as
 `sim$get_summary_metrics()$circulation_time_years` reports it. Everything scales with k·ΔP: ΔP = 1e4
 Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close to the ~7 cm implied by
 Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
-2.4e8–2.4e10 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
+7.8e7–7.8e9 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
 2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
-faster than Choblet et al.
+faster than Choblet et al. (This table is the Darcy term alone; item 2 of `exchange-physics` caps it.)
 
 **The sweep (N6; designed, not run).**
 1. Treat the driving term as one quantity, reported three ways: k·ΔP/L, the mean Darcy flux, and
@@ -280,8 +281,7 @@ faster than Choblet et al.
 4. **Open question for the PI:** how the oscillating flow becomes net exchange. Liao et al.'s
    velocities imply ~7 cm of pore-fluid displacement per tide, back and forth. The code counts
    |q| over the whole orbit as one-way exchange, an upper bound, if back-and-forth flow brings the
-   same fluid back. Two code details belong to the same question. The flow is |q| × area × φ, though
-   a Darcy flux is already per unit total area (×φ makes it 3.1× smaller). And L, the layer
+   same fluid back. (The extra ×φ in the flow rate was a bug, fixed 2026-10-29.) L, the layer
    thickness (194.2 km), sets the pressure gradient, where Liao et al.'s pressure varies with
    latitude over the core's radius.
 

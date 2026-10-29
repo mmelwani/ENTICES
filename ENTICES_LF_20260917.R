@@ -816,10 +816,12 @@ GeometricUtils <- list(
 
 FlowUtils <- list(
   # Calculate Darcy flow
-  calculate_darcy_flow = function(k, grad_P, area, porosity,  #this function doesnt get used?
+  # q is the Darcy flux (volume per unit TOTAL area per unit time), so the volumetric flow through
+  # area A is q * A; porosity enters only in the pore velocity q / porosity. (Not called.)
+  calculate_darcy_flow = function(k, grad_P, area,
                                   viscosity = CONSTANTS$FLUID$viscosity) {
     q <- -(k/viscosity) * grad_P  # Specific discharge
-    Q <- q * area * porosity      # Volumetric flow rate
+    Q <- q * area                 # Volumetric flow rate
     return(Q)
   },
   
@@ -932,7 +934,10 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              results <- results %>%
                                mutate(
                                  flow_velocity = flow_velocity,
-                                 flow_rate_m3s = abs(flow_velocity) * flow_area * self$params$porosity,
+                                 # flow_velocity is the Darcy flux q (per unit total area) and flow_area the
+                                 # core's whole surface, so the flow is q * A. Until 2026-10-29 it was also
+                                 # multiplied by porosity, which made it 1/porosity (3.1x) too small.
+                                 flow_rate_m3s = abs(flow_velocity) * flow_area,
                                  flow_rate_Ls = flow_rate_m3s * 1000
                                )
                              print("Added flow rates")
