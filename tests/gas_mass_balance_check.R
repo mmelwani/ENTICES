@@ -9,7 +9,9 @@
 #  2. No-bubble identity. The same at 25 C with the Fe and Ni metal set to 0 (no H2 pulse), where no
 #     bubble forms: "retain" and "to_ocean" give the same output. Every element's system total in
 #     every row agrees to 1e-9 relative or within the run's mole-balance criterion (1e-8 x the
-#     element's whole-system total), and every numeric column to 1e-6: the ocean step of
+#     element's whole-system total), and every numeric column to 1e-6 relative or 1e-12 absolute
+#     (molal; PI 2026-10-29: with the smaller exchange of exchange-physics the ocean's H2 is 2.6e-8
+#     molal and differs by 4e-14, 1.6e-6 relative). The ocean step of
 #     "to_ocean" integrates the (zero) transfer over 1 s, so PHREEQC solves the same equilibrium from
 #     a different start, and species differ at its 1e-8 convergence criterion (measured 2026-10-28:
 #     5e-8 relative in dissolved H2, only in the ocean step).
@@ -96,7 +98,11 @@ nometal <- function(pqi) {
 }
 A <- run(nometal(gen("nb_retain", 25, "retain"))); B <- run(nometal(gen("nb_to_ocean", 25, "to_ocean")))
 num <- names(A$x)[vapply(A$x, is.numeric, logical(1))]
-d <- vapply(num, function(c) { a <- A$x[[c]]; b <- B$x[[c]]; k <- abs(a) > 1e-20 | abs(b) > 1e-20
+# a value passes if within 1e-6 relative or 1e-12 absolute (molal); d is each column's largest relative
+# difference among the values that are not within 1e-12 absolute
+d <- vapply(num, function(c) { a <- A$x[[c]]; b <- B$x[[c]]; k <- abs(a - b) > 1e-12
+  if (!any(k)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k]) }, 0)
+d_all <- vapply(num, function(c) { a <- A$x[[c]]; b <- B$x[[c]]; k <- abs(a) > 1e-20 | abs(b) > 1e-20
   if (!any(k)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k]) }, 0)
 el <- intersect(A$pq$totals, names(A$x)); ra <- which(A$x$state == "react")
 # an element passes if within 1e-9 relative, or within 1e-8 (the run's mole-balance convergence
@@ -110,9 +116,9 @@ for (i in ra) { a <- system_totals(A$x, i, el, A$pq$iom); b <- system_totals(B$x
 te <- length(bad) == 0
 vg <- max(c(A$x$Vgas_L, B$x$Vgas_L))
 check(vg == 0 && te && max(d) <= 1e-6,
-      sprintf("25 C, no metal: largest gas volume %g L; retain vs to_ocean: element totals within tolerance%s (largest relative %s, %s, row %s); %d columns max %.1e (%s)",
+      sprintf("25 C, no metal: largest gas volume %g L; retain vs to_ocean: element totals within tolerance%s (largest relative %s, %s, row %s); %d columns within 1e-6 relative or 1e-12 absolute (largest relative beyond 1e-12 absolute %.1e, %s; largest relative overall %.1e, %s)",
               vg, if (te) "" else paste0(" EXCEPT ", paste(bad, collapse = " ")), signif(as.numeric(worst[["rel"]]), 2), worst["el"], worst["row"],
-              length(d), max(d), names(d)[which.max(d)]))
+              length(d), max(d), names(d)[which.max(d)], max(d_all), names(d_all)[which.max(d_all)]))
 
 if (nzchar(Sys.getenv("KEEP"))) cat("kept:", od, "\n") else unlink(od, recursive = TRUE)
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))
