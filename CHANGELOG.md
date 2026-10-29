@@ -961,3 +961,8 @@ One commit per item; each commit message has its pass check.
   inside, 1.880 (`"retain"`) below. Iess et al. (2014)'s ~2.4 g/cm3 is an example structure for
   C/MR2 = 0.335, not a measurement. The config's radius, mass, core radius and core density are the
   PlanetProfile profile's; its [citation needed] now says so (neither paper gives those values).
+- **Citations checked against the PDFs** (PI): Casey, Hochella & Westrich (1993) GCA 57 (tephroite;
+  not the Nature 366 chain-silicate paper); Pincus, Peters, Yi & Kermani (2026); Glein & Waite (2020);
+  White & Brantley (2003). The tephroite Ea fit (-60.11 ln(pH) + 106.17) is from Casey Fig. 4's
+  labels (54, 26, 22, 4 kJ/mol; 0 at pH 6.2), not the appendix rate table; the REM now says it
+  reaches 0 at pH 5.85. README section 7 compares the oceans' carbon with Glein & Waite (2020).

@@ -1928,10 +1928,12 @@ Tephroite
   11  REM value -- checked here, not assumed). For tephroite: -5.4 + 0.47*2 =
   12  REM -4.46. Hand-checked: 10^(-4.46)*ACT(H+)^0.47 at pH2 = 10^(-5.4), exact.
   13  REM
-  14  REM Ea: Casey find Ea that decreases with increasing pH, "Ea < 4" at pH 6.2. 
-  15  REM We used the pH, Ea pairs from Casey\'s Fig 4, assuming Ea = 0 at pH 6.2. 
-  16  REM A logarithmic fit to these 5 data points is used to calculate Ea, and we 
-  17  REM require Ea >= 0 (so generally Ea=0 for pH>~6).  
+  14  REM Ea: Casey et al. (1993) Fig. 4 gives Eexp = 54, 26, 22 and 4 kJ/mol at
+  15  REM pH 2.5, 3.5, 4.2 and 5.15, and < 4 at pH 6.2 (a slope not distinct from 0).
+  16  REM Taking 0 at pH 6.2, a least-squares fit Ea = a ln(pH) + b to these 5 points
+  17  REM gives a = -60.11, b = 106.17 (not the appendix rate table: see PROGRESS).
+  18  REM The fit is not forced through (6.2, 0): it reaches 0 at pH 5.85 and is
+  19  REM -3.5 at pH 6.2. Ea >= 0 is imposed, so Ea = 0 for pH > 5.85.
   22  REM
   23  REM ANOXIC CONDITIONS ONLY. Casey\'s experiments were run rigorously
   24  REM O2-free (N2-degassed, Fe-filing/hot-Cu scrubbed, <6e-6 mol/L O2);

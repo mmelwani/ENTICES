@@ -210,7 +210,8 @@ organics will be swept.
 
 **Mineral rates.** Palandri & Kharaka (2004) for the silicates, feldspars and troilite (as hexagonal
 pyrrhotite). Tephroite: log k(H⁺) = −5.4 at pH 2, n = 0.47 (Pincus et al. 2026, Table S1, citing
-Casey et al. 1993), with an Ea that falls with pH (a fit to Casey et al.'s Fig. 4) and no neutral
+Casey et al. 1993), with an Ea that falls with pH (a fit to Casey et al.'s Fig. 4: 54, 26, 22 and
+4 kJ/mol at pH 2.5–5.15, 0 taken at pH 6.2; zero above pH 5.85) and no neutral
 branch: the rate at pH > 7 is held at its pH-7 value.
 
 **Surface areas: UNSOURCED.** Forsterite, enstatite, diopside and tephroite are at 0.1 m²/g; albite,
@@ -331,6 +332,17 @@ H₂ and organic Mtg under `"to_ocean"`; `organic_contribution()` reports it.
 Use `carbon_by_oxidation_state()` (`phreeqc_tools.R`), not PHREEQC's valence totals, to see which
 carbon is reduced: PHREEQC files formate, acetate and other organics under C(4).
 
+**Comparing with Enceladus's ocean carbonate.** Glein & Waite (2020) adopt Postberg et al.
+(2009)'s salt envelopes, 0.2 molal Cl with 0.1 molal total dissolved carbonate (TDC = HCO₃⁻ +
+CO₃²⁻, without CO₂(aq)) or 0.05 molal Cl with 0.01 molal TDC, and the pH range 8.5–9, which gives
+log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's oceans:
+- the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 it is almost all CO₂(aq)
+  (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no Cl;
+- the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 1.3e-7 molal DIC at pH
+  11.3, of which the organics contribute 1.29e-7 molal. Whether the organic contribution can
+  approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
+  for.
+
 ## 8. Known limitations and open decisions
 
 `docs/PROGRESS.md` Part 10 lists the decisions (D6 metal corrosion rate, D7 surface areas, D9 spin-up,
@@ -373,16 +385,17 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   6, 245. doi:10.3847/PSJ/ae0cab
 - Burnham, A.K. (2019). Kinetic models of vitrinite, kerogen, and bitumen reflectance. *Org.
   Geochem.* 131, 50–59. doi:10.1016/j.orggeochem.2019.03.007
-- Casey, W.H., et al. (1993). *Geochim. Cosmochim. Acta* 57, 785–793 [citation needed: authors and
-  title; cited via Pincus et al. 2026].
+- Casey, W.H., Hochella, M.F., Jr., Westrich, H.R. (1993). The surface chemistry of manganiferous
+  silicate minerals as inferred from experiments on tephroite (Mn₂SiO₄). *Geochim. Cosmochim.
+  Acta* 57, 785–793. (Not Casey et al. 1993, *Nature* 366, on chain-silicate leaching.)
 - Delarue, C., Reynard, B., Sotin, C., Fellah, C., Cardon, H., Montagnac, G., Confortini, G.,
   Ferreiro Mählmann, R. (2026). Metamorphic and density evolution of carbonaceous matter: a
   potential cometary composition of Titan. *Earth Planet. Sci. Lett.* 691, 120227 (Eq. 10: IOM
   density from H/C).
 - Fray, N., Schmitt, B. (2009). Sublimation of ices of astrophysical interest: a bibliographic
   review. *Planet. Space Sci.* 57, 2053–2080.
-- Glein, C.R., Waite, J.H. (2020). *Geophys. Res. Lett.* 47, e2019GL085885 [citation needed: the
-  title and the DIC estimate, from the paper].
+- Glein, C.R., Waite, J.H. (2020). The carbonate geochemistry of Enceladus' ocean. *Geophys. Res.
+  Lett.* 47, e2019GL085885. doi:10.1029/2019GL085885
 - Green, E.C.R., Holland, T.J.B., Powell, R., Weller, O.M., Riel, N. (2025). *J. Petrol.*,
   doi:10.1093/petrology/egae079 (its `tc-ds636` dataset cross-checks the molar volumes).
 - Iess, L., Stevenson, D.J., Parisi, M., Hemingway, D., Jacobson, R.A., Lunine, J.I., Nimmo, F.,
@@ -407,8 +420,10 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
   *Astrobiology* 5, 515–535.
 - Peng, D.-Y., Robinson, D.B. (1976). A new two-constant equation of state. *Ind. Eng. Chem.
   Fundam.* 15, 59–64.
-- Pincus et al. (2026). *ACS Earth Space Chem.* 10, 1174–1184 [citation needed: authors and title,
-  as cited in the tephroite rate law].
+- Pincus, L.N., Peters, C.A., Yi, C., Kermani, H.M. (2026). Manganese and cobalt in olivine-group
+  silicates offer potential for natural H₂ generation. *ACS Earth Space Chem.* 10, 1174–1184.
+  doi:10.1021/acsearthspacechem.5c00301 (Table S1: tephroite log k(H⁺) = −5.4, from Casey et al.
+  1993)
 - Rubin, M., et al. (2019). Elemental and molecular abundances in comet 67P/Churyumov-Gerasimenko.
   *Mon. Not. R. Astron. Soc.* 489, 594–607. doi:10.1093/mnras/stz2086
 - Sloan, E.D., Koh, C.A. (2007). *Clathrate Hydrates of Natural Gases*, 3rd ed. CRC Press. Table
@@ -416,5 +431,6 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
 - Styczinski, M.J., Vance, S.D., Melwani Daswani, M. (2023). PlanetProfile: Self-consistent interior
   structure modeling for ocean worlds and rocky dwarf planets in Python. *Earth Space Sci.* 10,
   e2022EA002748. doi:10.1029/2022EA002748
-- White, A.F., Brantley, S.L. (2003) [citation needed: the lab–field weathering-rate discrepancy
-  paper].
+- White, A.F., Brantley, S.L. (2003). The effect of time on the weathering of silicate minerals:
+  why do weathering rates differ in the laboratory and field? *Chem. Geol.* 202, 479–506.
+  doi:10.1016/j.chemgeo.2003.03.001

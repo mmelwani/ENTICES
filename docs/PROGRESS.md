@@ -722,6 +722,15 @@ primary** (schreibersite has no log K).
   `max(ACT("H+"), 1e-7)`. That gives a floor equal to the pH-7 rate above pH 7,
   with no summed neutral term.
 - **Ea is pH-dependent:** `Ea = −60.11·ln(pH) + 106.17` kJ/mol, floored at 0.
+  - Origin (checked 10-29 against Casey, Hochella & Westrich 1993, GCA 57,
+    785–793): a least-squares fit of Ea against ln(pH) to Fig. 4's labels,
+    54, 26, 22 and 4 kJ/mol at pH 2.5, 3.5, 4.2 and 5.15, with 0 taken at
+    pH 6.2 (Fig. 4 says "< 4"). That reproduces −60.11 and 106.17 exactly.
+  - Not from the appendix rate table
+    (`Casey1993_Appendix_tephroite_dissolution_rates.csv`): an Arrhenius fit
+    to its 25/35/45 °C replicate sets gives 58, 33, 47, 10 and −5 kJ/mol
+    at those pH values, and −66.8·ln(pH) + 122.8.
+  - The fit is not forced through (6.2, 0): it reaches 0 at pH 5.85.
   - It reproduces Casey's quoted temperature sensitivity: 2.3×, 1.5× and 1.1×
     per 10 K at pH 2, 3.5 and 5.
   - It implies **no temperature dependence above pH 5.85**, i.e. at all
@@ -1066,8 +1075,13 @@ an unrealistic upper bound (~2.6 molal CO₂ + 1.7 molal CO).
 `initial_ocean` (and `pore_gas_fate`) to the run and the blank. The ocean
 starts with ~0.087 molal DIC, so the organic contribution is organic − blank
 and can't be read from the ocean's carbon. Comparison with Glein & Waite
-(2020): [citation needed: their Cassini-based DIC estimate; the PDF was not
-available]. `organic_contribution()` also reports the ocean gas phase (mol).
+(2020), GRL 47, e2019GL085885 (README §7, Carbon): they adopt Postberg et
+al. (2009)'s envelopes, 0.2 molal Cl with 0.1 molal TDC (HCO₃⁻ + CO₃²⁻) or
+0.05 molal Cl with 0.01 molal TDC, and prefer pH 8.5–9, log a(CO₂) −4.6 to
+−3.2. The cometary option has 0.087 molal DIC, but at pH 1.85 it is 0.0866
+molal CO₂(aq) and 2e-6 molal HCO₃⁻. The pure-water default's organic
+contribution is 1.29e-7 molal after 12 orbits at 160 °C; the long runs (N8)
+are what can say whether it approaches the observed range. `organic_contribution()` also reports the ocean gas phase (mol).
 
 **Trace C seed (`trace_C_molal`, default NULL).** Pure water at 25 °C fails on
 ~10⁻²¹ mol of IOM carbon in the ocean step. A seed of **1e-14 mol/kgw**
