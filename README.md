@@ -142,8 +142,10 @@ Run everything from the repo root.
       at 25 °C in the brine); use the CSV's `si_` columns.
     - *B-dot activities above ~1 molal:* the 25 °C NaOH porewater brine reaches I ≈ 2.4 for the
       first ~3×10⁴ orbits; treat its pH and activities as qualitative.
-    - *Disk space:* `KNOBS -logfile true` (every template) writes `phreeqc.log` with every solver
-      iteration, ~300 MB per 12-orbit run; set it to `false` if you don't need it.
+    - *Disk space:* `KNOBS -logfile` is off by default (PI, 10-29). Every generator takes
+      `logfile = TRUE` to switch it on for convergence debugging: `phreeqc.log` then holds every
+      solver iteration, 258–346 MB per 12-orbit production run at 150–160 °C (~300 MB), and 11.9 GB
+      from one stalled run.
 
 ## 4. Worked examples
 

@@ -909,9 +909,10 @@ sets PHREEQC's mole-balance criterion to 1e-12; with a gas phase the metal-pulse
 step then ran > 15 min. A KNOBS after SELECTED_OUTPUT restores 1e-8 (the last
 setting read wins, read.cpp; the manual says "the smaller of"). Gas-phase runs
 are ~3.5× slower than before: Lucas's 12-orbit case at 150–160 °C takes
-320–515 s (116 s with gases as equilibrium phases). `KNOBS -logfile true`
-(every template) writes every solver iteration: ~300 MB per 12-orbit run, and
-11.9 GB from one stalled run. Consider turning it off (not changed here).
+320–515 s (116 s with gases as equilibrium phases). `KNOBS -logfile` writes
+every solver iteration: ~300 MB per 12-orbit run, and 11.9 GB from one stalled
+run. **Off by default since 10-29** (PI); `logfile = TRUE` in any generator
+turns it on.
 
 ## PHREEQC version
 

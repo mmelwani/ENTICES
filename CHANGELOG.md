@@ -966,3 +966,6 @@ One commit per item; each commit message has its pass check.
   White & Brantley (2003). The tephroite Ea fit (-60.11 ln(pH) + 106.17) is from Casey Fig. 4's
   labels (54, 26, 22, 4 kJ/mol; 0 at pH 6.2), not the appendix rate table; the REM now says it
   reaches 0 at pH 5.85. README section 7 compares the oceans' carbon with Glein & Waite (2020).
+- **KNOBS `-logfile` off by default** (PI): every generator takes `logfile = FALSE`; `TRUE` writes
+  `phreeqc.log` (258-346 MB per 12-orbit production run; 11.9 GB from one stalled run).
+  tests/pressure_check.R checks all six generators.

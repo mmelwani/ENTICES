@@ -8,6 +8,7 @@
 #  3. A missing profile is an error in every generator (no fallback pressure).
 #  4. Restarts compare their pressures with the parent's header: a match passes, a mismatch is an
 #     error (a warning with allow_pressure_change = TRUE), an unstamped parent is a warning.
+#  5. KNOBS -logfile is false unless logfile = TRUE, in every generator (2026-10-29).
 #
 # Generates inputs only; nothing is run in PHREEQC.
 # Run from the repo root:  Rscript tests/pressure_check.R
@@ -127,6 +128,23 @@ for (tidal in c(TRUE, FALSE)) {
   check(!is.null(r$file) && grepl("not stamped", w_msg, fixed = TRUE) &&
           "# parent pressures: unknown (not checked)" %in% readLines(r$file),
         sprintf("%s: an unstamped parent is a warning", kind))
+}
+
+# 5. KNOBS -logfile: false by default in every generator (restarts included), true with logfile = TRUE.
+logfile_line <- function(f) grep("^   -logfile ", readLines(f), value = TRUE)
+for (nm in names(gens)) {
+  g <- gens[[nm]]
+  on <- quiet(do.call(ph[[g$fn]], c(list(output_dir = file.path(od, "logfile", nm), logfile = TRUE), g$args)))
+  check(identical(logfile_line(files[[nm]]), "   -logfile false") && identical(logfile_line(on), "   -logfile true"),
+        sprintf("%-15s -logfile false by default, true with logfile = TRUE", nm))
+}
+for (tidal in c(TRUE, FALSE)) {
+  kind <- if (tidal) "tidal_kinetic_restart" else "bulk_kinetic_restart"
+  csv <- stub_parent(file.path(od, "logfile", kind), pressure_header_lines(261.2, 66.7), tidal)
+  off <- restart(tidal, csv)$file
+  on <- restart(tidal, csv, logfile = TRUE, suffix = "_log")$file
+  check(identical(logfile_line(off), "   -logfile false") && identical(logfile_line(on), "   -logfile true"),
+        sprintf("%-15s -logfile false by default, true with logfile = TRUE", kind))
 }
 
 unlink(od, recursive = TRUE)

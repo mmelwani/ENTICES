@@ -133,6 +133,14 @@ trace_C_header_line <- function(trace_C_molal) {
   sprintf("# trace_C_molal: %s", if (is.null(trace_C_molal)) "NULL (no initial C)" else
     sprintf("%.6e mol/kgw C added to every initial SOLUTION", trace_C_molal))
 }
+# KNOBS -logfile (the generators' logfile argument). PHREEQC's phreeqc.log records every solver
+# iteration: 258-346 MB per 12-orbit production run at 150-160 C, and 11.9 GB from one stalled run.
+# The templates write "-logfile false"; logfile = TRUE switches it on (for convergence debugging).
+knobs_logfile <- function(content, logfile = FALSE) {
+  if (!is.logical(logfile) || length(logfile) != 1 || is.na(logfile)) stop("logfile must be TRUE or FALSE")
+  if (!logfile) return(content)
+  gsub("\n   -logfile false\n", "\n   -logfile true\n", content)
+}
 
 # A restart's record of its parent's initial fluid: the trace_C_molal and initial_ocean header lines
 # of the parent .pqi (prev_csv with .csv -> .pqi), re-emitted as "# parent <key>: <value>". A parent
@@ -1459,7 +1467,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
-                                                                     pore_gas_fate = c("to_ocean", "retain")) {
+                                                                     pore_gas_fate = c("to_ocean", "retain"), logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
@@ -1537,7 +1545,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                                 pore_gas_fate = pore_gas_fate)
 
                                      # Write to file
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
 
                                      return(filename)
                                    },
@@ -1792,7 +1800,7 @@ TITLE Enceladus hydrothermal simulation
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Organic content: {self$organic_wt_percent} wt.%
@@ -2523,7 +2531,8 @@ KNOBS
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                            initial_ocean = "pure_water", charge_balance = NULL,
-                                                                           pore_gas_fate = c("to_ocean", "retain"), trace_C_molal = NULL) {
+                                                                           pore_gas_fate = c("to_ocean", "retain"), trace_C_molal = NULL,
+                                                                           logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
@@ -2539,7 +2548,7 @@ KNOBS
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
                                                                                          initial_ocean = initial_ocean, charge_balance = charge_balance,
                                                                                          pore_gas_fate = pore_gas_fate, trace_C_molal = trace_C_molal)
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
@@ -2675,7 +2684,7 @@ TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {trace_C_header_line(trace_C_molal)}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: equilibrium (primary minerals in EQUILIBRIUM_PHASES, no kinetics)
@@ -3153,7 +3162,8 @@ KNOBS
                                                                                  water_rock_ratio = NULL,
                                                                                  water_temp       = "ocean",
                                                                                  suffix = "",
-                                                                                 CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150) {
+                                                                                 CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150,
+                                                                                 logfile = FALSE) {
                                      mode <- match.arg(mode)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -3294,7 +3304,7 @@ TITLE {.pqi_title}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.header_lines}
 
@@ -3469,7 +3479,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
@@ -3505,7 +3515,8 @@ END
                                      ch4_cutoff_C        = 150,
                                      rec_eqb_minerals    = FALSE,
                                      rec_eqb_margin      = 2,
-                                     trace_C_molal       = NULL
+                                     trace_C_molal       = NULL,
+                                     logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
@@ -3905,7 +3916,7 @@ TITLE {.pqi_title}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.header_lines}
 {rec_eqb_note}
@@ -4085,7 +4096,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
@@ -4119,7 +4130,8 @@ END
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
                                      ch4_cutoff_C        = 150,
-                                     allow_pressure_change = FALSE
+                                     allow_pressure_change = FALSE,
+                                     logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -4582,7 +4594,7 @@ TITLE {.pqi_title}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.thick_line}
 # Mode: {.mode_comment}
@@ -4667,7 +4679,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
@@ -4718,7 +4730,8 @@ END
                                      carbon_mode         = NULL,
                                      ch4_cutoff_C        = 150,
                                      allow_pressure_change = FALSE,
-                                     pore_gas_fate       = c("to_ocean", "retain")
+                                     pore_gas_fate       = c("to_ocean", "retain"),
+                                     logfile             = FALSE
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -5305,7 +5318,7 @@ TITLE Enceladus tidal kinetic (restart)
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
@@ -5486,7 +5499,7 @@ KNOBS
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
                                                                       ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    }
                                  )
