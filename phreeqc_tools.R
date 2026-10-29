@@ -262,7 +262,8 @@ restrict_to_database <- function(text, database, base = NULL) {
 #               the gas phases of 2026-10-28, the pore gas bubble: rho_pore = (1 - s_g) rho_fluid +
 #               s_g rho_gas, with gas saturation s_g = min(Vgas / Vpore, 1) (Vgas_Vpore column) and
 #               rho_gas the bubble's mass (sum of its g_ moles x molar mass) over its volume. s_g is
-#               capped at 1: a bubble larger than the pores (pore_gas_fate = "retain") is not physical.
+#               capped at 1: a bubble larger than the pores (pore_gas_fate = "retain") is not physical,
+#               and the excess is not counted. Such rows are flagged (gas_exceeds_pores) and warned of.
 
 MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
 # IOM density (g/cm3) from its atomic H/C: Delarue et al. (2026), EPSL 691, 120227, Eq. 10,
@@ -388,12 +389,13 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   kin_cols <- grep("^k_", names(x), value = TRUE)
   kin_min <- intersect(sub("^k_", "", kin_cols), volumes$phase)
   rows <- list(); bd <- list()
-  add <- function(label, time, moles, iom_g, hc, rho_f, s_g = 0, rho_g = 0) {
+  add <- function(label, time, moles, iom_g, hc, rho_f, s_g = 0, rho_g = 0, vg_vp = 0) {
     rho_iom <- iom_rho(hc)
     s <- solid_density(moles, iom_g, rho_iom, volumes)
     rho_p <- (1 - s_g) * rho_f + s_g * rho_g
     rows[[length(rows) + 1]] <<- data.frame(row = label, Time_Years = time, rho_solid = s$rho_solid,
                                              rho_fluid = rho_f, gas_saturation = s_g, rho_gas = rho_g,
+                                             Vgas_Vpore = vg_vp, gas_exceeds_pores = vg_vp > 1,
                                              rho_bulk = (1 - porosity) * s$rho_solid + porosity * rho_p,
                                              solid_mass_g = s$mass_g, solid_volume_cm3 = s$volume_cm3, iom_g = iom_g,
                                              iom_HC = hc, iom_density = rho_iom)
@@ -411,14 +413,19 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
     rho_f <- if (!is.null(fluid_density)) fluid_density else if (!is.null(rho_col)) as.numeric(x[[rho_col]][r]) else 1.0
     # the pore gas bubble (gas phase in use on this REACT row)
     vg <- if ("Vgas_L" %in% names(x)) as.numeric(x$Vgas_L[r]) else 0
-    s_g <- if (vg > 0 && "Vgas_Vpore" %in% names(x)) min(as.numeric(x$Vgas_Vpore[r]), 1) else 0
+    vg_vp <- if (vg > 0 && "Vgas_Vpore" %in% names(x)) as.numeric(x$Vgas_Vpore[r]) else 0
+    s_g <- min(vg_vp, 1)                                   # gas beyond the pore volume is not counted
     mg <- sum(vapply(grep("^g_", names(x), value = TRUE), function(k) {
       fe <- formula_elements(sub("\\(g\\)$", "", sub("^g_", "", k)))
       as.numeric(x[r, k]) * sum(gfw[names(fe)] * fe) }, 0))  # g
     rho_g <- if (vg > 0) mg / (vg * 1000) else 0           # g / cm3
-    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, iom_hc(n_iom), rho_f, s_g, rho_g)
+    add(as.character(r), if ("Time_Years" %in% names(x)) as.numeric(x$Time_Years[r]) else NA_real_, mol, iom_g, iom_hc(n_iom), rho_f, s_g, rho_g, vg_vp)
   }
-  list(summary = do.call(rbind, rows), breakdown = do.call(rbind, bd))
+  s <- do.call(rbind, rows)
+  if (any(s$gas_exceeds_pores))
+    warning(sprintf("bulk_density: the pore gas exceeds the pore volume on %d of %d rows (Vgas/Vpore up to %.2f); gas saturation is capped at 1 and the excess is not counted (see gas_exceeds_pores)",
+                    sum(s$gas_exceeds_pores), nrow(s), max(s$Vgas_Vpore)))
+  list(summary = s, breakdown = do.call(rbind, bd))
 }
 
 # ---- Element totals of the whole system ---------------------------------------

@@ -954,3 +954,5 @@ One commit per item; each commit message has its pass check.
   Replaces the UNSOURCED 1.4 g/cm3. Lucas's 160 C case: rho_solid 2.977 -> 2.920 g/cm3 at t = 0
   (-1.9%), 2.806 -> 2.759 at orbit 12; rho_bulk 2.344 -> 2.305 at t = 0. Compression left out
   (K0 = 10.2 GPa: 0.25% at 26 MPa). Summary gains `iom_HC` and `iom_density`.
+- **`bulk_density()` flags Vgas > Vpore** (PI): new `Vgas_Vpore` and `gas_exceeds_pores` summary
+  columns and a warning; gas beyond the pore volume is not counted (s_g capped at 1, as before).

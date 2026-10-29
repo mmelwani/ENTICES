@@ -289,6 +289,11 @@ d$breakdown   # per phase: mass and volume, and their fractions
   is PHREEQC's solution density (`Rho_soln`): under the LLNL aqueous model PHREEQC does not compute
   water's density from T and P, so it is ~1 g/cm³ for water at any temperature (give
   `fluid_density =` to override).
+- Gas beyond the pore volume is not counted (s_g is capped at 1; it is not rock volume either).
+  Rows where Vgas > Vpore are flagged in the `gas_exceeds_pores` column (with `Vgas_Vpore`), and
+  `bulk_density()` warns when there are any: their ρ_bulk is for pores full of gas, not a physical
+  state. In Lucas's 160 °C case that is the first REACT row under `"to_ocean"` (2.14 pore volumes,
+  before the transfer) and every row under `"retain"` (up to 2.26).
 
 For Lucas's 160 °C case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
 at orbit 12, ρ_solid 2.759 and ρ_bulk 2.255 (`"to_ocean"`) or 1.880 (`"retain"`, the bubble filling
