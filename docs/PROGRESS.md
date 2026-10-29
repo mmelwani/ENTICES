@@ -1183,7 +1183,7 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
 | D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ pending the PI** |
 | D9 | **Spin-up** before tidal cycling; doubles as the King et al. forward check (reconstruction §8 item 8) | 10-06 review §4 | Worth doing as a modelling option; not needed for convergence |
-| D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; the §8 addendum is in the claude.ai Project (`claude/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md`) | **The PI is checking it:** a zero-filled average reproduces Table 9's sulfur (addendum §8). The addendum could not be copied into `docs/`: this session has no access to the Project |
+| D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
 
 ## Next actions (code and tests), in order
