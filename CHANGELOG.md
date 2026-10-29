@@ -1016,3 +1016,11 @@ One commit per item; each commit message has its pass check.
   production 2.5e-6); with it all converge. A 160 C orbit is unchanged (1e-8 relative); set globally
   it moved the porewater m_H2S by 0.9%, so it is ocean-step only. The 25 C 1-orbit and 2-orbit runs
   give 0 errors. Trace seeds were not tried (not needed).
+- **The reacting box is the skin** (PI): `Simulator$new(reactive_depth = "skin")` (default) or "layer" (old).
+  `sim$reactive_thickness()` = min(L, delta) sets the porewater T and P (profile means over it), the rock
+  mass and pore volume, and the exchange fraction (relative to the skin's pore volume). Poro binds at
+  every k: x_half 2.1e-6 (k 1e-14 to 1e-11, skin 28-883 m, 1.4 C, 66.7 atm; circulation 4.5e6-1.4e5 yr)
+  and 1.4e-6 at production (88 km, 36.7 C, 177.3 atm; 3,410 yr). Tidal pumping alone reaches only cold
+  near-seafloor rock at low k. Header "Reacting box" line; pressure stamp "(profile mean over the
+  reacting box)". pressure_check and initial_fluid_check use reactive_depth = "layer" for their
+  full-layer pressures; exchange_check gains skin-box checks.

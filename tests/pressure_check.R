@@ -23,7 +23,9 @@ check <- function(ok, what) {
 }
 quiet <- function(expr) { invisible(capture.output(r <- suppressMessages(expr))); r }
 
-sim <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new())
+# reactive_depth = "layer": these checks are of the profile mean over the whole 194.2 km layer (section 6
+# checks the default skin box).
+sim <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new(), reactive_depth = "layer")
 quiet(sim$run_simulation())
 ph <- quiet(PhreeqcIntegrator$new(sim))
 invisible(quiet(ph$calculate_phreeqc_parameters(organic_wt_percent = 0)))
@@ -47,7 +49,7 @@ pressure_lines <- function(f) {
   }
   rp <- function(n) { i <- grep(sprintf("^REACTION_PRESSURE %d$", n), l); if (length(i)) trimws(l[i + 1]) else NA_character_ }
   list(s1 = sol(1), s2 = sol(2), rp1 = rp(1), rp2 = rp(2),
-       stamp = all(c("# Porewater pressure: 261.2 atm (profile mean over the permeable layer)",
+       stamp = all(c("# Porewater pressure: 261.2 atm (profile mean over the reacting box)",
                      "# Ocean pressure: 66.7 atm (profile, ocean floor)") %in% l[1:10]),
        use_rp = sum(l == "USE reaction_pressure 1"), use_rp2 = sum(l == "USE reaction_pressure 2"))
 }
@@ -146,6 +148,16 @@ for (tidal in c(TRUE, FALSE)) {
   check(identical(logfile_line(off), "   -logfile false") && identical(logfile_line(on), "   -logfile true"),
         sprintf("%-15s -logfile false by default, true with logfile = TRUE", kind))
 }
+
+# 6. The default skin box (reactive_depth = "skin"): at k = 1e-7 the box is the top skin depth (88.3 km),
+#    and the porewater pressure is the profile mean over it, 177.3 atm (the ocean pressure is unchanged).
+sk <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new()); quiet(sk$run_simulation())
+phs <- quiet(PhreeqcIntegrator$new(sk)); invisible(quiet(phs$calculate_phreeqc_parameters(organic_wt_percent = 15)))
+fs <- quiet(phs$generate_phreeqc_input_tidal_kinetic(output_dir = file.path(od, "skin"), mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 100))
+ps <- pressure_lines(fs)
+check(abs(sk$reactive_thickness() / 88288 - 1) < 1e-3 && identical(ps$s1, "177.3") && identical(ps$s2, "66.7") &&
+        any(grepl("^# Reacting box: top 8.829e\\+04 m of the 1.942e\\+05 m layer", readLines(fs))),
+      sprintf("skin box: top %.4g m; SOLUTION 1 %s atm, SOLUTION 2 %s atm", sk$reactive_thickness(), ps$s1, ps$s2))
 
 unlink(od, recursive = TRUE)
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))

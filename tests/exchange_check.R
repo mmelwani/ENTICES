@@ -46,7 +46,7 @@ check(abs(f_full - 0.19245 * 0.6) < 1e-5 && abs(f_thin - 0.19245) < 1e-4,
 cfg <- EnceladusConfig$new()
 expect <- c("1e-14" = "darcy", "1e-13" = "darcy", "1e-12" = "darcy", "1e-11" = "darcy", "1e-07" = "poro")
 for (k in c(1e-14, 1e-13, 1e-12, 1e-11, 1e-7)) {
-  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
+  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
   x <- sim$exchange; m <- quiet(sim$get_summary_metrics())
   pw <- 1000 * sim$params$porosity * x$V_layer
   circ <- cfg$get_derived_properties()$ocean_mass / m$exchanging_fluid_mass * cfg$orbital_period / (365.25 * 24 * 3600)
@@ -61,7 +61,7 @@ for (k in c(1e-14, 1e-13, 1e-12, 1e-11, 1e-7)) {
 #     moduli; the Darcy volume over L_eff = min(L, delta), (k/mu)(dP/L_eff) A T/pi, equals the code's; and the
 #     storage cross-check S dP delta A is the Darcy volume / (2/f), f = (K_m + 4/3 mu)/(K_u + 4/3 mu).
 for (k in c(1e-14, 1e-7)) {
-  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
+  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
   a <- cfg$biot_alpha; phi <- 0.32; Ks <- 10e9; Kf <- 2.2e9; mu <- cfg$core_rigidity
   Km <- (1 - a) * Ks; Ku <- Km + a^2 * Ks * Kf / (phi * Ks + (a - phi) * Kf)
   c_liao <- k / 1.8e-3 * (Km + 4/3 * mu) * (Ku - Km) / (a^2 * (Ku + 4/3 * mu))
@@ -71,6 +71,18 @@ for (k in c(1e-14, 1e-7)) {
   check(abs(x$delta / delta - 1) < 1e-9 && abs(x$dV_darcy / darcy - 1) < 2e-3 && abs(x$dV_darcy / x$dV_storage - 2 / f) < 0.01,
         sprintf("k = %.0e: skin depth %.4g m (Table A1: %.4g); darcy %.4g m3 (by hand %.4g); darcy / storage %.3f (2/f = %.3f)",
                 k, x$delta, delta, x$dV_darcy, darcy, x$dV_darcy / x$dV_storage, 2 / f))
+}
+
+# 3c. The default skin box: the reacting box is the top L_eff = min(L, delta); V_pore = phi * V_skin, and the
+#     poroelastic volume uses the skin's degree-2 factor. Poro binds at every k (the skin's pore volume scales
+#     with delta as the Darcy volume does, and alpha eps_v / phi ~ 2e-6 is below what drains).
+for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
+  sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
+  x <- sim$exchange; R <- cfg$core_radius; Le <- min(194200, x$delta)
+  Vs <- 4 / 3 * pi * (R^3 - (R - Le)^3)
+  ok <- abs(sim$reactive_thickness() / Le - 1) < 1e-12 && abs(x$V_pore / (0.32 * Vs) - 1) < 1e-12 &&
+    abs(x$dV_poro / (cfg$biot_alpha * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs) - 1) < 1e-12 && x$binding == "poro"
+  check(ok, sprintf("skin box, k = %.0e: L_eff %.4g m; x_half %.3e (%s)", k, Le, x$x_half, x$binding))
 }
 
 # 4. Pore-volume limit.
@@ -87,7 +99,8 @@ od <- file.path(tempdir(), "exchange_check"); unlink(od, recursive = TRUE)
 f <- quiet({ s <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg); s$run_simulation()
   ph <- PhreeqcIntegrator$new(s); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
   ph$generate_phreeqc_input_tidal_kinetic(output_dir = od, mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 25, trace_C_molal = 1e-14) })
-check(any(grepl("^# Exchange per half-orbit .*limited by poro", readLines(f))), "tidal_kinetic header stamps the exchange (limited by poro)")
+check(any(grepl("^# Exchange per half-orbit .*limited by poro", readLines(f))) && any(grepl("^# Reacting box: top ", readLines(f))),
+      "tidal_kinetic header stamps the reacting box and the exchange (limited by poro)")
 unlink(od, recursive = TRUE)
 
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))

@@ -22,7 +22,8 @@ check <- function(ok, what) {
 }
 quiet <- function(expr) { invisible(capture.output(r <- suppressMessages(expr))); r }
 
-sim <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new())
+# reactive_depth = "layer": the porewater pressure checked is the profile mean over the whole layer.
+sim <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new(), reactive_depth = "layer")
 quiet(sim$run_simulation())
 ph <- quiet(PhreeqcIntegrator$new(sim))
 invisible(quiet(ph$calculate_phreeqc_parameters(organic_wt_percent = 0)))

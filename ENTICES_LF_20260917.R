@@ -575,7 +575,7 @@ profile_conditions <- function(profile_file, layer_thickness) {
 
 # The two pressure lines stamp_pqi_header() writes, and parent_pressures_atm() reads back.
 pressure_header_lines <- function(pore_pressure_atm, ocean_pressure_atm) {
-  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the permeable layer)", pore_pressure_atm),
+  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the reacting box)", pore_pressure_atm),
     sprintf("# Ocean pressure: %.1f atm (profile, ocean floor)", ocean_pressure_atm))
 }
 # A parent run's pressures (atm), from its .pqi header. NA where there is no parent .pqi or no
@@ -898,11 +898,16 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            config = NULL,
                            
                            # Initialize simulator with parameters and configuration
-                           initialize = function(k, layer_thickness, porosity = 0.32, config = NULL) {
+                           # reactive_depth: "skin" (default) makes the reacting box the top L_eff = min(layer_thickness,
+                           # delta) of the layer, delta the poroelastic skin depth (skin_depth()); "layer" uses the whole
+                           # layer (the behaviour before 2026-10-29). See reactive_thickness().
+                           initialize = function(k, layer_thickness, porosity = 0.32, config = NULL,
+                                                 reactive_depth = c("skin", "layer")) {
                              self$params <- list(
                                k = k,
                                layer_thickness = layer_thickness,
-                               porosity = porosity
+                               porosity = porosity,
+                               reactive_depth = match.arg(reactive_depth)
                              )
                              self$config <- config  # Store configuration
                              if(is.null(self$config)) {
@@ -1033,8 +1038,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # x_half = dV / V_pore per half-orbit; per orbit the two halves compound, x_orbit = 1 - (1 - x_half)^2,
                            # and exchanging_fluid_mass = x_orbit * the porewater mass, so x <= 1 by construction.
                            calculate_exchange = function() {
-                             cfg <- self$config; R <- cfg$core_radius; L <- self$params$layer_thickness
-                             V_layer <- (4/3) * pi * (R^3 - max(0, R - L)^3)
+                             cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
+                             V_layer <- (4/3) * pi * (R^3 - max(0, R - L)^3)   # the reacting box (the skin, by default)
                              V_pore  <- self$params$porosity * V_layer
                              eps0    <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
                                                                       R, cfg$eccentricity, cfg$orbital_period)
@@ -1056,6 +1061,14 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                   mass_per_orbit = x_orbit * V_pore * CONSTANTS$FLUID$density)
                            },
 
+                           # Thickness (m) of the box that reacts and exchanges: the top min(layer_thickness, delta) under
+                           # reactive_depth = "skin" (only the skin's porewater exchanges in a tide), else the whole layer.
+                           # It sets the porewater temperature and pressure (profile means over it), the rock mass and pore
+                           # volume (PhreeqcIntegrator$calculate_phreeqc_parameters()) and the exchange (calculate_exchange()).
+                           reactive_thickness = function() {
+                             if (identical(self$params$reactive_depth, "layer")) self$params$layer_thickness else self$skin_depth()$L_eff
+                           },
+
                            # Poroelastic skin depth, Liao et al. (2020) Table A1 and Fig. B4: delta = sqrt(c / omega), with
                            #   c = (k / eta_f) (K_m + 4/3 mu)(K_u - K_m) / (alpha^2 (K_u + 4/3 mu)),
                            #   K_m = (1 - alpha) K_s, K_u = K_m + alpha^2 K_s K_f / (phi K_s + (alpha - phi) K_f).
@@ -1075,8 +1088,10 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # One header line on the exchange, for the generated inputs.
                            exchange_header_line = function() {
                              x <- self$exchange
-                             sprintf(paste0("# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
+                             sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
+                                            "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
                                             "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.2f)"),
+                                     self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
                                      x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0,
                                      self$config$core_rigidity / 1e9, self$config$core_viscosity, self$config$biot_alpha)
                            },
@@ -1202,7 +1217,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # This ensures mineral moles and porewater_mass_norm share the same
                                      # reference mass (core_mass), giving a physically correct W/R ratio.
                                      r_core_gf     <- self$simulator$config$core_radius
-                                     layer_thick_gf <- self$simulator$params$layer_thickness
+                                     layer_thick_gf <- self$simulator$reactive_thickness()   # the reacting box (skin by default)
                                      layer_vol      <- (4/3) * pi * (r_core_gf^3 - (r_core_gf - layer_thick_gf)^3)
                                      core_vol       <- (4/3) * pi * r_core_gf^3
                                      layer_fraction <- layer_vol / core_vol
@@ -1270,7 +1285,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      self$mineral_basis_wt_percent <- mineral_basis_wt_percent
                                      # Porewater mass: physical mass of water filling the permeable layer pore space
                                      r_core <- self$simulator$config$core_radius
-                                     layer_thick <- self$simulator$params$layer_thickness
+                                     layer_thick <- self$simulator$reactive_thickness()
                                      layer_volume <- (4/3) * pi * (r_core^3 - (r_core - layer_thick)^3)  # m^3
                                      porewater_mass <- 1000 * self$simulator$params$porosity * layer_volume  # kg (rho_water * V_pore)
 
@@ -1752,7 +1767,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # Temperatures and pressures for SOLUTION blocks. The ocean temperature is fixed.
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -2697,7 +2712,7 @@ KNOBS
                                      # Temperatures and pressures
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -3315,7 +3330,7 @@ KNOBS
                                      # layer if water_temp = "profile")
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -3663,7 +3678,7 @@ END
                                      # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -4309,7 +4324,7 @@ END
                                      # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -4963,7 +4978,7 @@ END
                                      # ---- Temperature / pressure ----
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm

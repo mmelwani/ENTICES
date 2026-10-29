@@ -182,6 +182,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `k` | none (production 1e-7) | m² | permeability; sets Darcy flow and exchange | literature ranges (§6, Flow driving) | **production value at the top of Liao et al.'s range** | yes (D12 sweep) |
 | `layer_thickness` | none (production 194200) | m | permeable layer; 194.2 km is the whole core | production choice | — | yes |
 | `core_rigidity`, `core_viscosity` (`EnceladusConfig`) | 17e9, 1e12 | Pa, Pa·s | the tidal strain (exchange) | Bagheri et al. 2025 Table 5, core dissipation | **placeholders** at the geometric means of 4–70 GPa and 4.4e11–2.3e12 | yes (range ends) |
+| `reactive_depth` (`Simulator`) | `"skin"` | — | the reacting box: the top min(L, δ), or `"layer"` | PI 2026-10-29 | decided | — |
 | `biot_alpha` (`EnceladusConfig`) | 0.2 | — | fluid expelled per unit volumetric strain | Liao et al. 2020 (0–1) | chosen in their range | yes |
 | `eccentricity` (`EnceladusConfig`) | 0.0047 | — | tidal strain | Enceladus's orbit | — | — |
 | `max_tidal_stress` (`EnceladusConfig`) | 1e5 | Pa | tidal pressure amplitude ΔP driving the flow | Liao et al. 2020 Fig. B3 (~3e4 Pa peak) | **UNSOURCED** as a value; ~3× Liao's peak; to be swept with k (D12) | yes |
@@ -348,6 +349,30 @@ the volume the pressure change stores in the skin, S·ΔP·δ·A, is the δ-base
 2/f = 2.02 at every k (exactly: (ωT/π)/f), so the two agree to a factor 2.
 Note: α = 0.2 is below φ = 0.32, which a real porous solid does not allow (α = 1 − K_m/K_s ≥ φ);
 S stays positive, but the pair should be revisited with the placeholders.
+
+**The reacting box is the skin (`reactive_depth = "skin"`, default; PI 2026-10-29).** When δ < L,
+only the top δ of the layer exchanges in a tide, so the box that reacts is the top L_eff = min(L, δ)
+(`sim$reactive_thickness()`): its temperature and pressure are the profile means over the top L_eff,
+its rock mass and pore volume are those of the L_eff shell, and the exchange fraction is relative to
+the skin's pore volume (the poroelastic volume uses the skin's degree-2 factor). `reactive_depth =
+"layer"` is the old whole-layer box. In the skin the poroelastic limit binds at every k: the skin's pore
+volume grows with δ as the Darcy volume does, and the strain expels α·ε_v/φ ≈ 2e-6 of it per half-orbit,
+less than what drains. Full core, φ = 0.32, α = 0.2, placeholders:
+
+| k (m²) | L_eff | skin T | skin P | x per half-orbit | binds | circulation time |
+|---|---|---|---|---|---|---|
+| 1e-14 | 28 m | 1.4 °C | 66.7 atm | 2.08e-6 | poro | 4.5e6 yr |
+| 1e-12 | 279 m | 1.4 °C | 66.7 atm | 2.08e-6 | poro | 4.5e5 yr |
+| 1e-11 | 883 m | 1.4 °C | 66.7 atm | 2.07e-6 | poro | 1.4e5 yr |
+| 1e-7 (production) | 88 km | 36.7 °C | 177.3 atm | 1.42e-6 | poro | 3,410 yr |
+
+(The profile's grid is coarser than 883 m near the top, so skins up to that depth take its top row.)
+One-orbit `tidal_kinetic` runs at each k (`porewater_temp = "profile"`, 15 wt% IOM) complete with 0
+errors. **Result: at low k, tidal pumping alone reaches only cold rock just below the seafloor** (1.4
+°C, ocean pressure); deep, hot rock is reached only as δ approaches L, i.e. at the top of the
+permeability range. This is the comparison point with buoyancy-driven models (Choblet et al. 2017),
+whose hot upwellings tidal pumping does not produce; those models are out of scope here.
+`porewater_temp` still overrides the profile temperature when given as a number.
 
 **Rigidity and viscosity** come from Bagheri et al. (2025) Table 5, "dissipation in the core" (µ 4–70
 GPa, η 4.4e11–2.3e12 Pa·s; the scenario consistent with tidally driven flow in the core), with
