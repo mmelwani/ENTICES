@@ -909,11 +909,13 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # layer (the behaviour before 2026-10-29). See reactive_thickness().
                            # phi0: initial porosity (default 0.32, the PlanetProfile profile's phiRockMax: ONE fit, Styczinski
                            # et al. 2023; N6 sweep 0.1-0.4). `porosity` is the older name for it and, if given, wins.
-                           # phi_c: critical porosity of the critical-porosity model (Nur et al. 1998), default 0.5 (PLACEHOLDER;
-                           # 0.4-0.6 for granular media); the Biot coefficient is then min(1, phi / phi_c) (biot_alpha()).
+                           # phi_c: critical porosity of the critical-porosity model (Nur et al. 1998), default 0.4 (PI 10-30:
+                           # Dvorkin & Nur 2000's table, 36-40% for sorted grain packs and sandstones; still a placeholder);
+                           # the Biot coefficient is then min(1, phi / phi_c) (biot_alpha()); phi >= phi_c gives alpha = 1, a
+                           # suspension rather than a frame.
                            # alpha: a number overrides that; it must be >= the porosity.
                            initialize = function(k, layer_thickness, porosity = NULL, config = NULL,
-                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.5, alpha = NULL) {
+                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.4, alpha = NULL) {
                              self$params <- list(
                                k = k,
                                layer_thickness = layer_thickness,

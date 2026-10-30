@@ -184,7 +184,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `core_rigidity`, `core_viscosity` (`EnceladusConfig`) | 17e9, 1e12 | Pa, Pa·s | the tidal strain (exchange) | Bagheri et al. 2025 Table 5, core dissipation | **placeholders** at the geometric means of 4–70 GPa and 4.4e11–2.3e12 | yes (range ends) |
 | `reactive_depth` (`Simulator`) | `"skin"` | — | the reacting box: the top min(L, δ), or `"layer"` | PI 2026-10-29 | decided | — |
 | `phi0` (`Simulator`; was `porosity`) | 0.32 | — | initial porosity: k, α, storage, δ, strain volume, pore water | PlanetProfile `phiRockMax` (one fit) | **one fit**; end-state check against Bagheri's core density | yes (0.1–0.4) |
-| `phi_c` (`Simulator`) | 0.5 | — | critical porosity: α = min(1, φ/φc) | Nur et al. 1998 (0.4–0.6 granular) | **placeholder** | yes |
+| `phi_c` (`Simulator`) | 0.4 | — | critical porosity: α = min(1, φ/φc); φ ≥ φc is a suspension (α = 1) | Nur et al. 1998; Dvorkin & Nur 2000 (36–40% sorted grains, sandstones) | PI 10-30; still a placeholder | yes (0.4–0.6) |
 | `alpha` (`Simulator`) | NULL (from φ/φc) | — | Biot coefficient override (must be ≥ φ) | — | — | — |
 | `eccentricity` (`EnceladusConfig`) | 0.0047 | — | tidal strain | Enceladus's orbit | — | — |
 | `max_tidal_stress` (`EnceladusConfig`) | NULL: ΔP = α·ε_v·M | Pa | tidal pore-pressure amplitude driving the Darcy flow | derived from the strain (PI 10-30); a number overrides it (the old default was an UNSOURCED 1e5) | derived; override documented | through ε_v, η, φ |
@@ -331,12 +331,14 @@ are constant through a run (they will change between chunks once φ evolves, PRO
 model (Nur, Mavko, Dvorkin & Galmudi 1998, *The Leading Edge* 17, 357–362; as cited by Dvorkin & Nur
 2000): the frame's bulk modulus falls linearly to zero at the critical porosity φc, K_frame =
 K_grain(1 − φ/φc), so **α = 1 − K_frame/K_grain = min(1, φ/φc)**, which is ≥ φ as a porous solid
-requires. `phi_c` defaults to 0.5, a **placeholder** in the 0.4–0.6 range for granular media (Nur et
-al.'s table, via Dvorkin & Nur 2000: 40% for sandstones and carbonates, 36–40% for a random close pack
-of sorted grains, 65% for chalk). `alpha = <number>` overrides it; an override below φ is an error.
+requires. `phi_c` defaults to **0.4** (PI, 10-30), the critical porosity of sorted grain packs and
+sandstones in Dvorkin & Nur (2000)'s table after Nur et al. (1998) (36–40%; 40% for sandstones and
+carbonates, 65% for chalk), still a placeholder. **φ ≥ φc means α = 1:** the solid no longer forms a
+frame and the "rock" is a suspension (granular media are loose at φc, Dvorkin & Nur 2000), so α is
+capped there. `alpha = <number>` overrides it; an override below φ is an error.
 Bagheri et al. (2025) give a single, fixed core bulk modulus (100 GPa, their Table 2), not frame and
-grain moduli, so α cannot be computed from them. At φ = 0.32, α = 0.64 (it was a free 0.2 before,
-below φ). The box's solid mass is V·(ρ_core − φ·ρ_water), so the W/R follows φ.
+grain moduli, so α cannot be computed from them. At φ = 0.32, α = 0.80 (it was a free 0.2 before,
+below φ, and 0.64 with φc = 0.5). The box's solid mass is V·(ρ_core − φ·ρ_water), so the W/R follows φ.
 
 **The core-density check.** ρ_bulk = (1 − φ)ρ_solid + φρ_fluid, and Bagheri et al. (2025) give a
 present-day core density of 2160–2400 kg/m³. `phi_from_core_density(rho_solid, rho_core)` inverts it:
@@ -375,9 +377,9 @@ until the PI picks values. At these viscosities the Maxwell time η/µ is second
 
 | η (Pa·s) | ε₀ | ε_v (full core) | ΔV_poro / V_pore per half-orbit (= ε_v/φc) |
 |---|---|---|---|
-| 4.4e11 | 3.8e-5 | 4.4e-6 | 8.8e-6 |
-| 1e12 (placeholder) | 1.7e-5 | 2.0e-6 | 4.0e-6 |
-| 2.3e12 | 7.6e-6 | 8.7e-7 | 1.7e-6 |
+| 4.4e11 | 3.8e-5 | 4.4e-6 | 1.1e-5 |
+| 1e12 (placeholder) | 1.7e-5 | 2.0e-6 | 5.0e-6 |
+| 2.3e12 | 7.6e-6 | 8.7e-7 | 2.2e-6 |
 
 (any µ in 4–70 GPa; full-layer box; with α = φ/φc the ratio α·ε_v/φ = ε_v/φc does not depend on φ).
 Bagheri's rigidities lie above Liao's explored 0.01–10 GPa, and Liao's viscosities (1e12–1e18) only
@@ -391,9 +393,9 @@ gives ε₀ ≈ 1.5e-4, so α·ε_v ≤ 1.7e-5 of the box per half-orbit, agains
 independent parameter: it is the undrained pore pressure of the same strain, **ΔP = α·ε_v·M**, with the
 Biot modulus M = 1/S = (K_u − K_m)/α² of Liao et al. (2020) Table A1 (their Eq. A5 with no change of
 fluid content). `max_tidal_stress = <number>` still overrides it (for reproducing old runs or a sweep).
-At the placeholders (φ = 0.32, φc = 0.5, α = 0.64, M = 5.6 GPa, ε₀ = 1.73e-5) the pole amplitude
-α·M·ε₀ is 6.2e4 Pa and the box mean 1.2e4 Pa in a thin skin (ε_v/ε₀ = 0.192), 8.6e3 Pa in the 74 km
-skin at k = 1e-7 and 7.2e3 Pa over the whole layer (0.115). **Against Liao et al.'s ~3e4 Pa (Fig.
+At the placeholders (φ = 0.32, φc = 0.4, α = 0.80, M = 5.2 GPa, ε₀ = 1.73e-5) the pole amplitude
+α·M·ε₀ is 7.2e4 Pa and the box mean 1.4e4 Pa in a thin skin (ε_v/ε₀ = 0.192), 1.0e4 Pa in the 69 km
+skin at k = 1e-7 and 8.3e3 Pa over the whole layer (0.115). **Against Liao et al.'s ~3e4 Pa (Fig.
 B3a):** the same formula at their Fig. B3 case (η = 1e16 Pa·s, µ = 1 GPa, α = 0.1, φ = 0.2, ε₀ = 8.6e-7)
 gives only 1.1e3 Pa at the pole, ~28× below their plot. Their pore pressure also carries the ocean's
 tidal loading through the surface condition P = P_ocean, σ_rr = −P_ocean (their Appendix A), which
@@ -401,8 +403,8 @@ the strain-only ΔP here leaves out; the strain-derived ΔP is therefore a lower
 pressure, and the Darcy volume with it. It does not change the exchange where the strain binds.
 
 With ΔP derived, the three volumes are tied together: the storage volume S·ΔP·δ·A = α·ε_v·δ·A equals
-the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.2 times the storage volume
-(exactly, since δ² = c/ω). **In the skin the strain therefore binds at every k**, by a factor 2.2–3.3,
+the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.3 times the storage volume
+(exactly, since δ² = c/ω). **In the skin the strain therefore binds at every k**, by a factor 2.3–3.3,
 and the exchange per half-orbit is ε_v·α/φ, independent of k: k sets only how deep the skin reaches.
 
 **The skin depth.** The tidal pressure change diffuses into the rock only a skin depth δ = √(c/ω)
@@ -410,25 +412,25 @@ and the exchange per half-orbit is ε_v·α/φ, independent of k: k sets only ho
 c = (k/η_f)·(K_m + 4µ/3)(K_u − K_m) / (α²(K_u + 4µ/3)), K_m = (1 − α)K_s, K_u = K_m + α²K_sK_f/(φK_s +
 (α − φ)K_f), K_f = 2.2 GPa and K_s = 10 GPa (their Table A1; `water_bulk_modulus`,
 `rock_bulk_modulus`) and µ the matrix rigidity. (K_u − K_m)/α² is the Biot modulus M = 1/S, S =
-φ/K_f + (α − φ)/K_s the storage (1.78e-10 Pa⁻¹ at φ = 0.32, α = 0.64), so c is k/(η_f S) times
-f = (K_m + 4µ/3)/(K_u + 4µ/3) = 0.92. Their convention has no factor 2 (δ = √(c/ω), not √(2D/ω)); this
-code follows it. δ is 23 m at k = 1e-14 m², 0.74 km at 1e-11 and 74 km at 1e-7: **δ is the depth the
+φ/K_f + (α − φ)/K_s the storage (1.93e-10 Pa⁻¹ at φ = 0.32, α = 0.80), so c is k/(η_f S) times
+f = (K_m + 4µ/3)/(K_u + 4µ/3) = 0.88. Their convention has no factor 2 (δ = √(c/ω), not √(2D/ω)); this
+code follows it. δ is 22 m at k = 1e-14 m², 0.69 km at 1e-11 and 69 km at 1e-7: **δ is the depth the
 exchange actually reaches**, which is what makes the well-mixed porewater box an approximation
 (below). Cross-check: the volume the pressure change stores in the skin, S·ΔP·δ·A, is the δ-based
-Darcy volume divided by 2/f = 2.18 at every k (exactly: (ωT/π)/f), so the two agree to a factor 2.
+Darcy volume divided by 2/f = 2.27 at every k (exactly: (ωT/π)/f).
 
-**Which limit binds over the whole layer** (`reactive_depth = "layer"`, φ = 0.32, α = 0.64, placeholders):
+**Which limit binds over the whole layer** (`reactive_depth = "layer"`, φ = 0.32, α = 0.80, ΔP from the
+strain = 8.3e3 Pa, placeholders):
 
 | k (m²) | δ | ΔV_poro (m³) | ΔV_Darcy (m³) | S·ΔP·δ·A (m³) | V_pore (m³) | binds | x per half-orbit | circulation time |
 |---|---|---|---|---|---|---|---|---|
-| 1e-14 | 23 m | 3.9e10 | 4.3e8 | 2.0e8 | 9.8e15 | darcy | 4.4e-8 | 9.3e4 yr |
-| 1e-13 | 74 m | 3.9e10 | 1.4e9 | 6.2e8 | 9.8e15 | darcy | 1.4e-7 | 2.9e4 yr |
-| 1e-12 | 233 m | 3.9e10 | 4.3e9 | 2.0e9 | 9.8e15 | darcy | 4.4e-7 | 9,300 yr |
-| 1e-11 | 738 m | 3.9e10 | 1.4e10 | 6.2e9 | 9.8e15 | darcy | 1.4e-6 | 2,950 yr |
-| 1e-7 (production) | 74 km | 3.9e10 | 1.4e12 | 6.2e11 | 9.8e15 | **poro** | 4.0e-6 | 1,010 yr |
+| 1e-14 | 22 m | 4.9e10 | 3.8e7 | 1.7e7 | 9.8e15 | darcy | 3.8e-9 | 1.1e6 yr |
+| 1e-12 | 219 m | 4.9e10 | 3.8e8 | 1.7e8 | 9.8e15 | darcy | 3.8e-8 | 1.1e5 yr |
+| 1e-11 | 692 m | 4.9e10 | 1.2e9 | 5.2e8 | 9.8e15 | darcy | 1.2e-7 | 3.3e4 yr |
+| 1e-7 (production) | 69 km | 4.9e10 | 1.2e11 | 5.2e10 | 9.8e15 | **poro** | 5.0e-6 | 811 yr |
 
-With the skin depth the Darcy volume grows as √k, not k; over the whole layer Darcy and poro cross at
-k ≈ 8.4e-11 m².
+With the skin depth the Darcy volume grows as √k, not k. Over the whole layer the storage volume is only
+δ·A/V_layer = 3δ/R of the strain volume, so Darcy binds until δ ≈ R/7, 28 km (k ≈ 2e-8 m²).
 
 **The reacting box is the skin (`reactive_depth = "skin"`, default; PI 2026-10-29).** When δ < L,
 only the top δ of the layer exchanges in a tide, so the box that reacts is the top L_eff = min(L, δ)
@@ -436,29 +438,29 @@ only the top δ of the layer exchanges in a tide, so the box that reacts is the 
 its rock mass and pore volume are those of the L_eff shell, and the exchange fraction is relative to
 the skin's pore volume (the poroelastic volume uses the skin's degree-2 factor). `reactive_depth =
 "layer"` is the old whole-layer box. In the skin the poroelastic limit binds at every k: the skin's
-pore volume grows with δ as the Darcy volume does, and the strain expels ε_v/φc ≈ 7e-6 of it per
-half-orbit, less than what drains. Full core, α = φ/φc (φc = 0.5), placeholders:
+pore volume grows with δ as the Darcy volume does, and the strain expels ε_v/φc ≈ 8e-6 of it per
+half-orbit, less than what drains (2.3–3.3× less, above). Full core, α = φ/φc (φc = 0.4), placeholders:
 
 | φ0 | α | k (m²) | L_eff | skin T | skin P | x per half-orbit | binds | circulation time |
 |---|---|---|---|---|---|---|---|---|
-| 0.32 | 0.64 | 1e-14 | 23 m | 1.4 °C | 66.7 atm | 6.66e-6 | poro | 1.7e6 yr |
-| 0.32 | 0.64 | 1e-12 | 233 m | 1.4 °C | 66.7 atm | 6.65e-6 | poro | 1.7e5 yr |
-| 0.32 | 0.64 | 1e-11 | 738 m | 1.4 °C | 66.7 atm | 6.63e-6 | poro | 5.4e4 yr |
-| 0.32 | 0.64 | 1e-7 (production) | 74 km | 32.5 °C | 161.3 atm | 4.76e-6 | poro | 1,117 yr |
-| 0.2 | 0.4 | 1e-14 | 30 m | 1.4 °C | 66.7 atm | 6.66e-6 | poro | 2.1e6 yr |
-| 0.2 | 0.4 | 1e-12 | 300 m | 1.4 °C | 66.7 atm | 6.65e-6 | poro | 2.1e5 yr |
-| 0.2 | 0.4 | 1e-11 | 950 m | 1.4 °C | 66.7 atm | 6.62e-6 | poro | 6.7e4 yr |
-| 0.2 | 0.4 | 1e-7 | 95 km | 38.5 °C | 184.0 atm | 4.45e-6 | poro | 1,681 yr |
-| 0.4 | 0.8 | 1e-14 | 21 m | 1.4 °C | 66.7 atm | 6.66e-6 | poro | 1.5e6 yr |
-| 0.4 | 0.8 | 1e-12 | 206 m | 1.4 °C | 66.7 atm | 6.65e-6 | poro | 1.5e5 yr |
-| 0.4 | 0.8 | 1e-11 | 651 m | 1.4 °C | 66.7 atm | 6.63e-6 | poro | 4.9e4 yr |
-| 0.4 | 0.8 | 1e-7 | 65 km | 30.0 °C | 152.0 atm | 4.92e-6 | poro | 932 yr |
+| 0.32 | 0.8 | 1e-14 | 22 m | 1.4 °C | 66.7 atm | 8.32e-6 | poro | 1.4e6 yr |
+| 0.32 | 0.8 | 1e-12 | 219 m | 1.4 °C | 66.7 atm | 8.31e-6 | poro | 1.4e5 yr |
+| 0.32 | 0.8 | 1e-11 | 692 m | 1.4 °C | 66.7 atm | 8.29e-6 | poro | 4.6e4 yr |
+| 0.32 | 0.8 | 1e-7 (production) | 69 km | 31.0 °C | 155.8 atm | 6.06e-6 | poro | 912 yr |
+| 0.2 | 0.5 | 1e-14 | 28 m | 1.4 °C | 66.7 atm | 8.32e-6 | poro | 1.8e6 yr |
+| 0.2 | 0.5 | 1e-12 | 284 m | 1.4 °C | 66.7 atm | 8.31e-6 | poro | 1.8e5 yr |
+| 0.2 | 0.5 | 1e-11 | 899 m | 1.4 °C | 66.7 atm | 8.28e-6 | poro | 5.7e4 yr |
+| 0.2 | 0.5 | 1e-7 | 90 km | 37.2 °C | 179.0 atm | 5.64e-6 | poro | 1,359 yr |
+| 0.4 | 1 | 1e-14 | 19 m | 1.4 °C | 66.7 atm | 8.32e-6 | poro | 1.3e6 yr |
+| 0.4 | 1 | 1e-12 | 192 m | 1.4 °C | 66.7 atm | 8.31e-6 | poro | 1.3e5 yr |
+| 0.4 | 1 | 1e-11 | 606 m | 1.4 °C | 66.7 atm | 8.29e-6 | poro | 4.2e4 yr |
+| 0.4 | 1 | 1e-7 | 61 km | 28.4 °C | 146.3 atm | 6.26e-6 | poro | 767 yr |
 
 (The profile's grid is coarser than ~1 km near the top, so skins up to that depth take its top row.)
 At a fixed k a larger φ gives a larger α and a shorter δ (the storage grows), a thinner, colder skin,
 and a faster circulation (more pore water per volume exchanged at the same fraction). One-orbit
-`tidal_kinetic` runs at each k (φ0 = 0.32, α = 0.64, `porewater_temp = "profile"`, 15 wt% IOM)
-complete with 0 errors. **Result: at low k, tidal pumping alone reaches only cold rock just below
+`tidal_kinetic` runs at each k (φ0 = 0.32, then α = 0.64, `porewater_temp = "profile"`, 15 wt% IOM)
+completed with 0 errors. **Result: at low k, tidal pumping alone reaches only cold rock just below
 the seafloor** (1.4 °C, ocean pressure); deep, hot rock is reached only as δ approaches L, i.e. at the
 top of the permeability range. This is the comparison point with buoyancy-driven models (Choblet et
 al. 2017), whose hot upwellings tidal pumping does not produce; those models are out of scope here.

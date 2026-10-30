@@ -1051,3 +1051,7 @@ One commit per item; each commit message has its pass check.
 - **Strain factor follows the box** (PI, 10-30): eps_v/eps0 = (mean |P2| / 2 = 0.192) x the radial mean of (r/R)^2
   over the reacting box: 0.192 for a thin skin (0.138 for the 74 km skin at k 1e-7), 0.115 for the full layer.
   Already how tidal_strain() evaluates it; documented and tested (exchange_check 3d).
+- **phi_c = 0.4 by default** (PI, 10-30): Dvorkin & Nur (2000)'s table (36-40% for sorted grain packs and
+  sandstones) after Nur et al. (1998); phi >= phi_c gives alpha = 1 (a suspension, not a frame). At phi0
+  0.32, alpha 0.80: skin box x_half 8.3e-6 at low k, production 6.1e-6 (69 km skin, 31 C, 156 atm),
+  circulation 912 yr. README tables recomputed with dP from the strain.

@@ -150,7 +150,7 @@ for (tidal in c(TRUE, FALSE)) {
 }
 
 # 6. The default skin box (reactive_depth = "skin"): at k = 1e-7 the box is the top skin depth delta (73.8 km
-#    with alpha = phi/phi_c = 0.64), and the porewater pressure is the profile mean over it (161.3 atm); the
+#    with alpha = phi/phi_c), and the porewater pressure is the profile mean over it; the
 #    ocean pressure is unchanged.
 sk <- Simulator$new(k = 1e-07, layer_thickness = 194200, config = EnceladusConfig$new()); quiet(sk$run_simulation())
 phs <- quiet(PhreeqcIntegrator$new(sk)); invisible(quiet(phs$calculate_phreeqc_parameters(organic_wt_percent = 15)))

@@ -113,12 +113,12 @@ check(sim$exchange$binding == "pore_volume" && sim$exchange$x_half == 1 && sim$e
 #    1998); an override below phi is an error; the box's solid mass is V (rho_core - phi rho_water).
 s <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg)
 s2 <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, phi0 = 0.2)
-s4 <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, phi0 = 0.4, phi_c = 0.4)
+s4 <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, phi0 = 0.45)
 so <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, alpha = 0.5)
 e <- tryCatch({ Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg, alpha = 0.2); "no error" }, error = function(e) conditionMessage(e))
-check(abs(s$biot_alpha() - 0.64) < 1e-12 && abs(s2$biot_alpha() - 0.4) < 1e-12 && s4$biot_alpha() == 1 && so$biot_alpha() == 0.5 &&
+check(s$params$phi_c == 0.4 && abs(s$biot_alpha() - 0.8) < 1e-12 && abs(s2$biot_alpha() - 0.5) < 1e-12 && s4$biot_alpha() == 1 && so$biot_alpha() == 0.5 &&
         grepl("must be >= the porosity", e),
-      sprintf("alpha: %.3g (phi 0.32), %.3g (phi 0.2), %.3g (phi 0.4 = phi_c), override 0.5; override 0.2 < phi errors", s$biot_alpha(), s2$biot_alpha(), s4$biot_alpha()))
+      sprintf("alpha (phi_c 0.4): %.3g (phi 0.32), %.3g (phi 0.2), %.3g (phi 0.45 >= phi_c: a suspension), override 0.5; override 0.2 < phi errors", s$biot_alpha(), s2$biot_alpha(), s4$biot_alpha()))
 p2 <- quiet({ s2$run_simulation(); ph2 <- PhreeqcIntegrator$new(s2); ph2$calculate_phreeqc_parameters(organic_wt_percent = 15) })
 Vb <- 4 / 3 * pi * (cfg$core_radius^3 - (cfg$core_radius - s2$reactive_thickness())^3)
 check(abs(p2$layer_mass / (Vb * (cfg$core_density - 0.2 * 1000)) - 1) < 1e-12 && abs(p2$porewater_mass / (1000 * 0.2 * Vb) - 1) < 1e-12,

@@ -26,7 +26,7 @@ on <- run_tidal_evolution(tmpl, organic_wt_percent = 15, n_orbits = 4, output_di
 n <- nrow(on)
 chain <- n == 1 || all(abs(on$phi_start[-1] - pmax(0.01, on$phi_end_solids[-n])) < 1e-12)
 check(on$phi_start[1] == 0.32 && chain && all(abs(on$k / kc(on$phi_start) - 1) < 1e-12) &&
-        all(abs(on$alpha - on$phi_start / 0.5) < 1e-12) && length(unique(on$V_total_cm3)) == 1 &&
+        all(abs(on$alpha - pmin(1, on$phi_start / tmpl$params$phi_c)) < 1e-12) && length(unique(on$V_total_cm3)) == 1 &&
         all(!on$over_tol | on$n_orbits == 1) && sum(on$n_orbits) == 4 && max(on$orbit_to) == 4,
       sprintf("evolution on: %d chunks (%s orbits); phi %s; k %s",
               n, paste(on$n_orbits, collapse = "+"), paste(sprintf("%.4f", c(on$phi_start, on$phi_end_solids[n])), collapse = " -> "),
