@@ -441,6 +441,51 @@ top of the permeability range. This is the comparison point with buoyancy-driven
 al. 2017), whose hot upwellings tidal pumping does not produce; those models are out of scope here.
 `porewater_temp` still overrides the profile temperature when given as a number.
 
+**Porosity that evolves with the chemistry (`run_tidal_evolution()`, `porosity_evolution.R`; PI
+2026-10-29; `porosity_evolution = FALSE` by default until the PI decides).** Rigid frame, no
+compaction: φ(t) = 1 − V_solid(t)/V_total, with V_total = V_solid(0)/(1 − φ0) fixed and V_solid from
+`bulk_density()` (minerals, the remaining IOM at the Delarue density, clathrates; `origin_pqi` carries
+the IOM inventory across restarts). The run is split into chunks (`tidal_kinetic`, then
+`tidal_kinetic_restart` with `stop_on_depletion = FALSE` and `allow_pressure_change = TRUE`, since the
+skin's pressure moves with δ); between chunks a new Simulator takes φ(t) and recomputes k (with
+`k_of_phi`, e.g. Kozeny–Carman), α, the storage, δ, the reacting box, the strain-limited volume and the
+exchange fraction. A chunk whose φ changes by more than `phi_tol` (1% relative) is rerun with half the
+orbits, down to one orbit, which is accepted and flagged (`over_tol`); the next chunk is scaled from the
+last one's rate. φ ≤ `phi_min` (0.01) is capped and flagged `clogged`. `tests/porosity_evolution_check.R`
+checks the bookkeeping.
+
+**160 °C test (24 orbits, production k = 1e-7 at φ0 = 0.32 via Kozeny–Carman with d = 1.59 cm, skin box,
+α = φ/φc):**
+
+| orbit | φ (15 wt% IOM) | k | δ | circulation | φ (no IOM) | k | δ | circulation |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.320 | 1.0e-7 | 74 km | 1,117 yr | 0.320 | 1.0e-7 | 74 km | 1,117 yr |
+| 1 | 0.251 | 4.0e-8 | 53 km | 1,624 yr | 0.213 | 2.2e-8 | 43 km | 2,137 yr |
+| 4 | 0.227 | 2.8e-8 | 47 km | 1,917 yr | 0.177 | 1.2e-8 | 34 km | 2,950 yr |
+| 12 (14 without IOM) | 0.222 | 2.6e-8 | 45 km | 1,985 yr | 0.169 | 9.8e-9 | 33 km | 3,202 yr |
+| 24 | 0.219 | 2.5e-8* | 45 km* | 2,014 yr* | 0.165 | 9.1e-9* | 32 km* | 3,334 yr* |
+
+(k, δ and circulation are those φ gives, i.e. of the next chunk; * those of the last chunk, which
+started at φ 0.220 and 0.165.)
+
+The poroelastic limit binds throughout (x per half-orbit 4.8e-6 → 5.4e-6 with IOM, → 5.7e-6 without).
+**The core closes; it does not open**, and it does not clog in 24 orbits: hydration (lizardite and
+the corrosion products of the metal) fills pores much faster than IOM degradation empties them (only
+~0.01 g of 150 g of IOM is released in 24 orbits at 160 °C), and the rate falls as the fast primaries
+run out (albite is exhausted by orbit ~7). With IOM φ falls less, because the IOM is a large, inert
+share of the solid volume. In practice the first ~4–5 chunks are single orbits over the 1% tolerance
+(Δφ 22% and 34% in orbit 1, from the instantaneous metal corrosion and the fastest hydration); after
+that chunks of 2–6 orbits stay within it.
+
+**Water accounting (open).** Hydration consumes water. PHREEQC's porewater mass falls from 0.157 to
+0.080 kg (normalised basis) in orbit 1 with IOM, while the pore volume left implies 0.126 kg: the
+porewater is 37% short of filling the pores (20% short without IOM, 0.067 vs 0.084 kg), and stays so
+(0.062 vs 0.110 kg at orbit 24 with IOM). At t = 0 the two differ by 2% (0.157 vs 0.160), because the
+profile's core density and the reconstructed solid's density differ. The model treats PHREEQC's mass as
+authoritative for the chemistry (it conserves H and O) and φ from the solids for transport; nothing
+refills the emptied pore space from the ocean beyond the tidal exchange (a hydration-driven inflow is a
+modelling choice for the PI).
+
 **Two assumptions, stated, not swept.**
 - **Ingested water has the bulk-ocean composition.** The water drawn in is not the fluid just
   expelled (bottom currents disperse that), but it is not fresh either: the ocean box carries the

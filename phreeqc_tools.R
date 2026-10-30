@@ -362,12 +362,21 @@ pqi_initial_solids <- function(pqi) {
 # uses the run's Rho_soln column (PHREEQC's RHO; under the LLNL aqueous model this is ~1 g/cm3 for
 # water at any T and P, see README), else a number in g/cm3. iom_density: "delarue2026" (default)
 # evaluates Delarue et al. (2026) Eq. 10 at the remaining IOM's H/C on each row (the bulk IOM less
-# what the channels have released); a number fixes it (g/cm3). Returns list(summary, breakdown).
+# what the channels have released); a number fixes it (g/cm3). origin_pqi: for a restart, the first
+# run's .pqi, which holds the IOM's t = 0 inventory (a restart's own .pqi starts its IOM channels at
+# what was left); the t = 0 row is then the restart's start. Returns list(summary, breakdown).
 bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_density = "delarue2026",
-                         fluid_density = NULL, volumes = read_mineral_volumes()) {
+                         fluid_density = NULL, volumes = read_mineral_volumes(), origin_pqi = pqi) {
   if (missing(porosity) || !is.numeric(porosity) || porosity < 0 || porosity >= 1)
     stop("porosity: give the model's porosity (Simulator$params$porosity)")
   init <- pqi_initial_solids(pqi)
+  n_iom_start <- NULL                                       # IOM channel amounts at this run's start
+  if (!identical(normalizePath(origin_pqi, mustWork = FALSE), normalizePath(pqi, mustWork = FALSE))) {
+    org <- pqi_initial_solids(origin_pqi)
+    n_iom_start <- init$iom$m0[match(org$iom$name, init$iom$name)]
+    if (anyNA(n_iom_start)) stop("bulk_density: the restart's .pqi lacks IOM channels of origin_pqi")
+    init$iom <- org$iom; init$iom_mass0_g <- org$iom_mass0_g
+  }
   gfw <- element_gfw(init$database)
   iom_M <- vapply(init$iom$formula, kinetics_formula_mass, 0, gfw = gfw)
   if (identical(iom_density, "delarue2026")) {
@@ -402,7 +411,12 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
     bd[[length(bd) + 1]] <<- cbind(row = label, s$breakdown)
   }
   rho_col <- if ("Rho_soln" %in% names(x)) "Rho_soln" else NULL
-  add("t0", 0, init$minerals, init$iom_mass0_g, iom_hc(init$iom$m0), if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  if (is.null(n_iom_start)) {
+    add("t0", 0, init$minerals, init$iom_mass0_g, iom_hc(init$iom$m0), if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  } else {                                                  # a restart: its start, IOM measured from the origin
+    add("t0", NA_real_, init$minerals, max(0, init$iom_mass0_g - sum((init$iom$m0 - n_iom_start) * iom_M)), iom_hc(n_iom_start),
+        if (!is.null(fluid_density)) fluid_density else 1.0)
+  }
   for (r in which(x$state == "react" & trimws(x$soln) == "1")) {
     mol <- c(stats::setNames(as.numeric(x[r, paste0("k_", kin_min)]), kin_min),
              stats::setNames(as.numeric(unlist(x[r, ep_idx])), ep_names),

@@ -1032,3 +1032,13 @@ One commit per item; each commit message has its pass check.
   the final rho_bulk is outside Bagheri's 2.16-2.40 g/cm3. At phi0 0.32 (alpha 0.64): skin 23 m-74 km;
   production circulation 1,117 yr (skin box); x_half 6.66e-6 at low k for any phi0 (= eps_v/phi_c).
   Bagheri gives no frame/grain moduli (one fixed core bulk modulus), so alpha is not computed from them.
+- **Porosity that evolves with the chemistry** (PI): `run_tidal_evolution()` (`porosity_evolution.R`),
+  rigid frame, phi = 1 - V_solid/V_total, updated between chunks (k via `k_of_phi`, alpha, storage,
+  delta, box, exchange); chunks rerun at half length if phi changes > 1%; phi_min 0.01 and `clogged`.
+  Option, default FALSE. `bulk_density(origin_pqi =)` carries the IOM inventory across restarts.
+  `tidal_kinetic_restart(stop_on_depletion = TRUE)` (the USER_PRINT STOP once depletion_mineral is
+  exhausted, which PHREEQC reports as 2 errors) can now be turned off. 160 C, 24 orbits: phi 0.32 ->
+  0.219 (15 wt% IOM) / 0.165 (none), k 1e-7 -> 2.5e-8 / 9.1e-9 (Kozeny-Carman), delta 74 -> 45 / 32 km,
+  circulation 1,117 -> 2,014 / 3,334 yr; poro binds throughout; the core closes, no clogging. Water:
+  PHREEQC's porewater runs 37% (IOM) / 20% (none) short of the solids' pore volume after orbit 1.
+  `tests/porosity_evolution_check.R`.

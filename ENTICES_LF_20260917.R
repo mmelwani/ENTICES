@@ -50,6 +50,9 @@ source("phreeqc_tools.R")
 # organic_contribution.R -- pair_organic_run(): a run and its organic_wt_percent = 0 blank, and the
 # organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
 source("organic_contribution.R")
+# porosity_evolution.R -- run_tidal_evolution(): tidal_kinetic in chunks, with the porosity (and k, alpha,
+# skin depth, exchange) updated between chunks from the solid volume (PI 2026-10-29).
+source("porosity_evolution.R")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
 # Single source for all four generators that build primary-mineral inventories.
@@ -4862,6 +4865,8 @@ END
                                    # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
                                    # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
                                    # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
+                                   # @param stop_on_depletion TRUE (default): stop the run (USER_PRINT STOP, which PHREEQC reports as 2 errors, status 3) at the
+                                   #   end of an orbit once depletion_mineral is exhausted. FALSE runs every orbit (run_tidal_evolution() uses it).
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
@@ -4889,7 +4894,8 @@ END
                                      ch4_cutoff_C        = 150,
                                      allow_pressure_change = FALSE,
                                      pore_gas_fate       = c("to_ocean", "retain"),
-                                     logfile             = FALSE
+                                     logfile             = FALSE,
+                                     stop_on_depletion   = TRUE
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -5645,7 +5651,7 @@ KNOBS
                                          sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
-                                         if (i < kinetic_cycles &&
+                                         if (stop_on_depletion && i < kinetic_cycles &&
                                              length(depletion_mineral) == 1 && length(proxy_mineral) == 1 &&
                                              depletion_mineral != proxy_mineral)
                                            paste0(
