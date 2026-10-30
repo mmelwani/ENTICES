@@ -187,7 +187,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `phi_c` (`Simulator`) | 0.5 | — | critical porosity: α = min(1, φ/φc) | Nur et al. 1998 (0.4–0.6 granular) | **placeholder** | yes |
 | `alpha` (`Simulator`) | NULL (from φ/φc) | — | Biot coefficient override (must be ≥ φ) | — | — | — |
 | `eccentricity` (`EnceladusConfig`) | 0.0047 | — | tidal strain | Enceladus's orbit | — | — |
-| `max_tidal_stress` (`EnceladusConfig`) | 1e5 | Pa | tidal pressure amplitude ΔP driving the flow | Liao et al. 2020 Fig. B3 (~3e4 Pa peak) | **UNSOURCED** as a value; ~3× Liao's peak; to be swept with k (D12) | yes |
+| `max_tidal_stress` (`EnceladusConfig`) | NULL: ΔP = α·ε_v·M | Pa | tidal pore-pressure amplitude driving the Darcy flow | derived from the strain (PI 10-30); a number overrides it (the old default was an UNSOURCED 1e5) | derived; override documented | through ε_v, η, φ |
 | `porosity` (`Simulator`) | 0.32 | — | pore volume, porewater mass | profile `phiRockMax`; Styczinski et al. 2023 | sourced | — |
 | `profile_file` | the Enceladus profile | — | porewater and ocean P, porewater T | PlanetProfile (Styczinski et al. 2023) | sourced | other profiles |
 | ocean temperature | 274.6 K (1.45 °C) | K | ocean SOLUTION and seafloor steps | profile, top of the rock layer (274.566 K) | sourced | — |
@@ -238,7 +238,8 @@ anorthite, K-feldspar and troilite at 5 m²/g, so the feldspars react against 50
 mafic silicates (D7).
 
 **Flow driving: UNSOURCED as a single value; to be swept (D12, N6).** The Simulator's Darcy flux is
-q = (k/μ)·ΔP/L, with ΔP = `max_tidal_stress`·sin(2πt/P), L = `layer_thickness` and μ = 1.8e-3 Pa·s,
+q = (k/μ)·ΔP/L, with ΔP·sin(2πt/P) the tidal pore pressure (since 2026-10-30 derived from the strain, see
+Exchange below; this paragraph's table used the old fixed ΔP), L = `layer_thickness` and μ = 1.8e-3 Pa·s,
 so only k·ΔP/L matters. The exchanged fluid per orbit is |q| integrated over the orbit times the
 core's surface area (q is per unit total area; until 2026-10-29 it was also multiplied by the
 porosity, 3.1× too small), and every orbit's volume is treated as fluid that leaves the
@@ -381,6 +382,24 @@ checked. Bagheri's core radius and density range (183–213 km, 2160–2400 kg/m
 and 2.1e-5 at the placeholders; the profile's 194.2 km and 2353 kg/m³, which the code uses, are inside
 both ranges. **The pore-volume limit cannot bind at real porosities:** even a fluid matrix (k₂ → 3/2)
 gives ε₀ ≈ 1.5e-4, so α·ε_v ≤ 1.7e-5 of the box per half-orbit, against φ = 0.1–0.4.
+
+**The tidal pore pressure (PI, 2026-10-30).** The pressure that drives the Darcy term is no longer an
+independent parameter: it is the undrained pore pressure of the same strain, **ΔP = α·ε_v·M**, with the
+Biot modulus M = 1/S = (K_u − K_m)/α² of Liao et al. (2020) Table A1 (their Eq. A5 with no change of
+fluid content). `max_tidal_stress = <number>` still overrides it (for reproducing old runs or a sweep).
+At the placeholders (φ = 0.32, φc = 0.5, α = 0.64, M = 5.6 GPa, ε₀ = 1.73e-5) the pole amplitude
+α·M·ε₀ is 6.2e4 Pa and the box mean 1.2e4 Pa in a thin skin (ε_v/ε₀ = 0.192), 8.6e3 Pa in the 74 km
+skin at k = 1e-7 and 7.2e3 Pa over the whole layer (0.115). **Against Liao et al.'s ~3e4 Pa (Fig.
+B3a):** the same formula at their Fig. B3 case (η = 1e16 Pa·s, µ = 1 GPa, α = 0.1, φ = 0.2, ε₀ = 8.6e-7)
+gives only 1.1e3 Pa at the pole, ~28× below their plot. Their pore pressure also carries the ocean's
+tidal loading through the surface condition P = P_ocean, σ_rr = −P_ocean (their Appendix A), which
+the strain-only ΔP here leaves out; the strain-derived ΔP is therefore a lower estimate of the driving
+pressure, and the Darcy volume with it. It does not change the exchange where the strain binds.
+
+With ΔP derived, the three volumes are tied together: the storage volume S·ΔP·δ·A = α·ε_v·δ·A equals
+the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.2 times the storage volume
+(exactly, since δ² = c/ω). **In the skin the strain therefore binds at every k**, by a factor 2.2–3.3,
+and the exchange per half-orbit is ε_v·α/φ, independent of k: k sets only how deep the skin reaches.
 
 **The skin depth.** The tidal pressure change diffuses into the rock only a skin depth δ = √(c/ω)
 (Liao et al. 2020, Table A1 and Fig. B4), with their poroelastic diffusivity

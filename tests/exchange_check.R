@@ -66,7 +66,7 @@ for (k in c(1e-14, 1e-7)) {
   Km <- (1 - a) * Ks; Ku <- Km + a^2 * Ks * Kf / (phi * Ks + (a - phi) * Kf)
   c_liao <- k / 1.8e-3 * (Km + 4/3 * mu) * (Ku - Km) / (a^2 * (Ku + 4/3 * mu))
   delta <- sqrt(c_liao / (2 * pi / cfg$orbital_period)); Leff <- min(194200, delta)
-  darcy <- k / 1.8e-3 * cfg$max_tidal_stress / Leff * 4 * pi * cfg$core_radius^2 * cfg$orbital_period / pi
+  darcy <- k / 1.8e-3 * sim$tidal_pressure() / Leff * 4 * pi * cfg$core_radius^2 * cfg$orbital_period / pi
   f <- (Km + 4/3 * mu) / (Ku + 4/3 * mu); x <- sim$exchange
   check(abs(x$delta / delta - 1) < 1e-9 && abs(x$dV_darcy / darcy - 1) < 2e-3 && abs(x$dV_darcy / x$dV_storage - 2 / f) < 0.01,
         sprintf("k = %.0e: skin depth %.4g m (Table A1: %.4g); darcy %.4g m3 (by hand %.4g); darcy / storage %.3f (2/f = %.3f)",
@@ -84,6 +84,21 @@ for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
     abs(x$dV_poro / (sim$biot_alpha() * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs) - 1) < 1e-12 && x$binding == "poro"
   check(ok, sprintf("skin box, k = %.0e: L_eff %.4g m; x_half %.3e (%s)", k, Le, x$x_half, x$binding))
 }
+
+# 3d. The pore pressure from the strain (F, 2026-10-30): dP = alpha eps_v M, M = 1/S; the strain factor is the
+#     box's (0.192 for a thin skin, 0.115 for the full layer, G); in the skin, the storage volume S dP delta A
+#     equals the strain volume alpha eps_v V_skin to O(delta/R), so Darcy / strain = 2/f there; an override of
+#     max_tidal_stress is used as given.
+s1 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
+sl <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
+x1 <- s1$exchange
+ok <- abs(x1$dP / (s1$biot_alpha() * x1$eps_v / s1$skin_depth()$S) - 1) < 1e-12 && x1$dP_source == "strain" &&
+  abs(x1$strain_factor - FlowUtils$degree2_dilatation_factor(cfg$core_radius, x1$delta)) < 1e-15 && abs(x1$strain_factor - 0.19245) < 1e-4 &&
+  abs(sl$exchange$strain_factor - 0.19245 * 0.6) < 1e-5 && abs(x1$dV_storage / x1$dV_poro - 1) < 1e-3
+ov <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(max_tidal_stress = 1e5))); s$run_simulation(); s })
+check(ok && ov$exchange$dP == 1e5 && ov$exchange$dP_source == "override",
+      sprintf("dP = alpha eps_v M: %.4g Pa (skin, factor %.4f), %.4g Pa (layer, factor %.4f); storage / strain %.4f in the skin; override %g Pa",
+              x1$dP, x1$strain_factor, sl$exchange$dP, sl$exchange$strain_factor, x1$dV_storage / x1$dV_poro, ov$exchange$dP))
 
 # 4. Pore-volume limit.
 eps_fluid <- FlowUtils$tidal_strain_amplitude(1e10, 1, cfg$core_density, cfg$core_radius, cfg$eccentricity, cfg$orbital_period)

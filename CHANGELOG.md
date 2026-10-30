@@ -1042,3 +1042,9 @@ One commit per item; each commit message has its pass check.
   circulation 1,117 -> 2,014 / 3,334 yr; poro binds throughout; the core closes, no clogging. Water:
   PHREEQC's porewater runs 37% (IOM) / 20% (none) short of the solids' pore volume after orbit 1.
   `tests/porosity_evolution_check.R`.
+- **The tidal pore pressure is derived from the strain** (PI, 10-30): dP = alpha eps_v M, M = 1/S
+  (Simulator$tidal_pressure(); tidal_strain()). config `max_tidal_stress` defaults to NULL; a number
+  overrides it. Placeholders (alpha 0.64): pole 6.2e4 Pa; box mean 1.2e4 (thin skin), 8.6e3 (k 1e-7
+  skin), 7.2e3 Pa (layer). At Liao et al.'s Fig. B3 case the formula gives 1.1e3 Pa against their
+  ~3e4 (their ocean-loading term is not in it). Storage volume = strain volume in the skin, Darcy =
+  2.2x storage: the strain binds at every k in the skin box. Header and `sim$exchange` report dP.

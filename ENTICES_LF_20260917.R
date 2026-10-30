@@ -633,7 +633,10 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
-                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED as a value: tidal pressure amplitude, ~3x Liao et al. (2020) Fig. B3 peak; swept with k (README section 6, Flow driving; PROGRESS D12)
+                                 # Tidal pore-pressure amplitude [Pa]. NULL (default): derived from the strain, dP = alpha eps_v M
+                                 # (Simulator$tidal_pressure(); PI 2026-10-30). A number overrides it (the old default was an
+                                 # UNSOURCED 1e5 Pa); README section 6.
+                                 max_tidal_stress = NULL,
                                  eccentricity = 0.0047,   # Enceladus's orbital eccentricity (the value with which Liao et al. 2020's Fig. 2a is reproduced)
 
                                  # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
@@ -946,12 +949,12 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              # Debug print
                              print(sprintf("Calculating stress for %d time points", length(t)))
                              print(sprintf("Using orbital period: %f", self$config$orbital_period))
-                             print(sprintf("Using max stress: %f", self$config$max_tidal_stress))
+                             print(sprintf("Using tidal pressure amplitude: %f Pa", self$tidal_pressure()))
                              
                              # Calculate phase in orbital cycle
                              phase <- 2 * pi * t / self$config$orbital_period
                              # Calculate stress - ensure vectorized operation
-                             stress <- self$config$max_tidal_stress * sin(phase) #any need to incorporate real/imaginary parts of tidal stress?
+                             stress <- self$tidal_pressure() * sin(phase)
                              
                              # Debug print
                              print(sprintf("Calculated %d stress values", length(stress)))
@@ -1043,6 +1046,27 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              return(results)
                            },
                            
+                           # Tidal strain of the reacting box. eps0: Liao et al. (2020)'s polar strain amplitude. eps_v: the
+                           # volume mean of the compressed part of a degree-2 dilatation field with pole amplitude eps0 over the
+                           # box, eps0 * degree2_dilatation_factor(R, L): (mean |P2| over the sphere = 0.385) / 2 = 0.192 times
+                           # the radial mean of (r/R)^2 over the box: 0.192 for a thin skin, 0.115 for the full core (reactive
+                           # depth "layer", 194.2 km). PLACEHOLDER pending the PI (README section 6, The strain).
+                           tidal_strain = function() {
+                             cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
+                             eps0 <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
+                                                                   R, cfg$eccentricity, cfg$orbital_period)
+                             f <- FlowUtils$degree2_dilatation_factor(R, L)
+                             list(eps0 = eps0, factor = f, eps_v = eps0 * f)
+                           },
+
+                           # Tidal pore-pressure amplitude (Pa) driving the Darcy flow: the undrained pressure of the strain,
+                           # dP = alpha eps_v M with the Biot modulus M = 1/S (Liao et al. 2020 Table A1: (K_u - K_m)/alpha^2;
+                           # their Eq. A5 with zero fluid-content change). config$max_tidal_stress, if a number, overrides it.
+                           tidal_pressure = function() {
+                             if (!is.null(self$config$max_tidal_stress)) return(self$config$max_tidal_stress)
+                             self$biot_alpha() * self$tidal_strain()$eps_v / self$skin_depth()$S
+                           },
+
                            # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; README section 6):
                            #   poro:        alpha * eps_v * V_layer, the fluid the tidal volumetric strain expels from the
                            #                matrix (drained limit). eps_v = eps0 * degree2_dilatation_factor(): the
@@ -1057,9 +1081,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
                              V_layer <- (4/3) * pi * (R^3 - max(0, R - L)^3)   # the reacting box (the skin, by default)
                              V_pore  <- self$params$porosity * V_layer
-                             eps0    <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
-                                                                      R, cfg$eccentricity, cfg$orbital_period)
-                             eps_v   <- eps0 * FlowUtils$degree2_dilatation_factor(R, L)
+                             st      <- self$tidal_strain(); eps0 <- st$eps0; eps_v <- st$eps_v
+                             dP      <- self$tidal_pressure()
                              vols    <- c(poro = self$biot_alpha() * eps_v * V_layer,
                                           darcy = sum(self$results$fluid_volume) / 2,
                                           pore_volume = V_pore)
@@ -1067,10 +1090,12 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              x_half  <- dV / V_pore
                              x_orbit <- 1 - (1 - x_half)^2
                              sd      <- self$skin_depth()
-                             list(eps0 = eps0, eps_v = eps_v, V_layer = V_layer, V_pore = V_pore,
+                             list(eps0 = eps0, eps_v = eps_v, strain_factor = st$factor, dP = dP,
+                                  dP_source = if (is.null(cfg$max_tidal_stress)) "strain" else "override",
+                                  V_layer = V_layer, V_pore = V_pore,
                                   delta = sd$delta, L_eff = sd$L_eff, storage = sd$S,
                                   # cross-check: the volume the pressure change stores in the skin, S * dP * delta * A
-                                  dV_storage = sd$S * cfg$max_tidal_stress * sd$L_eff * 4 * pi * R^2,
+                                  dV_storage = sd$S * dP * sd$L_eff * 4 * pi * R^2,
                                   dV_poro = vols[["poro"]], dV_darcy = vols[["darcy"]], dV_pore_volume = V_pore,
                                   dV = dV, binding = names(vols)[which.min(vols)],
                                   x_half = x_half, x_orbit = x_orbit,
@@ -1114,9 +1139,11 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              x <- self$exchange
                              sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
                                             "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
-                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, eps_v/eps0 %.4f, ",
+                                            "dP %.4g Pa (%s), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
-                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0,
+                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0, x$strain_factor,
+                                     x$dP, x$dP_source,
                                      self$config$core_rigidity / 1e9, self$config$core_viscosity, self$biot_alpha(), self$params$porosity)
                            },
 
