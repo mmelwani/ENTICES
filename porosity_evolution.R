@@ -88,6 +88,7 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
       water_from_phi_kg = max(phi_raw, 0) * V_total / 1000, water_target_kg = m_pw0 * max(phi_min, phi_raw) / phi0,
       refill_in_kg = refill_next, refill_kg_per_orbit = if (is.na(n_prev)) 0 else refill_next / n_prev,
       exchange_kg_per_orbit = xch$x_orbit * ph$phreeqc_params$porewater_mass / ph$phreeqc_params$layer_mass,
+      layer_mass_kg = ph$phreeqc_params$layer_mass,
       seconds = r$seconds)
     done <- done + n; prev_csv <- csv
     if (porosity_evolution) {
@@ -100,4 +101,34 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
     n <- if (rel > 0) max(1, min(max_chunk, floor(n * phi_tol / rel))) else min(max_chunk, 2 * n)
   }
   list(chunks = do.call(rbind, rows), files = files)
+}
+
+# The ocean mass in a PlanetProfile profile's header (Mocean_kg).
+profile_ocean_mass_kg <- function(profile_file) {
+  h <- readLines(profile_file, n = 81, warn = FALSE)
+  as.numeric(sub(".*=\\s*", "", grep("^\\s*Mocean_kg\\s*=", h, value = TRUE)[1]))
+}
+
+# The water the refill drew from the ocean (PI 2026-10-31), per chunk and cumulatively: on the run's normalised
+# basis (kg per kg of the reacting box's rock), scaled to the whole core by the box's rock mass (the skin is a
+# shell over the whole core, so layer_mass_kg is already whole-core; rebuilt from phi_start and k for runs made
+# before that column), and as a fraction of the profile's ocean mass. The ocean's concentration factor from this
+# water loss is M_ocean / (M_ocean - cumulative); the model's own ocean (water_ocean_kg, normalised) is reported
+# alongside, as its first chunk's water over its current water.
+refill_summary <- function(chunks, template = NULL, organic_wt_percent = 15,
+                           profile_file = "profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt") {
+  if (!"layer_mass_kg" %in% names(chunks)) {
+    if (is.null(template)) stop("refill_summary: give the template Simulator to rebuild layer_mass_kg")
+    chunks$layer_mass_kg <- vapply(seq_len(nrow(chunks)), function(i) {
+      s <- evolution_simulator(template, chunks$phi_start[i], chunks$k[i])
+      invisible(capture.output(ph <- PhreeqcIntegrator$new(s), p <- ph$calculate_phreeqc_parameters(organic_wt_percent = organic_wt_percent)))
+      p$layer_mass }, 0)
+  }
+  M <- profile_ocean_mass_kg(profile_file)
+  real <- chunks$refill_in_kg * chunks$layer_mass_kg
+  data.frame(chunk = chunks$chunk, orbit_from = chunks$orbit_from, refill_norm_kg = chunks$refill_in_kg,
+             refill_core_kg = real, cumulative_core_kg = cumsum(real), cumulative_fraction_of_ocean = cumsum(real) / M,
+             ocean_concentration_factor = M / (M - cumsum(real)),
+             model_ocean_concentration_factor = chunks$water_ocean_kg[1] / chunks$water_ocean_kg,
+             layer_mass_kg = chunks$layer_mass_kg)
 }

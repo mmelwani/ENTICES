@@ -1070,3 +1070,8 @@ One commit per item; each commit message has its pass check.
   mean 25-41 Pa; added to the strain dP as an amplitude (upper bound) and its stored volume to the poro
   limit. 0.3% of the strain term at every k and eta. `ocean_load = FALSE` drops it. It does not explain
   Liao's ~3e4 Pa (README corrected). Flag: the core h2 behind eps0 (0.29) is 6x the whole-body h2 (0.046).
+- **Water drawn in by the refill** (PI, 10-31): `refill_summary()` (porosity_evolution.R) per chunk and
+  cumulatively, scaled to the whole core by the box's rock mass (new `layer_mass_kg` column), as a fraction
+  of the profile's ocean (`profile_ocean_mass_kg()`, 2.13e19 kg), and the ocean's concentration factor.
+  24-orbit runs: 1.27e18-1.82e18 kg, 6.0-8.5% of the ocean, almost all in orbit 1; concentration factor
+  1.06-1.09 (model's own ocean 1.08-1.12).

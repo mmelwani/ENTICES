@@ -525,6 +525,26 @@ that it falls to 1e-4–1e-5 kg per orbit, still 10–100× the tidal exchange, 
 little porewater returned) without IOM. In this model, then, **hydration-driven inflow, not tidal
 pumping, sets how much ocean water enters the rock** while the primaries hydrate.
 
+**How much ocean water the refill takes (PI, 2026-10-31).** `refill_summary(chunks)` scales each chunk's
+refill to the whole core by the reacting box's rock mass (the skin is a shell over the whole core) and
+compares it with the profile's ocean mass (`Mocean_kg` = 2.13e19 kg). In the 24-orbit runs below:
+
+| run | after orbit 1 | cumulative, 24 orbits | fraction of the ocean | ocean concentration factor (scaled / model's own ocean) |
+|---|---|---|---|---|
+| skin T, 15 wt% IOM | 1.42e18 kg | 1.48e18 kg | 6.97% | 1.07 / 1.08 |
+| skin T, no IOM | 1.41e18 kg | 1.42e18 kg | 6.65% | 1.07 / 1.08 |
+| 160 °C, 15 wt% IOM | 1.66e18 kg | 1.82e18 kg | 8.53% | 1.09 / 1.12 |
+| 160 °C, no IOM | 1.25e18 kg | 1.27e18 kg | 5.96% | 1.06 / 1.09 |
+
+**Some 6–8% of the ocean is drawn into the core in the first orbit**, as the 69 km skin's metal corrodes
+and its primaries hydrate (both nearly instantaneous here: D6 accepts instantaneous corrosion as an
+idealisation of early alteration). After that the refill adds only ~0.1–0.5% of the ocean over 23
+orbits, and is sometimes slightly negative without IOM. The ocean's solutes concentrate by the same
+factor (1.06–1.09; the model's own normalised ocean water gives 1.08–1.12, the difference being that the
+restarts keep the parent's normalised ocean while the box's rock mass shrinks with δ). The concentration
+factor follows from the water loss alone; the solutes the refilled water carries into the rock are in
+the chemistry.
+
 **24-orbit runs (production k = 1e-7 at φ0 = 0.32 via Kozeny–Carman with d = 1.59 cm, skin box, φc = 0.4,
 ΔP from the strain, refill on):**
 
