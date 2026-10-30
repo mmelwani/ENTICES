@@ -1238,10 +1238,10 @@ rate, rock table and `rec_eqb` default have all changed since.
 - **N8.** Confirm in a long grouped run that the 25 °C porewater brine flushes
   as expected (Part 5).
 - ~~N9. pH 11 with 2e-4 molal Na~~ **Closed 10-27** (Part 5: pKw at 1.45 °C).
-- **N13.** Evolving porosity: **implemented 10-30 as an option** (`run_tidal_evolution(porosity_evolution =
-  TRUE)`, default FALSE until the PI decides; README §6). At 160 °C the core closes (φ 0.32 → 0.22 with
-  IOM, → 0.17 without, in 24 orbits). **Open:** the porewater runs 20–40% short of the pore volume as
-  hydration consumes water; whether the ocean should refill it (a hydration-driven inflow) is for the PI.
+- **N13.** Evolving porosity: **implemented 10-30** (`run_tidal_evolution()`, TRUE for production, FALSE
+  in the quick self-tests), with the refill of the pores from the ocean between chunks (README §6). At the
+  skin's temperature (k = 1e-7) φ 0.32 → 0.28 (IOM) / 0.26 (none) in 24 orbits; at 160 °C → 0.22 / 0.17.
+  The refill moves ~2×10⁴ times the tidal exchange after orbit 1.
 - **N10.** D6 (metal corrosion rate): until it is decided, every gas-phase
   result is dominated by the t = 0 metal pulse (Part 7).
 - **N12 (after D6).** A third `pore_gas_fate`, `"retain_to_pore_volume"`: keep

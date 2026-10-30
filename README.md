@@ -467,49 +467,53 @@ al. 2017), whose hot upwellings tidal pumping does not produce; those models are
 `porewater_temp` still overrides the profile temperature when given as a number.
 
 **Porosity that evolves with the chemistry (`run_tidal_evolution()`, `porosity_evolution.R`; PI
-2026-10-29; `porosity_evolution = FALSE` by default until the PI decides).** Rigid frame, no
-compaction: φ(t) = 1 − V_solid(t)/V_total, with V_total = V_solid(0)/(1 − φ0) fixed and V_solid from
-`bulk_density()` (minerals, the remaining IOM at the Delarue density, clathrates; `origin_pqi` carries
-the IOM inventory across restarts). The run is split into chunks (`tidal_kinetic`, then
-`tidal_kinetic_restart` with `stop_on_depletion = FALSE` and `allow_pressure_change = TRUE`, since the
-skin's pressure moves with δ); between chunks a new Simulator takes φ(t) and recomputes k (with
-`k_of_phi`, e.g. Kozeny–Carman), α, the storage, δ, the reacting box, the strain-limited volume and the
-exchange fraction. A chunk whose φ changes by more than `phi_tol` (1% relative) is rerun with half the
-orbits, down to one orbit, which is accepted and flagged (`over_tol`); the next chunk is scaled from the
-last one's rate. φ ≤ `phi_min` (0.01) is capped and flagged `clogged`. `tests/porosity_evolution_check.R`
-checks the bookkeeping.
+2026-10-29/30; `porosity_evolution = TRUE` for production runs, FALSE in the quick self-tests).** Rigid
+frame, no compaction: φ(t) = 1 − V_solid(t)/V_total, with V_total = V_solid(0)/(1 − φ0) fixed and
+V_solid from `bulk_density()` (minerals, the remaining IOM at the Delarue density, clathrates;
+`origin_pqi` carries the IOM inventory across restarts). The run is split into chunks
+(`tidal_kinetic`, then `tidal_kinetic_restart` with `stop_on_depletion = FALSE` and
+`allow_pressure_change = TRUE`, since the skin's pressure moves with δ); between chunks a new Simulator
+takes φ(t) and recomputes k (with `k_of_phi`, e.g. Kozeny–Carman), α, the storage, ΔP, δ, the reacting
+box, the strain-limited volume and the exchange fraction. A chunk whose φ changes by more than
+`phi_tol` (1% relative) is rerun with half the orbits, down to one orbit, which is accepted and flagged
+(`over_tol`); the next chunk is scaled from the last one's rate. φ ≤ `phi_min` (0.01) is capped and
+flagged `clogged`. `tests/porosity_evolution_check.R` checks the bookkeeping.
 
-**160 °C test (24 orbits, production k = 1e-7 at φ0 = 0.32 via Kozeny–Carman with d = 1.59 cm, skin box,
-α = φ/φc):**
+**Refill (PI, 2026-10-30).** Hydration consumes porewater (after the first orbit the porewater was
+20–37% short of the pores). Between chunks the porewater is now brought back to the pore volume φ(t)
+implies, m_pw(0)·φ(t)/φ0 (m_pw(0) the first chunk's porewater, so the target is on the run's own
+normalised basis and is 0 at t = 0), by moving ocean water into it: `tidal_kinetic_restart(refill_kg
+=)` mixes that much of the ocean solution into the porewater (or porewater into the ocean, if negative)
+before its first orbit. MIX moves whole solutions, so every element is conserved between the two; the
+gas phases are untouched; the MIX steps run before the SELECTED_OUTPUT is defined and add no rows
+(such a restart has no `i_soln` rows). `tests/restart_closure_check.R` checks that a restart with a
+refill of +0.02 or −0.01 kg ends its orbit with the same whole-system element totals (porewater, ocean,
+rock, pore and ocean gas) as without it, and that the water moved. Each chunk reports the refill
+(`refill_in_kg`, and per orbit of the previous chunk) next to the tidal exchange (`exchange_kg_per_orbit`).
+**The refill dwarfs the tidal exchange:** after orbit 1 it moves 0.033–0.044 kg of ocean water into the
+porewater (normalised basis), against a tidal exchange of 1.9e-6 kg per orbit, ~2×10⁴ times more; after
+that it falls to 1e-4–1e-5 kg per orbit, still 10–100× the tidal exchange, and is sometimes negative (a
+little porewater returned) without IOM. In this model, then, **hydration-driven inflow, not tidal
+pumping, sets how much ocean water enters the rock** while the primaries hydrate.
 
-| orbit | φ (15 wt% IOM) | k | δ | circulation | φ (no IOM) | k | δ | circulation |
-|---|---|---|---|---|---|---|---|---|
-| 0 | 0.320 | 1.0e-7 | 74 km | 1,117 yr | 0.320 | 1.0e-7 | 74 km | 1,117 yr |
-| 1 | 0.251 | 4.0e-8 | 53 km | 1,624 yr | 0.213 | 2.2e-8 | 43 km | 2,137 yr |
-| 4 | 0.227 | 2.8e-8 | 47 km | 1,917 yr | 0.177 | 1.2e-8 | 34 km | 2,950 yr |
-| 12 (14 without IOM) | 0.222 | 2.6e-8 | 45 km | 1,985 yr | 0.169 | 9.8e-9 | 33 km | 3,202 yr |
-| 24 | 0.219 | 2.5e-8* | 45 km* | 2,014 yr* | 0.165 | 9.1e-9* | 32 km* | 3,334 yr* |
+**24-orbit runs (production k = 1e-7 at φ0 = 0.32 via Kozeny–Carman with d = 1.59 cm, skin box, φc = 0.4,
+ΔP from the strain, refill on):**
 
-(k, δ and circulation are those φ gives, i.e. of the next chunk; * those of the last chunk, which
-started at φ 0.220 and 0.165.)
+| | φ at orbit 24 | k | δ | skin T | circulation | refill, orbit 1 |
+|---|---|---|---|---|---|---|
+| skin temperature (`"profile"`), 15 wt% IOM | 0.279 | 6.0e-8 | 58 km | 31 → 27 °C | 1,121 yr | 0.033 kg |
+| skin temperature, no IOM | 0.259 | 4.5e-8 | 52 km | 31 → 26 °C | 1,260 yr | 0.034 kg |
+| 160 °C override, 15 wt% IOM | 0.222 | 2.6e-8 | 43 km | 160 °C | 1,626 yr | 0.044 kg |
+| 160 °C override, no IOM | 0.169 | 9.9e-9 | 31 km | 160 °C | 2,651 yr | 0.038 kg |
+| *before (10-29): 160 °C, φc 0.5, ΔP 1e5, no refill, IOM / none* | *0.219 / 0.165* | *2.5e-8 / 9.1e-9* | *45 / 32 km* | *160 °C* | *2,014 / 3,334 yr* | — |
 
-The poroelastic limit binds throughout (x per half-orbit 4.8e-6 → 5.4e-6 with IOM, → 5.7e-6 without).
-**The core closes; it does not open**, and it does not clog in 24 orbits: hydration (lizardite and
-the corrosion products of the metal) fills pores much faster than IOM degradation empties them (only
-~0.01 g of 150 g of IOM is released in 24 orbits at 160 °C), and the rate falls as the fast primaries
-run out (albite is exhausted by orbit ~7). With IOM φ falls less, because the IOM is a large, inert
-share of the solid volume. In practice the first ~4–5 chunks are single orbits over the 1% tolerance
-(Δφ 22% and 34% in orbit 1, from the instantaneous metal corrosion and the fastest hydration); after
-that chunks of 2–6 orbits stay within it.
-
-**Water accounting (open).** Hydration consumes water. PHREEQC's porewater mass falls from 0.157 to
-0.080 kg (normalised basis) in orbit 1 with IOM, while the pore volume left implies 0.126 kg: the
-porewater is 37% short of filling the pores (20% short without IOM, 0.067 vs 0.084 kg), and stays so
-(0.062 vs 0.110 kg at orbit 24 with IOM). At t = 0 the two differ by 2% (0.157 vs 0.160), because the
-profile's core density and the reconstructed solid's density differ. The model treats PHREEQC's mass as
-authoritative for the chemistry (it conserves H and O) and φ from the solids for transport; nothing
-refills the emptied pore space from the ocean beyond the tidal exchange (a hydration-driven inflow is a
-modelling choice for the PI).
+(k, δ and circulation are those of the last chunk, which starts a little above the final φ.) **The test
+of 10-29 overrode the temperature** (`porewater_temp = 160`) on the skin box, whose own temperature at
+k = 1e-7 is 31 °C (falling to 26–27 °C as the skin thins). At the skin's temperature the core closes much
+less (φ 0.32 → 0.28 with IOM, → 0.26 without), because hydration is slower; at 160 °C it closes as
+before (→ 0.22, 0.17), the new defaults changing little (the strain binds throughout, so ΔP does not
+matter). In every case **the core closes and does not clog** in 24 orbits, and the strain limit binds.
+The first chunk takes 77 s at the skin's temperature and 190–515 s at 160 °C.
 
 **Two assumptions, stated, not swept.**
 - **Ingested water has the bulk-ocean composition.** The water drawn in is not the fluid just

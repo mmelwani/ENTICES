@@ -1055,3 +1055,12 @@ One commit per item; each commit message has its pass check.
   sandstones) after Nur et al. (1998); phi >= phi_c gives alpha = 1 (a suspension, not a frame). At phi0
   0.32, alpha 0.80: skin box x_half 8.3e-6 at low k, production 6.1e-6 (69 km skin, 31 C, 156 atm),
   circulation 912 yr. README tables recomputed with dP from the strain.
+- **Refill of the pores from the ocean** (PI, 10-30): `tidal_kinetic_restart(refill_kg =)` mixes ocean water
+  into the porewater (negative: the reverse) before the first orbit, without output rows; run_tidal_evolution()
+  refills to m_pw(0) phi(t)/phi0 between chunks and reports it next to the tidal exchange. After orbit 1 it
+  moves 0.033-0.044 kg (normalised) against 1.9e-6 kg of tidal exchange per orbit. restart_closure_check:
+  whole-system totals conserved for +0.02 / -0.01 kg refills. `porosity_evolution` defaults to TRUE in
+  run_tidal_evolution() (FALSE in the quick self-test).
+- **The 10-29 porosity test overrode the temperature** (porewater_temp = 160 on the skin box, whose own T is
+  31 C at k 1e-7). Rerun at the skin's temperature (new defaults, refill on): phi 0.32 -> 0.279 (15 wt% IOM)
+  / 0.259 (none) in 24 orbits; at 160 C -> 0.222 / 0.169. The core closes, no clogging, poro binds.
