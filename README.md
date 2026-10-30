@@ -397,10 +397,39 @@ At the placeholders (φ = 0.32, φc = 0.4, α = 0.80, M = 5.2 GPa, ε₀ = 1.73e
 α·M·ε₀ is 7.2e4 Pa and the box mean 1.4e4 Pa in a thin skin (ε_v/ε₀ = 0.192), 1.0e4 Pa in the 69 km
 skin at k = 1e-7 and 8.3e3 Pa over the whole layer (0.115). **Against Liao et al.'s ~3e4 Pa (Fig.
 B3a):** the same formula at their Fig. B3 case (η = 1e16 Pa·s, µ = 1 GPa, α = 0.1, φ = 0.2, ε₀ = 8.6e-7)
-gives only 1.1e3 Pa at the pole, ~28× below their plot. Their pore pressure also carries the ocean's
-tidal loading through the surface condition P = P_ocean, σ_rr = −P_ocean (their Appendix A), which
-the strain-only ΔP here leaves out; the strain-derived ΔP is therefore a lower estimate of the driving
-pressure, and the Darcy volume with it. It does not change the exchange where the strain binds.
+gives only 1.1e3 Pa at the pole, ~28× below their plot. The ocean's tidal loading of the seafloor
+(below) is far too small to close that gap; it remains unexplained (their full poroviscoelastic solution,
+not reproduced here). The strain-derived ΔP does not change the exchange where the strain binds.
+
+**Ocean tidal loading (PI, 2026-10-31).** The ocean column over the seafloor changes thickness with the
+tide, and its weight change, ΔP_load = ρ_w·g_c·|u_ocean − u_core|, loads the pores. With Bagheri et al.
+(2025)'s eccentricity tide (their Eq. 1, U₂ = r²ω²e[−(3/2)P₂⁰(cos θ)cos ωt + P₂²(cos θ)((3/4)cos ωt
+cos 2φ + sin ωt sin 2φ)], ω = n the mean motion, here 5.289e-5 rad/s from the 118,800 s period (their
+5.307e-5), e = 0.0047) and the radial displacement u_r = h₂U₂/g (their Eq. 2), at the pole (U₂ =
+(3/2)r²ω²e):
+- **ocean surface:** taken to move with the surface, whose whole-body Love number is Bagheri et al.'s
+  Table 3, "dissipative core": |h₂| = 0.0459 ± 0.0294, lag 2.95° ± 2.69°, at R = 252.1 km, g = 0.114:
+  **u_ocean = 0.50 m** at the pole (their Eq. 4's maximum over the surface, 12√(2/7)|h₂|R²ω²e/g, is
+  2.16 m; 0.78–3.54 m over the ±);
+- **core surface:** Table 3 gives no core Love number. The code uses the core's own h₂ = (5/3)k₂* of
+  the uniform Maxwell core (Liao's formula, the one behind ε₀): |h₂| = 0.29 lagging 83° at the
+  placeholders (0.64 at η = 4.4e11, 0.13 at 2.3e12), **u_core = 1.7 m** (3.7, 0.7 m);
+- the difference is taken with the phases: **ΔP_load = 213 Pa at the pole** (459 and 108 Pa at the η
+  range ends), and its box mean is the pole value times the strain factor: 41 Pa in a thin skin, 30 Pa
+  in the 69 km skin, 25 Pa over the layer.
+
+It is **added to the strain-derived ΔP as an amplitude** (an upper bound: the phase between the loading
+and the matrix strain inside the core is not known), and the volume it stores, S·ΔP_load·L_eff·A, is added
+to the strain volume, so the "poro" limit is ΔV ≈ S·(ΔP_strain + ΔP_load)·δ·A in the skin. `ocean_load =
+FALSE` drops it. **At every k and η tested the load is 0.3% of the strain term** (strain 1.38e4 + load 41
+= 1.38e4 Pa in a thin skin at the placeholders; 1.00e4 + 30 Pa at k = 1e-7; 8,257 + 25 Pa over the layer),
+so it changes the exchange by 0.3%.
+
+**A flag on the strain itself:** the core's isolated h₂ that sets ε₀ (0.29) is six times Bagheri et al.'s
+whole-body surface h₂ (0.046) and lags by 83° rather than 3°. Inside the real coupled body the core's
+response is not the isolated one; if it were nearer the whole-body value, ε₀, ΔP_strain and the
+exchange would be several times smaller. Bagheri's Table 3 does not give the core's own Love number, so
+this cannot be resolved from it; it belongs with the ε_v and η placeholders.
 
 With ΔP derived, the three volumes are tied together: the storage volume S·ΔP·δ·A = α·ε_v·δ·A equals
 the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.3 times the storage volume

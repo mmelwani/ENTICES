@@ -637,6 +637,12 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  # (Simulator$tidal_pressure(); PI 2026-10-30). A number overrides it (the old default was an
                                  # UNSOURCED 1e5 Pa); README section 6.
                                  max_tidal_stress = NULL,
+                                 # Ocean tidal loading at the seafloor (PI 2026-10-31): the whole-body surface Love number h2 of
+                                 # Bagheri et al. (2025) Table 3, "dissipative core" (|h2| 0.0459 +- 0.0294, lag 2.95 +- 2.69 deg);
+                                 # the ocean surface beneath the shell is taken to move with the surface. ocean_load = FALSE drops it.
+                                 surface_h2 = 0.0459,
+                                 surface_h2_lag_deg = 2.95,
+                                 ocean_load = TRUE,
                                  eccentricity = 0.0047,   # Enceladus's orbital eccentricity (the value with which Liao et al. 2020's Fig. 2a is reproduced)
 
                                  # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
@@ -1066,7 +1072,33 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # their Eq. A5 with zero fluid-content change). config$max_tidal_stress, if a number, overrides it.
                            tidal_pressure = function() {
                              if (!is.null(self$config$max_tidal_stress)) return(self$config$max_tidal_stress)
-                             self$biot_alpha() * self$tidal_strain()$eps_v / self$skin_depth()$S
+                             self$tidal_pressure_strain() + self$tidal_load_pressure()$mean
+                           },
+                           tidal_pressure_strain = function() self$biot_alpha() * self$tidal_strain()$eps_v / self$skin_depth()$S,
+
+                           # Ocean tidal loading at the seafloor (PI 2026-10-31): the change of the ocean column's weight,
+                           # rho_w g_c (u_ocean - u_core), with u_r = h2 U2 / g (Bagheri et al. 2025 Eq. 2) and the eccentricity
+                           # tide's amplitude at the pole, U2 = (3/2) r^2 omega^2 e (their Eq. 1 with P20 = 1, P22 = 0; omega the
+                           # mean motion, e the eccentricity). u_ocean: the surface, |h2| and lag from config (Bagheri Table 3,
+                           # dissipative core), at R = config$radius; u_core: the core's own h2 = (5/3) k2* (Liao et al. 2020's
+                           # uniform Maxwell body, the h2 behind eps0) at the core radius; the difference is taken with both
+                           # phases. The pole amplitude is averaged over the box like the strain (degree-2 factor), and that
+                           # mean is ADDED to the strain's dP (amplitudes added: an upper bound, the relative phase of the
+                           # loading and strain pressures in the matrix not being known). Self-gravity of the tide is left out.
+                           tidal_load_pressure = function() {
+                             cfg <- self$config
+                             if (!isTRUE(cfg$ocean_load)) return(list(pole = 0, mean = 0, u_ocean = 0, u_core = 0, h2_core = 0))
+                             w <- 2 * pi / cfg$orbital_period; e <- cfg$eccentricity; Rc <- cfg$core_radius; RE <- cfg$radius
+                             U2 <- function(r) 1.5 * r^2 * w^2 * e
+                             gE <- cfg$calculate_gravity(RE); gc <- cfg$calculate_gravity(Rc)
+                             tau <- cfg$core_viscosity / cfg$core_rigidity
+                             mus <- cfg$core_rigidity * (1i * w * tau) / (1 + 1i * w * tau)
+                             h2c <- 5 / 3 * 1.5 / (1 + 19 * mus / (2 * cfg$core_density * (4 / 3 * pi * CONSTANTS$G * cfg$core_density * Rc) * Rc))
+                             h2s <- cfg$surface_h2 * exp(-1i * cfg$surface_h2_lag_deg * pi / 180)
+                             us <- h2s * U2(RE) / gE; uc <- h2c * U2(Rc) / gc
+                             pole <- CONSTANTS$FLUID$density * gc * Mod(us - uc)
+                             list(pole = pole, mean = pole * self$tidal_strain()$factor, u_ocean = Mod(us), u_core = Mod(uc),
+                                  h2_core = Mod(h2c), h2_core_lag_deg = -Arg(h2c) * 180 / pi)
                            },
 
                            # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; README section 6):
@@ -1085,7 +1117,11 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              V_pore  <- self$params$porosity * V_layer
                              st      <- self$tidal_strain(); eps0 <- st$eps0; eps_v <- st$eps_v
                              dP      <- self$tidal_pressure()
-                             vols    <- c(poro = self$biot_alpha() * eps_v * V_layer,
+                             ld      <- self$tidal_load_pressure()
+                             dP_load <- if (is.null(cfg$max_tidal_stress)) ld$mean else 0
+                             S_      <- self$skin_depth()$S
+                             # poro: the strain's fluid volume plus the volume the ocean loading stores in the box, S dP_load L A
+                             vols    <- c(poro = self$biot_alpha() * eps_v * V_layer + S_ * dP_load * L * 4 * pi * R^2,
                                           darcy = sum(self$results$fluid_volume) / 2,
                                           pore_volume = V_pore)
                              dV      <- min(vols)
@@ -1093,6 +1129,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              x_orbit <- 1 - (1 - x_half)^2
                              sd      <- self$skin_depth()
                              list(eps0 = eps0, eps_v = eps_v, strain_factor = st$factor, dP = dP,
+                                  dP_strain = if (is.null(cfg$max_tidal_stress)) dP - dP_load else NA_real_, dP_load = dP_load,
+                                  dP_load_pole = ld$pole, u_ocean = ld$u_ocean, u_core = ld$u_core, h2_core = ld$h2_core,
                                   dP_source = if (is.null(cfg$max_tidal_stress)) "strain" else "override",
                                   V_layer = V_layer, V_pore = V_pore,
                                   delta = sd$delta, L_eff = sd$L_eff, storage = sd$S,
@@ -1142,10 +1180,10 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
                                             "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
                                             "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, eps_v/eps0 %.4f, ",
-                                            "dP %.4g Pa (%s), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
+                                            "dP %.4g Pa (%s; ocean load %.3g Pa), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
                                      x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0, x$strain_factor,
-                                     x$dP, x$dP_source,
+                                     x$dP, x$dP_source, x$dP_load,
                                      self$config$core_rigidity / 1e9, self$config$core_viscosity, self$biot_alpha(), self$params$porosity)
                            },
 

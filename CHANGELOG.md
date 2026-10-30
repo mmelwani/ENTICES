@@ -1064,3 +1064,9 @@ One commit per item; each commit message has its pass check.
 - **The 10-29 porosity test overrode the temperature** (porewater_temp = 160 on the skin box, whose own T is
   31 C at k 1e-7). Rerun at the skin's temperature (new defaults, refill on): phi 0.32 -> 0.279 (15 wt% IOM)
   / 0.259 (none) in 24 orbits; at 160 C -> 0.222 / 0.169. The core closes, no clogging, poro binds.
+- **Ocean tidal loading at the seafloor** (PI, 10-31): Simulator$tidal_load_pressure(), rho_w g_c |u_ocean - u_core|
+  with u_r = h2 U2/g at the pole (Bagheri et al. 2025 Eqs. 1-2; surface |h2| 0.0459, lag 2.95 deg, Table 3
+  dissipative core; core h2 = (5/3) k2* of the uniform Maxwell core). Pole 213 Pa (108-459 over eta), box
+  mean 25-41 Pa; added to the strain dP as an amplitude (upper bound) and its stored volume to the poro
+  limit. 0.3% of the strain term at every k and eta. `ocean_load = FALSE` drops it. It does not explain
+  Liao's ~3e4 Pa (README corrected). Flag: the core h2 behind eps0 (0.29) is 6x the whole-body h2 (0.046).

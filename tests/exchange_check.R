@@ -81,7 +81,8 @@ for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
   x <- sim$exchange; R <- cfg$core_radius; Le <- min(194200, x$delta)
   Vs <- 4 / 3 * pi * (R^3 - (R - Le)^3)
   ok <- abs(sim$reactive_thickness() / Le - 1) < 1e-12 && abs(x$V_pore / (0.32 * Vs) - 1) < 1e-12 &&
-    abs(x$dV_poro / (sim$biot_alpha() * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs) - 1) < 1e-12 && x$binding == "poro"
+    abs(x$dV_poro / (sim$biot_alpha() * x$eps0 * FlowUtils$degree2_dilatation_factor(R, Le) * Vs +
+                       x$storage * x$dP_load * Le * 4 * pi * R^2) - 1) < 1e-12 && x$binding == "poro"
   check(ok, sprintf("skin box, k = %.0e: L_eff %.4g m; x_half %.3e (%s)", k, Le, x$x_half, x$binding))
 }
 
@@ -92,13 +93,25 @@ for (k in c(1e-14, 1e-12, 1e-11, 1e-7)) {
 s1 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cfg); s$run_simulation(); s })
 sl <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
 x1 <- s1$exchange
-ok <- abs(x1$dP / (s1$biot_alpha() * x1$eps_v / s1$skin_depth()$S) - 1) < 1e-12 && x1$dP_source == "strain" &&
+ok <- abs(x1$dP_strain / (s1$biot_alpha() * x1$eps_v / s1$skin_depth()$S) - 1) < 1e-12 && x1$dP_source == "strain" &&
+  abs(x1$dP - x1$dP_strain - x1$dP_load) < 1e-9 &&
   abs(x1$strain_factor - FlowUtils$degree2_dilatation_factor(cfg$core_radius, x1$delta)) < 1e-15 && abs(x1$strain_factor - 0.19245) < 1e-4 &&
   abs(sl$exchange$strain_factor - 0.19245 * 0.6) < 1e-5 && abs(x1$dV_storage / x1$dV_poro - 1) < 1e-3
 ov <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(max_tidal_stress = 1e5))); s$run_simulation(); s })
 check(ok && ov$exchange$dP == 1e5 && ov$exchange$dP_source == "override",
       sprintf("dP = alpha eps_v M: %.4g Pa (skin, factor %.4f), %.4g Pa (layer, factor %.4f); storage / strain %.4f in the skin; override %g Pa",
               x1$dP, x1$strain_factor, sl$exchange$dP, sl$exchange$strain_factor, x1$dV_storage / x1$dV_poro, ov$exchange$dP))
+
+# 3e. Ocean tidal loading (L, 2026-10-31): u_ocean = |h2| (3/2) R^2 w^2 e / g at the pole (Bagheri et al. 2025 Eqs.
+#     1-2, Table 3 |h2| 0.0459); the load's box mean is its pole amplitude times the strain factor and is added to
+#     the strain's dP; ocean_load = FALSE removes it; it is ~0.3% of the strain's dP here.
+ld <- s1$tidal_load_pressure(); w <- 2 * pi / cfg$orbital_period
+us_hand <- 0.0459 * 1.5 * cfg$radius^2 * w^2 * cfg$eccentricity / cfg$calculate_gravity(cfg$radius)
+nl0 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(ocean_load = FALSE))); s$run_simulation(); s })
+check(abs(ld$u_ocean / us_hand - 1) < 1e-12 && abs(x1$dP_load - ld$pole * x1$strain_factor) < 1e-9 &&
+        nl0$exchange$dP_load == 0 && abs(nl0$exchange$dP - x1$dP_strain) < 1e-6 && x1$dP_load / x1$dP < 0.01,
+      sprintf("ocean load: u_ocean %.4f m, u_core %.4f m, pole %.4g Pa, box mean %.4g Pa (%.2f%% of dP %.5g Pa); off: dP %.5g Pa",
+              ld$u_ocean, ld$u_core, ld$pole, x1$dP_load, 100 * x1$dP_load / x1$dP, x1$dP, nl0$exchange$dP))
 
 # 4. Pore-volume limit.
 eps_fluid <- FlowUtils$tidal_strain_amplitude(1e10, 1, cfg$core_density, cfg$core_radius, cfg$eccentricity, cfg$orbital_period)
