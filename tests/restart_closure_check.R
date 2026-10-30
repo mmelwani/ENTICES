@@ -74,6 +74,30 @@ steps <- c("REACT", "MIX 4", "MIX 1", "MIX 2")
 scale <- totals(A, 5, pq)                          # orbit 2 REACT row: rock + porewater
 for (j in 1:4) compare(A, 4 + j, R, j, pq, scale, sprintf("tidal orbit 2, %-6s", steps[j]))
 
+# Refill (exchange-physics H, 2026-10-30): the same restart with refill_kg = +0.02 kg (ocean -> porewater) and
+# -0.01 kg (porewater -> ocean). The whole system at the end of the orbit (porewater after MIX 1 + ocean after
+# MIX 2 + the rock and pore gas of the REACT row + the ocean minerals and gas of MIX 4, less the pore gas moved
+# to the ocean) is the same as without the refill, and the water has moved.
+sol <- function(run, i) { s <- dissolved(run, i, pq); c(s, H = as.numeric(run$x$H_total_mol[i]), O = as.numeric(run$x$O_total_mol[i])) }
+gas <- function(run, i) { el <- intersect(pq$totals, names(run$x)); g <- stats::setNames(rep(0, length(el)), el)
+  for (k in grep("^g_", names(run$x), value = TRUE)) { f <- formula_elements(sub("\\(g\\)$", "", sub("^g_", "", k)))
+    for (e in names(f)) g[e] <- g[e] + as.numeric(run$x[i, k]) * f[[e]] }
+  g }
+whole <- function(run) { a <- sol(run, 3); b <- sol(run, 4); e <- names(totals(run, 1, pq))
+  s <- totals(run, 1, pq) - sol(run, 1)[e] + totals(run, 2, pq) - sol(run, 2)[e] - gas(run, 1)[e]
+  s + a[e] + b[e] }
+for (rk in c(0.02, -0.01)) {
+  R1 <- run(quiet(ph$generate_phreeqc_input_tidal_kinetic_restart(output_dir = file.path(od, sprintf("tidal_refill_%g", rk)), prev_csv = P$csv,
+                                                                 n_orbital_cycles = 1, porewater_temp = TEMP_C, depletion_mineral = "Troilite",
+                                                                 refill_kg = rk)))
+  j <- judge(whole(R), whole(R1), scale)
+  dpw <- as.numeric(R1$x$mass_H2O[3]) - as.numeric(R$x$mass_H2O[3]); doc <- as.numeric(R1$x$mass_H2O[4]) - as.numeric(R$x$mass_H2O[4])
+  check(j$ok && nrow(R1$x) == nrow(R$x) && abs(dpw / rk - 1) < 0.05 && abs(doc / -rk - 1) < 0.05,
+        sprintf("refill %+g kg: whole-system totals max rel. diff. %.1e (%s)%s; porewater %+.4g kg, ocean %+.4g kg after the orbit; %d rows",
+                rk, j$rel, j$worst, if (length(j$fails)) paste0(", beyond tolerance: ", paste(j$fails, collapse = " ")) else "",
+                dpw, doc, nrow(R1$x)))
+}
+
 # Bulk (porewater mode).
 bk <- function(n, dir) quiet(ph$generate_phreeqc_input_bulk_kinetic(output_dir = file.path(od, dir), n_orbital_cycles = n, mode = "porewater",
                                                                     water_rock_ratio = 1, porewater_temp = TEMP_C, trace_C_molal = 1e-14))

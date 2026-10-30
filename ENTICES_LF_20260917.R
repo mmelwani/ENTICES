@@ -4894,6 +4894,9 @@ END
                                    # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
                                    # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
                                    # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
+                                   # @param refill_kg Water (kg, on the run's normalised basis) moved from the ocean into the porewater
+                                   #   before the first orbit, by MIX (negative: from the porewater to the ocean), so that the porewater fills
+                                   #   the pore volume again (run_tidal_evolution(); PI 2026-10-30). Default 0. The MIX rows are not punched.
                                    # @param stop_on_depletion TRUE (default): stop the run (USER_PRINT STOP, which PHREEQC reports as 2 errors, status 3) at the
                                    #   end of an orbit once depletion_mineral is exhausted. FALSE runs every orbit (run_tidal_evolution() uses it).
                                    # @param suffix Appended to the file name. Default "".
@@ -4924,7 +4927,8 @@ END
                                      allow_pressure_change = FALSE,
                                      pore_gas_fate       = c("to_ocean", "retain"),
                                      logfile             = FALSE,
-                                     stop_on_depletion   = TRUE
+                                     stop_on_depletion   = TRUE,
+                                     refill_kg           = 0
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -5157,6 +5161,24 @@ END
                                      soln2_pH   <- as.numeric(row_mix2[["pH"]])
                                      soln2_pe   <- as.numeric(row_mix2[["pe"]])
                                      soln2_h2o  <- as.numeric(row_mix2[["mass_H2O"]])
+                                     # Refill (PI 2026-10-30): move refill_kg of water ocean -> porewater (negative: porewater ->
+                                     # ocean) by MIX before the first orbit. MIX scales whole solutions, so the moved water carries
+                                     # its solutes and every element is conserved between the two. Its simulations run before the
+                                     # SELECTED_OUTPUT is defined, so they add no rows (and this restart has no i_soln rows).
+                                     if (!is.numeric(refill_kg) || length(refill_kg) != 1 || !is.finite(refill_kg))
+                                       stop("refill_kg must be one finite number (kg)")
+                                     refill_block <- if (refill_kg > 0) {
+                                       if (refill_kg >= soln2_h2o) stop(sprintf("refill_kg %.4g >= the ocean's water %.4g kg", refill_kg, soln2_h2o))
+                                       paste0("END\n# Refill: ", sprintf("%.6e", refill_kg), " kg of ocean water into the porewater\n",
+                                              "MIX 1\n  1  1.0\n", sprintf("  2  %.15e\n", refill_kg / soln2_h2o), "SAVE solution 1\nEND\n",
+                                              "MIX 2\n", sprintf("  2  %.15e\n", 1 - refill_kg / soln2_h2o), "SAVE solution 2\nEND\n")
+                                     } else if (refill_kg < 0) {
+                                       if (-refill_kg >= soln1_h2o) stop(sprintf("-refill_kg %.4g >= the porewater's water %.4g kg", -refill_kg, soln1_h2o))
+                                       paste0("END\n# Refill: ", sprintf("%.6e", -refill_kg), " kg of porewater into the ocean\n",
+                                              "MIX 2\n  2  1.0\n", sprintf("  1  %.15e\n", -refill_kg / soln1_h2o), "SAVE solution 2\nEND\n",
+                                              "MIX 1\n", sprintf("  1  %.15e\n", 1 + refill_kg / soln1_h2o), "SAVE solution 1\nEND\n")
+                                     } else ""
+                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6)", refill_kg)
 
                                      # ---- Secondary minerals list ----
                                      secondary_minerals <- c(
@@ -5515,6 +5537,7 @@ KNOBS
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
+{refill_header_line}
 {self$simulator$exchange_header_line()}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
@@ -5548,6 +5571,7 @@ SOLUTION 2 Enceladus ocean (restarted)
     water     {sprintf("%.15g", soln2_h2o)}
     pressure  {round(ocean_pressure_atm, 1)}
 {soln2_elem_lines}
+{refill_block}
 
 REACTION_TEMPERATURE 1
     {round(porewater_temp_C, 2)}

@@ -32,6 +32,15 @@ check(on$phi_start[1] == 0.32 && chain && all(abs(on$k / kc(on$phi_start) - 1) <
               n, paste(on$n_orbits, collapse = "+"), paste(sprintf("%.4f", c(on$phi_start, on$phi_end_solids[n])), collapse = " -> "),
               paste(sprintf("%.3g", on$k), collapse = ", ")))
 
+# Refill (H): before each chunk after the first, the porewater is brought to m_pw(0) phi / phi0 by moving ocean
+# water in; so each chunk's refill equals the previous chunk's target less its porewater, and after the refill
+# the porewater (before the next chunk's orbits) is on target: checked by the next chunk's first REACT row
+# water being near the target (hydration in that REACT step moves it a little).
+check(on$refill_in_kg[1] == 0 && n > 1 && all(abs(on$refill_in_kg[-1] - (on$water_target_kg[-n] - on$water_phreeqc_kg[-n])) < 1e-12) &&
+        all(on$refill_in_kg[-1] > 0),
+      sprintf("refill: %s kg before chunks 2..%d (exchange per orbit %s kg)", paste(sprintf("%.3g", on$refill_in_kg[-1]), collapse = ", "), n,
+              paste(sprintf("%.2g", on$exchange_kg_per_orbit), collapse = ", ")))
+
 off <- run_tidal_evolution(tmpl, organic_wt_percent = 15, n_orbits = 2, output_dir = file.path(od, "off"),
                            porosity_evolution = FALSE, k_of_phi = kc, porewater_temp = 25)$chunks
 check(all(off$phi_start == 0.32) && all(off$k == kc(0.32)) && sum(off$n_orbits) == 2,
