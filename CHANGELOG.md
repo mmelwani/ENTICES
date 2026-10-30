@@ -1048,3 +1048,6 @@ One commit per item; each commit message has its pass check.
   skin), 7.2e3 Pa (layer). At Liao et al.'s Fig. B3 case the formula gives 1.1e3 Pa against their
   ~3e4 (their ocean-loading term is not in it). Storage volume = strain volume in the skin, Darcy =
   2.2x storage: the strain binds at every k in the skin box. Header and `sim$exchange` report dP.
+- **Strain factor follows the box** (PI, 10-30): eps_v/eps0 = (mean |P2| / 2 = 0.192) x the radial mean of (r/R)^2
+  over the reacting box: 0.192 for a thin skin (0.138 for the 74 km skin at k 1e-7), 0.115 for the full layer.
+  Already how tidal_strain() evaluates it; documented and tested (exchange_check 3d).

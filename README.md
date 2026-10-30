@@ -359,8 +359,12 @@ simplified model does not give the dilatation (with a Laplace displacement poten
 their viscoelastic end-member). **Assumption (placeholder pending the PI):** the dilatation has the
 degree-2 pattern (r/R)²·P₂(cos θ) with amplitude ε₀ at the pole. A degree-2 field has zero mean, so
 each half-orbit an equal volume compresses (expelling fluid) and expands (drawing it in); the
-compressed part's volume mean is ε_v = 0.19245 × (3/5)(1 − x⁵)/(1 − x³) × ε₀, x = (R − L)/R: 0.115·ε₀
-for the full core, 0.192·ε₀ for a thin layer. If the matrix is nearly incompressible the dilatation is
+compressed part's volume mean is ε_v = 0.19245 × (3/5)(1 − x⁵)/(1 − x³) × ε₀, x = (R − L)/R, where 0.19245
+is half the surface mean of |P₂| (0.385: the compressed half of the pattern) and the rest the radial mean
+of (r/R)² over the box. **The factor follows the reacting box** (PI, 10-30): with `reactive_depth =
+"skin"` it is evaluated over the skin, 0.192 for a thin skin (r ≈ R; 0.192 at k ≤ 1e-11, where δ < 1 km)
+falling to 0.138 for the 74 km skin at k = 1e-7; with `"layer"` over the whole layer, 0.115 for the
+full core. `sim$exchange$strain_factor` reports it. If the matrix is nearly incompressible the dilatation is
 smaller, so ΔV_poro is an upper estimate.
 
 **Rigidity and viscosity** come from Bagheri et al. (2025) Table 5, "dissipation in the core" (µ 4–70
