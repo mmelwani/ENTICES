@@ -104,11 +104,12 @@ o0 <- read.delim(list.files(dirname(f), "_initial_ocean\\.csv$", full.names = TR
 names(o0) <- trimws(names(o0)); o0[, c("pH", "C", "Mtg", "m_SO4-2", "m_HSO4-", "m_H2S", "m_H2", "Vgas_L")]
 ```
 
-Expect for the starting ocean: pH 1.85, 0.0866 molal DIC (all C(+4)), Mtg 0.0102, S(+6) 0.0094 and
-S(−2) 0.0028 molal, no bubble. With ~0.087 molal DIC from the start, the organics' carbon can only
+Expect for the starting ocean (NH₃ included, the default since 10-31): pH 2.08, 0.0866 molal DIC (all
+C(+4)), Mtg 0.0102, S(+6) 0.0094 and S(−2) 0.0028 molal, 7.4e-3 molal NH₄⁺, no bubble. With ~0.087 molal DIC from the start, the organics' carbon can only
 be found by the paired difference (example 3 with `initial_ocean = cometary_ice_ocean()`).
 `cometary_ice_ocean(include_O2 = FALSE)` leaves sulfide unoxidised and 0.031 molal H₂ (pH 3.8);
-`include_NH3 = TRUE` adds 7.4e-3 molal NH₃ (pending the PI).
+`include_NH3 = FALSE` gives Miller et al.'s Table 5 as printed (pH 1.85); `include_less_volatile = TRUE`
+adds 21 less-volatile ices (DIC 0.56 molal, pH 5.8, an H₂ bubble; README §6); `f` scales the load.
 
 ## 5. The pore-gas bracket
 

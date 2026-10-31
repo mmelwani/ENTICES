@@ -396,18 +396,40 @@ gas_punch <- function(comps, vpore_L, put = FALSE) {
 # (Rubin et al. 2019, MNRAS 489, 594-607, the "67P" column below, mol per 100 mol H2O), with every
 # ice more volatile than NH3 at 273 K (Fray & Schmitt 2009) depleted by v_NH3 = 0.02. v_NH3 comes
 # from Titan's atmospheric N budget (Miller et al. 2026, eqs. 21-24): it is not an Enceladus
-# constraint. NH3 (0.67 per 100 H2O, Rubin et al. 2019 Table 4) is not in Miller's Table 5, whose
-# "Total N" (2 x N2) excludes it, while their text says v_NH3 applies to NH3 too: include_NH3
-# (default FALSE, Table 5 as printed) is pending the PI. include_O2 exists because O2 decides the
-# redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound (2.6 molal CO2 + 1.7 molal
-# CO, far above CO2-clathrate dissociation at 1.45 C).
+# constraint. NH3 (0.67 +- 0.20 per 100 H2O, Rubin et al. 2019 Table 2) is not in Miller's Table 5,
+# whose "Total N" (2 x N2) excludes it, while their text applies v_NH3 to "NH3 and other compounds
+# that are more volatile": treated as an omission, include_NH3 = TRUE by default (PI 2026-10-29),
+# 0.0134 per 100 H2O = 7.44e-3 molal. (Rubin et al. note a factor of 10 between the 2015 bulk NH3 and
+# the earlier 3.1 au measurements, 0.06/0.15, which they leave unexplained.) include_O2 exists
+# because O2 decides the redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound
+# (2.6 molal CO2 + 1.7 molal CO, far above CO2-clathrate dissociation at 1.45 C).
+# f (PI 2026-10-29) scales the whole cometary volatile load after the depletion: the fraction of the
+# accreted cometary volatiles retained in the ocean (f = 1: all of it; 0.1: a tenth).
+# include_less_volatile (default FALSE): Miller's rule keeps ices LESS volatile than NH3 at 273 K in
+# full, but Table 5 lists none. TRUE adds them, undepleted (x f), from data/comet67p_volatility.csv
+# (Rubin et al. 2019 Table 2; classified by Fray & Schmitt 2009 at 273 K or a boiling-point proxy;
+# CHONS species only): 21 species, C 1.08, N 0.177, S 0.177 per 100 H2O (6.2x, 50x and 8x Table 5's).
+# They enter by their elements (cometary_reaction_lines): under c4_only their carbon can only become
+# C(+4), and the electrons go to H2 or reduce sulfate; HCN's N becomes N(-3). In a cold ocean these
+# organics are kinetically metastable, so that is an equilibrium assumption; under "coupled" the
+# equilibrium decides as well (no species is held as itself).
 COMET_67P_PER_100_H2O <- c(CO2 = 4.7, CO = 3.1, O2 = 3.1, H2S = 1.1, CH4 = 0.34, C2H6 = 0.29, N2 = 8.9e-2, NH3 = 0.67)
-cometary_ice_ocean <- function(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE) {
+COMET_VOLATILITY_CSV <- "data/comet67p_volatility.csv"
+cometary_ice_ocean <- function(v = 0.02, f = 1, include_NH3 = TRUE, include_less_volatile = FALSE, include_O2 = TRUE) {
   if (!is.numeric(v) || length(v) != 1 || !isTRUE(v > 0 && v <= 1)) stop("v must be one number in (0, 1]")
+  if (!is.numeric(f) || length(f) != 1 || !isTRUE(f > 0 && f <= 1)) stop("f must be one number in (0, 1]")
   sp <- setdiff(names(COMET_67P_PER_100_H2O), c(if (!include_NH3) "NH3", if (!include_O2) "O2"))
-  # mol per 100 mol H2O x v -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
-  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v / 100 / 0.0180153, v = v,
-                 include_NH3 = include_NH3, include_O2 = include_O2), class = "cometary_ice")
+  # mol per 100 mol H2O x v x f -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
+  lv <- c(C = 0, H = 0, O = 0, N = 0, S = 0); lv_species <- character(0)
+  if (include_less_volatile) {
+    x <- utils::read.csv(COMET_VOLATILITY_CSV, stringsAsFactors = FALSE)
+    x <- x[x$added_by_include_less_volatile == "yes", ]
+    lv <- vapply(names(lv), function(e) sum(x[[e]] * x$abundance_per_100_H2O), 0) * f / 100 / 0.0180153
+    lv_species <- x$species
+  }
+  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v * f / 100 / 0.0180153, v = v, f = f,
+                 include_NH3 = include_NH3, include_O2 = include_O2, include_less_volatile = include_less_volatile,
+                 less_volatile_mol_per_kgw = lv, less_volatile_species = lv_species), class = "cometary_ice")
 }
 # REACTION lines for the ices, by carbon mode: CO2, CO, O2, H2S and NH3 are coupled (equilibrium
 # decides CO's fate; under c4_only C can only be +4, so CO + H2O -> CO2 + H2);
@@ -421,8 +443,13 @@ cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
   dec <- ch4_mode$decoupled
   # CO enters as CO2 minus O: REACTION matches phase names first, case-insensitively, and "CO" is
   # the cobalt phase Co (tested 2026-10-28: it added 0.034 molal Co).
-  r <- c(CO2 = g("CO2") + g("CO"), O = -g("CO"), O2 = g("O2"), H2S = g("H2S"), Ntg = g("N2"), NH3 = g("NH3"),
-         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0, H = if (dec) -2 * g("C2H6") else 0,
+  # the less volatile ices enter by their elements, as CO2 (C), NH3 (N), H2S (S) and H and O corrections
+  # (element names alone could match a phase, as CO did): their C becomes C(+4) under c4_only (item 4)
+  lv <- if (is.null(ice$less_volatile_mol_per_kgw)) c(C = 0, H = 0, O = 0, N = 0, S = 0) else ice$less_volatile_mol_per_kgw * water_kg
+  r <- c(CO2 = g("CO2") + g("CO") + lv[["C"]], O = -g("CO") + lv[["O"]] - 2 * lv[["C"]], O2 = g("O2"), H2S = g("H2S") + lv[["S"]],
+         Ntg = g("N2"), NH3 = g("NH3") + lv[["N"]],
+         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0,
+         H = (if (dec) -2 * g("C2H6") else 0) + lv[["H"]] - 3 * lv[["N"]] - 2 * lv[["S"]],
          CH4 = if (dec) 0 else g("CH4"), C2H6 = if (dec) 0 else g("C2H6"))
   r <- r[r != 0]
   c(sprintf("    %-5s %.15e", names(r), r), "    1 mol")
@@ -433,9 +460,11 @@ cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
 cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, base_name, database) {
   comps <- gas_components(ch4_mode, "Ntg(g)")
   paste(c("END",
-          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s), in mol/kgw: %s.",
-                  ice$v, ice$include_NH3, ice$include_O2,
-                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", ")),
+          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, f = %g, include_NH3 = %s, include_less_volatile = %s, include_O2 = %s), in mol/kgw: %s%s.",
+                  ice$v, if (is.null(ice$f)) 1 else ice$f, ice$include_NH3, isTRUE(ice$include_less_volatile), ice$include_O2,
+                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", "),
+                  if (isTRUE(ice$include_less_volatile)) paste0("; less volatile ices (", length(ice$less_volatile_species), " species) as elements: ",
+                    paste(sprintf("%s %.4e", names(ice$less_volatile_mol_per_kgw), ice$less_volatile_mol_per_kgw), collapse = ", ")) else ""),
           "# Entered as a REACTION into pure water at ocean T and P, not as SOLUTION totals: the ice mixture",
           "# is out of redox equilibrium (O2 with CO and H2S), and equilibrium decides the outcome. That is",
           "# an assumption at 1.45 C, where the CO shift and O2 oxidation are kinetically slow.",
@@ -449,6 +478,7 @@ cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, 
           "    -high_precision true", "    -state true", "    -solution true", "    -reaction true", "    -ph true", "    -pe true", "    -alkalinity true", "    -water true",
           totals_block(database),
           "    -molalities CO2 HCO3- CO3-2 Mtg H2 O2 HS- H2S SO4-2 HSO4- Ntg NH3 NH4+ HCOO- CO CH3COO- C2H6",
+          sprintf("    -saturation_indices %s CO2_hydrate H2S_hydrate", if (ch4_mode$decoupled) "Mtg_hydrate" else "CH4_hydrate"),
           gas_so_line(comps),
           "USER_PUNCH 2", "    -headings H_total_mol O_total_mol Vgas_L", "    10 PUNCH TOT(\"H\") * TOT(\"water\"), TOT(\"O\") * TOT(\"water\")",
           "    20 ng = 0", sprintf("    %d ng = ng + GAS(\"%s\")", 20 + seq_along(comps), comps), "    90 PUNCH GAS_VM * ng",

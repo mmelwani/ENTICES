@@ -14,6 +14,11 @@
 #     Checked within 10%.
 #  4. include_O2 = FALSE: no sulfate; H2 from the CO shift (0.0344) less the ethane term (0.0032),
 #     ~0.031 molal; pH ~3.8. include_NH3 = TRUE: N(-3) 0.0074 molal enters.
+#  5. (2026-10-31) The defaults: include_NH3 = TRUE. f scales every input linearly (and the ocean's C, N, S).
+#     include_less_volatile = TRUE adds the 21 less-volatile CHONS ices of data/comet67p_volatility.csv by
+#     their elements (C 1.08, N 0.177, S 0.177 per 100 H2O x f): element closure, and under c4_only all
+#     coupled C is C(+4).
+# Checks 1-4 use the Table 5 set as printed (include_NH3 = FALSE).
 #
 # Run from the repo root:  Rscript tests/cometary_ocean_check.R
 
@@ -46,7 +51,7 @@ s6 <- function(x) x$`m_SO4-2` + x$`m_HSO4-`
 s2 <- function(x) x$m_H2S + x$`m_HS-`
 
 # 1-3. Default: v = 0.02, O2 included, NH3 not.
-ice <- cometary_ice_ocean()
+ice <- cometary_ice_ocean(include_NH3 = FALSE)
 o <- ocean0(ice, "default"); x <- o$x; m <- ice$mol_per_kgw
 check(o$errors == 0, "cometary step runs (0 errors)")
 st <- carbon_by_oxidation_state(o$csv)$by_state
@@ -67,13 +72,35 @@ check(abs(x$C / 0.0866 - 1) < 0.01 && abs(x$Mtg / 0.0102 - 1) < 0.01 && abs(x$pH
               x$C, x$Mtg, x$pH, x$m_H2, s6(x), s2(x), x$Vgas_L))
 
 # 4. Toggles.
-x <- ocean0(cometary_ice_ocean(include_O2 = FALSE), "noO2")$x
+x <- ocean0(cometary_ice_ocean(include_O2 = FALSE, include_NH3 = FALSE), "noO2")$x
 check(s6(x) < 1e-10 && abs(x$m_H2 / 0.031 - 1) < 0.15 && abs(x$pH - 3.8) < 0.5,
       sprintf("include_O2 = FALSE: S(+6) %.1e, H2 %.4f molal, pH %.2f", s6(x), x$m_H2, x$pH))
 ice3 <- cometary_ice_ocean(include_NH3 = TRUE)
 x <- ocean0(ice3, "NH3")$x
 check(abs(x$N / ice3$mol_per_kgw[["NH3"]] - 1) < 1e-3 && abs(ice3$mol_per_kgw[["NH3"]] - 7.44e-3) < 1e-5,
       sprintf("include_NH3 = TRUE: N(-3) %.4e molal in (input %.4e); pH %.2f", x$N, ice3$mol_per_kgw[["NH3"]], x$pH))
+
+# 5. Defaults, f, the less volatile ices.
+d <- cometary_ice_ocean()
+check(isTRUE(d$include_NH3) && !isTRUE(d$include_less_volatile) && d$f == 1, "defaults: include_NH3 = TRUE, include_less_volatile = FALSE, f = 1")
+a1 <- cometary_ice_ocean(include_less_volatile = TRUE); a01 <- cometary_ice_ocean(f = 0.1, include_less_volatile = TRUE)
+check(all(abs(a01$mol_per_kgw / a1$mol_per_kgw - 0.1) < 1e-12) && all(abs(a01$less_volatile_mol_per_kgw / a1$less_volatile_mol_per_kgw - 0.1) < 1e-12) &&
+        length(a1$less_volatile_species) == 21 && abs(a1$less_volatile_mol_per_kgw[["C"]] * 100 * 0.0180153 - 1.0806) < 1e-3,
+      sprintf("f = 0.1 scales every input by 0.1; less volatile: %d species, C %.4f per 100 H2O", length(a1$less_volatile_species),
+              a1$less_volatile_mol_per_kgw[["C"]] * 100 * 0.0180153))
+for (ff in c(1, 0.1)) {
+  ice <- cometary_ice_ocean(f = ff, include_less_volatile = TRUE); o <- ocean0(ice, sprintf("lv_f%g", ff)); x <- o$x
+  m <- ice$mol_per_kgw; lv <- ice$less_volatile_mol_per_kgw; w0 <- o$water; w <- x$mass_H2O
+  inp <- c(C = m[["CO2"]] + m[["CO"]] + lv[["C"]], Mtg = m[["CH4"]] + 2 * m[["C2H6"]], S = m[["H2S"]] + lv[["S"]], N = m[["NH3"]] + lv[["N"]],
+           Ntg = m[["N2"]]) * w0
+  got <- c(C = x$C, Mtg = x$Mtg, S = x$S, N = x$N, Ntg = x$Ntg) * w
+  for (k in grep("^g_", names(x), value = TRUE)) { fe <- formula_elements(sub("\\(g\\)$", "", sub("^g_", "", k)))
+    for (e in intersect(names(fe), names(got))) got[e] <- got[e] + as.numeric(x[[k]]) * fe[[e]] }   # the ocean's gas bubble
+  st <- carbon_by_oxidation_state(o$csv)$by_state; cpl <- st[!st$decoupled, ]
+  check(o$errors == 0 && all(abs(got / inp - 1) < 1e-9) && all(cpl$ox[cpl$C_molal > 1e-15] == 4),
+        sprintf("less volatile, f = %g: closure (solution + gas) C %.4e, S %.4e, N %.4e mol (worst %.1e); coupled C all C(+4); pH %.2f; bubble %.3g L", ff,
+                got[["C"]], got[["S"]], got[["N"]], max(abs(got / inp - 1)), x$pH, x$Vgas_L))
+}
 
 unlink(od, recursive = TRUE)
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))

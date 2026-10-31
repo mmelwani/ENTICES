@@ -1203,7 +1203,7 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D5 | ~~`IOM_CHn` routing and formate~~ | Part 3 | **Decided:** CHn as `Mtg 1 H -2.2` (a 2.2 e⁻ reduction imposed by hand, documented); formate as a sensitivity case only |
 | D6 | **Metal corrosion**: keep `dissolve_only` (H₂ pulse at t = 0) or add a rate | Part 5 | Needed before any H₂-vs-time claim; the rate is unsourced |
 | D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
-| D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ pending the PI** |
+| D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ included by default** (PI 10-29); `f` and `include_less_volatile` (21 species, `data/comet67p_volatility.csv`) added 10-31 |
 | D9 | **Spin-up** before tidal cycling; doubles as the King et al. forward check (reconstruction §8 item 8) | 10-06 review §4 | Worth doing as a modelling option; not needed for convergence |
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |

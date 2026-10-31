@@ -1097,3 +1097,11 @@ One commit per item; each commit message has its pass check.
   default. run_tidal_evolution() follows phi(t) through a Kozeny-Carman k. Choblet's 1e-14-1e-13 at phi 0.32
   needs 5-16 um grains; production k 1e-7 implies 1.6 cm gravel. The N6 sweep is one (phi, d, strain_scale)
   grid (README). `tests/kozeny_carman_check.R`.
+- **Item 4, cometary-ice ocean extended:** `cometary_ice_ocean(v, f = 1, include_NH3 = TRUE, include_less_volatile =
+  FALSE, include_O2 = TRUE)`. NH3 now by default (7.44e-3 molal; Table 5's omission). f scales the load.
+  `data/comet67p_volatility.csv`: Rubin et al. (2019) Table 2 classified against NH3 at 273 K (Fray &
+  Schmitt 2009 Table 5 evaluated, or a boiling-point proxy); the 21 less-volatile CHONS species add C 1.08,
+  N 0.177, S 0.177 per 100 H2O (6.2x, 50x, 8x Table 5), entered by their elements. With them: pH 5.8, DIC
+  0.56 molal (f = 1), no sulfate, H2 saturated and a bubble under c4_only; CH4 hydrate oversaturated (SI
+  +0.30) under coupled. The initial-ocean CSV gains the clathrate SIs. cometary_ocean_check: defaults, f
+  linearity, less-volatile closure (with the gas bubble) and the c4_only leak check.

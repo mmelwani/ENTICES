@@ -168,8 +168,8 @@ Run everything from the repo root.
    (saturated), ocean DIC 1.3e-7 molal (the seed is 1e-14), 0.82 L of ocean gas; the pore bubble
    0.34 L after the first orbit, 3e-4 L by orbit 12.
 3. **A 100 °C organic vs blank pair** with `pair_organic_run()`.
-4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()`; the ocean starts at pH 1.85
-   with 0.087 molal DIC.
+4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
+   10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
 5. **The pore-gas bracket:** the production case with `pore_gas_fate = "retain"` and `"to_ocean"`:
    ocean H₂ 1.5e-5 vs 6.5e-2 molal at orbit 12, the same organic DIC.
 
@@ -198,7 +198,9 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `pore_gas_fate` | `"to_ocean"` | — | the pore bubble's fate | §6; PROGRESS Part 7 | decided (PI, 10-29); `"retain"` is the other bound | yes (the bracket) |
 | `initial_ocean` | `"pure_water"` | — | ocean start; `cometary_ice_ocean()` option | attribution; Miller et al. 2026 | sourced | the cometary option |
 | `cometary_ice_ocean(v)` | 0.02 | — | volatile depletion of 67P ice | Miller et al. 2026 (from Titan's N budget) | sourced, not for Enceladus | v |
-| `include_NH3` | FALSE | — | NH₃ in the cometary ocean | Table 5 lists none | **pending the PI** | — |
+| `include_NH3` | TRUE | — | NH₃ in the cometary ocean (0.67 per 100 H₂O × v) | Rubin et al. 2019 Table 2; Miller et al.'s text applies v to it | decided (PI 10-29): Table 5's omission | — |
+| `cometary_ice_ocean(f)` | 1 | — | fraction of the accreted cometary volatiles retained in the ocean, applied after v | PI 10-29 | — | f |
+| `include_less_volatile` | FALSE | — | ices less volatile than NH₃ at 273 K, undepleted (× f) | Rubin et al. 2019 Table 2; Fray & Schmitt 2009 or boiling point; `data/comet67p_volatility.csv` | option | yes |
 | `trace_C_molal` | NULL (production 1e-14) | mol/kgw | numerical C seed | smallest value tested to converge | numerical | — |
 | `mode`, `grouping_factor`, `substeps` | `"ocean_circulations"`, —, 1 | — | orbits per step | grouped mode compounds exchange: x_step = 1 − (1 − x_tide)^G | — | — |
 | `rec_eqb_minerals` | FALSE | — | promote fast primaries to equilibrium (bulk_kinetic) | a modelling choice | — | — |
@@ -667,6 +669,54 @@ mineral equilibria are at the database's reference pressure (~0.1–0.2 log unit
 cometary option follows Miller et al. (2026) and Rubin et al. (2019); it starts the ocean with
 ~0.087 molal DIC, so attribution must use the paired difference.
 
+**The cometary-ice ocean, extended (PI, 2026-10-29; an option, never the default).**
+`cometary_ice_ocean(v = 0.02, f = 1, include_NH3 = TRUE, include_less_volatile = FALSE, include_O2 =
+TRUE)`.
+- **NH₃** is now included by default: Rubin et al. (2019) Table 2 gives 0.67 ± 0.20 per 100 H₂O, and
+  Miller et al. (2026) apply v_NH3 = 0.02 to "NH₃ and other compounds that are more volatile", so the
+  depleted ice has 0.0134 per 100 H₂O (7.44e-3 molal); its absence from their Table 5 is treated as an
+  omission. Rubin et al. note a factor of 10 for NH₃ between the 2015 bulk value and the earlier 3.1 au
+  measurements (0.06 and 0.15 over the two hemispheres, which themselves differ 2.5×), left unexplained.
+- **f** scales the whole cometary load after the depletion: the fraction of the accreted cometary
+  volatiles retained in the ocean.
+- **Less volatile ices.** Miller et al.'s rule keeps ices less volatile than NH₃ at 273 K in full, and
+  their Table 5 includes none. `data/comet67p_volatility.csv` lists every species of Rubin et al.'s
+  Table 2 (bulk column, with its ± errors), classified against NH₃ at 273 K: by the sublimation curves
+  of Fray & Schmitt (2009) (their Table 5 polynomials evaluated at 273 K, read from the PDF; NH₃ is 14
+  bar there) where they cover the species, else by the normal boiling point against NH₃'s 239.8 K, a
+  proxy marked as such (standard values; not checked against a handbook here). Fray & Schmitt make CO,
+  O₂, N₂, CH₄, C₂H₆, CO₂, H₂S and the noble gases more volatile, and SO₂, HCN, CH₃OH, HC₃N, C₆H₆ and
+  HCOOH less. Radicals and atoms (SO, S, S₂, H₂CS, PO) are left unclassified (no boiling point; Rubin et
+  al. tie S, S₂ and SO partly to grains); OCS, C₃H₈, HCl and HBr come out more volatile by the proxy
+  (OCS and C₃H₈ are then missing from Table 5 too). **The 21 less-volatile CHONS species add C 1.08,
+  N 0.177 and S 0.177 per 100 H₂O, against Table 5's C 0.174, N 0.00356, S 0.022: 6.2×, 50× and 8×**
+  (HF, also less volatile, is not CHONS and is not added). They enter by their elements (as CO₂, NH₃ and
+  H₂S with H and O corrections, so no element name can match a phase, the CO-as-cobalt trap): under
+  `c4_only` their carbon can only become C(+4), and the electrons go to H₂ or reduce sulfate; HCN's N
+  becomes N(−3). **Caveat:** in a cold ocean these organics are kinetically metastable, so converting
+  them to CO₂ plus reductant is an equilibrium assumption. Under `"coupled"` the equilibrium decides as
+  well: no species is held as itself (methanol, formate and acetate exist in the database but
+  equilibrate), which the PI's request ("stay as themselves") cannot be in an equilibrium model.
+
+The starting ocean (v = 0.02, NH₃ and O₂ included; 1.45 °C, 66.7 atm; mol/kgw; clathrate SIs from the
+initial-ocean step, which has no clathrate phases to precipitate):
+
+| less volatile | mode | f | pH | DIC (C+4) | H₂ | sulfate | sulfide | Mtg / reduced C | gas at 66.7 atm | clathrate SI (CH₄/Mtg, CO₂, H₂S) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| no | c4_only | 1 | 2.08 | 0.0866 | 6e-14 | 9.4e-3 | 2.8e-3 | Mtg 0.0102 | none | −0.81, −1.07, −1.88 |
+| no | c4_only | 0.1 | 2.98 | 8.7e-3 | 1e-13 | 9.4e-4 | 2.8e-4 | Mtg 1.0e-3 | none | −1.81, −2.07, −2.88 |
+| no | coupled | 1 | 5.43 | 0.0960 | 1e-10 | 3e-9 | 0.0122 | CH₄ etc. 2.8e-6 | none | −1.92, −1.06, −1.25 |
+| no | coupled | 0.1 | 5.45 | 9.6e-3 | 1e-10 | 3e-10 | 1.2e-3 | 2.9e-8 | none | −2.91, −2.06, −2.25 |
+| yes | c4_only | 1 | 5.79 | 0.557 | 0.055 | 0 | 0.099 | Mtg 1.3e-3 | **0.19 L** (H₂ 0.48, CO₂ 0.064, H₂S 6e-3, Mtg 4e-3 mol) | −1.73, −0.37, −0.38 |
+| yes | c4_only | 0.1 | 5.76 | 0.068 | 0.064 | 0 | 0.011 | Mtg 8e-4 | **7e-3 L** (mostly H₂) | −1.91, −1.25, −1.31 |
+| yes | coupled | 1 | 5.96 | 0.402 | 4e-10 | 1e-8 | 0.108 | 0.033 (CH₄) | **0.016 L** (CH₄ 0.051 mol) | **+0.30**, −0.55, −0.34 |
+| yes | coupled | 0.1 | 6.01 | 0.042 | 5e-10 | 5e-10 | 0.011 | 1.0e-3 | none | −0.39, −1.51, −1.31 |
+
+With the less volatile ices the organics' electrons consume all the O₂ (no sulfate is left), the ocean is
+saturated in H₂ under `c4_only` (~0.06 molal at 66.7 atm, the rest a bubble), and under `coupled` the
+carbon reduces to methane instead, oversaturating CH₄ hydrate at f = 1. The less volatile organics
+multiply the ocean's DIC by 6–7 (0.087 → 0.56 molal at f = 1).
+
 **Initial fluids** are defined at 25 °C, pe 4 (no oxidant or reductant) and heated by
 REACTION_TEMPERATURE; defined at the run temperature, pe 4 put O₂ into the porewater (4.9 molal
 O(0) at 250 °C).
@@ -755,8 +805,9 @@ carbon is reduced: PHREEQC files formate, acetate and other organics under C(4).
 (2009)'s salt envelopes, 0.2 molal Cl with 0.1 molal total dissolved carbonate (TDC = HCO₃⁻ +
 CO₃²⁻, without CO₂(aq)) or 0.05 molal Cl with 0.01 molal TDC, and the pH range 8.5–9, which gives
 log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's oceans:
-- the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 it is almost all CO₂(aq)
-  (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no Cl;
+- the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 (2.08 with NH₃, the default since
+  10-31) it is almost all CO₂(aq) (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no
+  Cl; with the less volatile ices it is 0.56 molal at pH 5.8;
 - the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 1.3e-7 molal DIC at pH
   11.3, of which the organics contribute 1.29e-7 molal. Whether the organic contribution can
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
