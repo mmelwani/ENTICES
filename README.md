@@ -851,6 +851,26 @@ alone (the metal's H₂ beyond 1 pore volume) still saturates the ocean in H₂;
 the ocean see the H₂ through the tidal exchange alone. The ocean gas phase (MIX 4 rows, `g_` columns) holds
 H₂ and organic Mtg under `"to_ocean"`; `organic_contribution()` reports it.
 
+### Steady state (item 7, PI 2026-10-29)
+
+The water the porewater takes in has the **evolving bulk-ocean composition**: each orbit's products feed
+the next. The expected end state is therefore a **steady state, an ocean composition that stops
+changing, but not necessarily zero net exchange**, for two reasons: the IOM degrades kinetically, with a
+long tail of high-Ea pools, so its release may never quite stop; and the porewater (100–160 °C) and the
+ocean (1.45 °C) cannot share one saturated mineral assemblage, so circulation can sustain a constant flux
+(e.g. silica dissolved in the pores and precipitated in the ocean). True equilibrium with no net exchange
+needs the IOM exhausted, no kinetic primaries left and equal temperatures.
+
+`steady_state_diagnostics(csv)` shows the approach directly, per orbit: the net elemental flux into the
+ocean (the change of the ocean side, water + minerals + gas, over the orbit; the ocean exchanges only
+with the porewater) and the net change of the secondary minerals in the porewater and in the ocean (mol
+of formula units per kg of the box's rock). In Lucas's 160 °C case (12 orbits): the porewater's
+secondary minerals grow by 1.09 mol in orbit 1, 0.26 in orbit 2, 0.014 in orbit 6 and 0.0038 in orbit
+12 (the hydration transient dying away); the ocean's by 4e-8 per orbit from orbit 6; the Na flux into
+the ocean settles at 2.4e-6 per orbit (2.9e-6 in orbit 1), Si falls from 1.2e-7 to 2.1e-8, while C
+rises from 2.2e-10 to 2.5e-9 per orbit as the IOM's carbon release grows. Twelve orbits are far from
+the steady state; the long runs (N8) are for that.
+
 ### Carbon
 
 Use `carbon_by_oxidation_state()` (`phreeqc_tools.R`), not PHREEQC's valence totals, to see which

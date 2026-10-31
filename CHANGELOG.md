@@ -1116,3 +1116,8 @@ One commit per item; each commit message has its pass check.
   restart): excess beyond the pore volume PUT, removed after the porewater step (KINETICS 4, unpunched;
   pore gas left written to <base>_poregas.csv) and added to the ocean (KINETICS 3). Worked example 1: ocean H2
   saturated under to_ocean and retain_to_pore_volume, 5.7e-7 under retain.
+- **Item 7, steady-state framing and diagnostic:** README section 7 (ingested water has the evolving ocean's
+  composition; a steady state need not be zero net exchange; true equilibrium needs the IOM exhausted, no
+  kinetic primaries and equal temperatures). `steady_state_diagnostics()`: per-orbit net elemental flux into
+  the ocean and secondary-mineral change in the porewater and in the ocean. Lucas's 160 C case: porewater
+  secondaries +1.09 -> +0.0038 mol per orbit (orbit 1 -> 12); Na flux 2.4e-6 per orbit; C flux rising.

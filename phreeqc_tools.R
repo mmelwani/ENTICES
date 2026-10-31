@@ -572,3 +572,33 @@ scale_to_core <- function(budget, sim, cols = setdiff(names(budget), c("orbit", 
   out
 }
 
+# Approach to steady state (item 7, PI 2026-10-29), per orbit, on the run's normalised basis: the net
+# elemental flux into the ocean (the change of the ocean side, its water, minerals and gas, over the orbit:
+# the ocean exchanges only with the porewater), and the net change of the secondary minerals in the
+# porewater (REACT row) and in the ocean (MIX 4 row), in moles of formula units. A steady state shows as
+# fluxes that stop changing, not necessarily zero (README section 7).
+steady_state_diagnostics <- function(csv, pqi = sub("\\.csv$", ".pqi", csv), elements = c("C", "Mtg", "Na", "Mg", "Si", "Fe", "Ca", "S", "Cl", "N")) {
+  init <- pqi_initial_solids(pqi)
+  fate <- sub("^# pore_gas_fate: ", "", grep("^# pore_gas_fate: ", readLines(pqi, n = 80), value = TRUE)[1])
+  x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  v <- read_mineral_volumes()
+  r <- x[trimws(x$state) == "react", , drop = FALSE]; n <- nrow(r) %/% 4
+  ini <- x[trimws(x$state) == "i_soln", , drop = FALSE]
+  el <- intersect(c(elements, "H", "O"), names(x))
+  ocean <- function(o) whole_system_parts(r[seq_len(4 * o), , drop = FALSE], init, fate)$ocean[el]
+  oc0 <- if (nrow(ini) >= 2) stats::setNames(vapply(el, function(e) as.numeric(ini[2, e]) * as.numeric(ini$mass_H2O[2]), 0), el) else NULL
+  if (!is.null(oc0)) oc0[c("H", "O")] <- c(as.numeric(ini$H_total_mol[2]), as.numeric(ini$O_total_mol[2]))
+  primaries <- c(names(init$minerals), "Fe", "Ni")
+  sec <- function(i) { p <- setdiff(intersect(names(r), v$phase), c(primaries, init$totals))
+    sum(vapply(p, function(q) as.numeric(r[i, max(which(names(r) == q))]), 0), na.rm = TRUE) }
+  prev <- oc0; p1 <- 0; p2 <- 0
+  do.call(rbind, lapply(seq_len(n), function(o) {
+    i <- 4 * (o - 1); oc <- ocean(o)
+    flux <- if (is.null(prev)) rep(NA_real_, length(el)) else oc - prev
+    s1 <- sec(i + 1); s2 <- sec(i + 2)
+    row <- data.frame(orbit = o, Time_Years = as.numeric(r$Time_Years[i + 1]), sec_minerals_pore_change = s1 - p1, sec_minerals_ocean_change = s2 - p2)
+    for (k in seq_along(el)) row[[paste0("flux_to_ocean_", el[k])]] <- flux[k]
+    prev <<- oc; p1 <<- s1; p2 <<- s2
+    row
+  }))
+}
