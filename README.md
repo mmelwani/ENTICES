@@ -721,6 +721,14 @@ multiply the ocean's DIC by 6–7 (0.087 → 0.56 molal at f = 1).
 REACTION_TEMPERATURE; defined at the run temperature, pe 4 put O₂ into the porewater (4.9 molal
 O(0) at 250 °C).
 
+**Trace N and S seeds: tested, not added (item 5, 10-31).** The default ocean is pure water plus the C seed.
+Seeding N or S as well (1e-14 mol/kgw in every initial solution, alone or together) changed nothing that
+matters in Lucas's case at 25 and 160 °C (2 orbits, 15 wt% IOM): every variant ran with 0 errors with and
+without them; at 160 °C the solver's retries were 33 in every variant; at 25 °C they moved without
+pattern (4 with C alone, 18 with C + N, 12 with C + S, 4 with all three); runtimes differed only with the
+machine's load. With the C seed and the ocean step's `-diagonal_scale` (B) the default already converges,
+so `trace_N_molal` and `trace_S_molal` were not added.
+
 **Trace C seed** 1e-14 mol/kgw: numerical, so the carbon mass balance can be solved when the IOM has
 released almost nothing.
 

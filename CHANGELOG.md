@@ -1105,3 +1105,6 @@ One commit per item; each commit message has its pass check.
   0.56 molal (f = 1), no sulfate, H2 saturated and a bubble under c4_only; CH4 hydrate oversaturated (SI
   +0.30) under coupled. The initial-ocean CSV gains the clathrate SIs. cometary_ocean_check: defaults, f
   linearity, less-volatile closure (with the gas bubble) and the c4_only leak check.
+- **Item 5, trace N and S seeds: tested, not added.** 25 and 160 C, 2 orbits, 15 wt% IOM, seeds C / C+N / C+S /
+  C+N+S: all 0 errors; 160 C retries 33 in every variant; 25 C retries 4 / 18 / 12 / 4 (no pattern). The C seed and
+  the ocean-step -diagonal_scale already make the default converge (README section 6).
