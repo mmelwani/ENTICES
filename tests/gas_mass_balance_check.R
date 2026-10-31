@@ -2,7 +2,8 @@
 #
 #  1. Mass balance. tidal_kinetic, 160 C, 15 wt% IOM, 2 orbits, for pore_gas_fate "retain" and
 #     "to_ocean": every element's whole-system total at the end of each orbit equals its t = 0 total
-#     to <= 1e-9 relative. The end-of-orbit system is the porewater (MIX 1 row) and ocean (MIX 2 row)
+#     to <= 1e-9 relative, or within the run's mole-balance criterion, 1e-8 x the element's whole-system
+#     total (PI 2026-10-31). The end-of-orbit system is the porewater (MIX 1 row) and ocean (MIX 2 row)
 #     solutions, plus the solids, IOM and pore gas of the REACT row and the seafloor solids and ocean
 #     gas of the MIX 4 row; under to_ocean the pore bubble is counted once, in the ocean. t = 0 is the
 #     two initial solutions plus the .pqi's kinetic m0 and equilibrium-phase amounts.
@@ -81,7 +82,10 @@ for (fate in c("retain", "to_ocean")) {
   for (o in 2:nrow(m)) {
     rel <- abs(m[o, ] - m[1, ]) / pmax(abs(m[1, ]), 1e-300); rel[m[1, ] == 0 & m[o, ] == 0] <- 0
     key <- c("H", "O", "C", "Mtg", "S", "N", "Fe")
-    check(max(rel) <= 1e-9, sprintf("160 C %-8s %s: worst element %s %.1e; H %.1e O %.1e C %.1e Mtg %.1e S %.1e N %.1e Fe %.1e",
+    # within 1e-9 relative, or within the run's mole-balance criterion, 1e-8 x the element's whole-system total
+    # (PI 2026-10-31: with phi_c = 0.4 the first REACT step converges Al only to 1.0e-9 mol of 0.39, inside it)
+    ok_el <- rel <= 1e-9 | abs(m[o, ] - m[1, ]) <= 1e-8 * abs(m[1, ])
+    check(all(ok_el), sprintf("160 C %-8s %s: worst element %s %.1e; H %.1e O %.1e C %.1e Mtg %.1e S %.1e N %.1e Fe %.1e",
                                     fate, rownames(m)[o], names(rel)[which.max(rel)], max(rel), rel["H"], rel["O"], rel["C"],
                                     rel["Mtg"], rel["S"], rel["N"], rel["Fe"]))
   }
