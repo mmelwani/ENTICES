@@ -1075,3 +1075,6 @@ One commit per item; each commit message has its pass check.
   of the profile's ocean (`profile_ocean_mass_kg()`, 2.13e19 kg), and the ocean's concentration factor.
   24-orbit runs: 1.27e18-1.82e18 kg, 6.0-8.5% of the ocean, almost all in orbit 1; concentration factor
   1.06-1.09 (model's own ocean 1.08-1.12).
+- **strain_scale** (PI, 10-31): config factor on eps0 (default 1) for the N6 sweep; the core h2 bracket is
+  strain_scale 0.046/0.29 = 0.16 to 1, documented as the largest uncertainty in the exchange. At 0.16 the
+  thin-skin exchange is 1.3e-6 per half-orbit (from 8.3e-6). exchange_check 3f.

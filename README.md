@@ -183,6 +183,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `layer_thickness` | none (production 194200) | m | permeable layer; 194.2 km is the whole core | production choice | — | yes |
 | `core_rigidity`, `core_viscosity` (`EnceladusConfig`) | 17e9, 1e12 | Pa, Pa·s | the tidal strain (exchange) | Bagheri et al. 2025 Table 5, core dissipation | **placeholders** at the geometric means of 4–70 GPa and 4.4e11–2.3e12 | yes (range ends) |
 | `reactive_depth` (`Simulator`) | `"skin"` | — | the reacting box: the top min(L, δ), or `"layer"` | PI 2026-10-29 | decided | — |
+| `strain_scale` (`EnceladusConfig`) | 1 | — | factor on the core's tidal strain ε₀ | bracket 0.046/0.29 = 0.16 to 1 (PI 10-31) | **largest uncertainty in the exchange** | yes (0.16–1) |
 | `phi0` (`Simulator`; was `porosity`) | 0.32 | — | initial porosity: k, α, storage, δ, strain volume, pore water | PlanetProfile `phiRockMax` (one fit) | **one fit**; end-state check against Bagheri's core density | yes (0.1–0.4) |
 | `phi_c` (`Simulator`) | 0.4 | — | critical porosity: α = min(1, φ/φc); φ ≥ φc is a suspension (α = 1) | Nur et al. 1998; Dvorkin & Nur 2000 (36–40% sorted grains, sandstones) | PI 10-30; still a placeholder | yes (0.4–0.6) |
 | `alpha` (`Simulator`) | NULL (from φ/φc) | — | Biot coefficient override (must be ≥ φ) | — | — | — |
@@ -425,11 +426,14 @@ FALSE` drops it. **At every k and η tested the load is 0.3% of the strain term*
 = 1.38e4 Pa in a thin skin at the placeholders; 1.00e4 + 30 Pa at k = 1e-7; 8,257 + 25 Pa over the layer),
 so it changes the exchange by 0.3%.
 
-**A flag on the strain itself:** the core's isolated h₂ that sets ε₀ (0.29) is six times Bagheri et al.'s
+**The largest uncertainty in the exchange: the core's strain (PI, 2026-10-31).** ε₀ comes from the
+isolated uniform Maxwell core, whose h₂ (0.29 at the placeholders) is six times Bagheri et al.'s
 whole-body surface h₂ (0.046) and lags by 83° rather than 3°. Inside the real coupled body the core's
-response is not the isolated one; if it were nearer the whole-body value, ε₀, ΔP_strain and the
-exchange would be several times smaller. Bagheri's Table 3 does not give the core's own Love number, so
-this cannot be resolved from it; it belongs with the ε_v and η placeholders.
+response is not the isolated one, and the exchange scales with ε_v. **The bracket is ε₀ × (0.046/0.29)
+to ε₀**, i.e. `strain_scale` (config, default 1) from 0.16 to 1, for the N6 sweep. At the low end the
+exchange per half-orbit in a thin skin falls from 8.3e-6 to 1.3e-6 and the strain-derived ΔP from 1.4e4
+to 2.2e3 Pa; circulation times are ~6× longer. Bagheri et al.'s Table 3 gives no core Love number; the
+PI may supply core-surface displacements from their model later, which would replace the bracket.
 
 With ΔP derived, the three volumes are tied together: the storage volume S·ΔP·δ·A = α·ε_v·δ·A equals
 the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.3 times the storage volume

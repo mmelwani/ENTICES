@@ -640,6 +640,10 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  # Ocean tidal loading at the seafloor (PI 2026-10-31): the whole-body surface Love number h2 of
                                  # Bagheri et al. (2025) Table 3, "dissipative core" (|h2| 0.0459 +- 0.0294, lag 2.95 +- 2.69 deg);
                                  # the ocean surface beneath the shell is taken to move with the surface. ocean_load = FALSE drops it.
+                                 # Scale on the core's tidal strain eps0 (PI 2026-10-31; N6 sweep). The isolated core's h2 behind eps0
+                                 # (0.29 at the placeholders) is 6x Bagheri et al. (2025)'s whole-body h2 (0.046): the bracket is
+                                 # strain_scale = 0.046/0.29 = 0.16 to 1 (README section 6). Default 1.
+                                 strain_scale = 1,
                                  surface_h2 = 0.0459,
                                  surface_h2_lag_deg = 2.95,
                                  ocean_load = TRUE,
@@ -1061,8 +1065,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # depth "layer", 194.2 km). PLACEHOLDER pending the PI (README section 6, The strain).
                            tidal_strain = function() {
                              cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
-                             eps0 <- FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
-                                                                   R, cfg$eccentricity, cfg$orbital_period)
+                             eps0 <- cfg$strain_scale * FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
+                                                                                    R, cfg$eccentricity, cfg$orbital_period)
                              f <- FlowUtils$degree2_dilatation_factor(R, L)
                              list(eps0 = eps0, factor = f, eps_v = eps0 * f)
                            },

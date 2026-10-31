@@ -113,6 +113,11 @@ check(abs(ld$u_ocean / us_hand - 1) < 1e-12 && abs(x1$dP_load - ld$pole * x1$str
       sprintf("ocean load: u_ocean %.4f m, u_core %.4f m, pole %.4g Pa, box mean %.4g Pa (%.2f%% of dP %.5g Pa); off: dP %.5g Pa",
               ld$u_ocean, ld$u_core, ld$pole, x1$dP_load, 100 * x1$dP_load / x1$dP, x1$dP, nl0$exchange$dP))
 
+# 3f. strain_scale (L, 2026-10-31) multiplies eps0, hence eps_v, the strain dP and the strain volume.
+sc <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(strain_scale = 0.046 / 0.29))); s$run_simulation(); s })
+check(abs(sc$exchange$eps0 / (x1$eps0 * 0.046 / 0.29) - 1) < 1e-12 && abs(sc$exchange$dP_strain / (x1$dP_strain * 0.046 / 0.29) - 1) < 1e-9,
+      sprintf("strain_scale 0.159: eps0 %.4g (from %.4g), x_half %.4g (from %.4g)", sc$exchange$eps0, x1$eps0, sc$exchange$x_half, x1$x_half))
+
 # 4. Pore-volume limit.
 eps_fluid <- FlowUtils$tidal_strain_amplitude(1e10, 1, cfg$core_density, cfg$core_radius, cfg$eccentricity, cfg$orbital_period)
 cat(sprintf("       (fluid-matrix limit: eps0 = %.3g; alpha = 1 gives %.3g of V_layer per half-orbit)\n",
