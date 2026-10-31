@@ -1201,10 +1201,10 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D3 | ~~Carbon decoupling mechanism~~ | Part 3 | **Decided 10-27:** `c4_only` at every temperature; coupled runs are the methanation upper bound |
 | D4 | ~~`IOM_S` coupled or `Sg 1 H 1`~~ | Part 3 | **Decided:** coupled (H₂ stays coupled, so sulfide is stable) |
 | D5 | ~~`IOM_CHn` routing and formate~~ | Part 3 | **Decided:** CHn as `Mtg 1 H -2.2` (a 2.2 e⁻ reduction imposed by hand, documented); formate as a sensitivity case only |
-| D6 | **Metal corrosion**: keep `dissolve_only` (H₂ pulse at t = 0) or add a rate | Part 5 | Needed before any H₂-vs-time claim; the rate is unsourced |
+| D6 | ~~**Metal corrosion**~~ | Part 5 | **Closed 10-29 (PI):** instantaneous `dissolve_only` corrosion is an accepted idealisation of early differentiation's alteration and outgassing, not a rate claim; the first orbits are a transient, judge results on the long runs (N8). `h2_budget()` and `scale_to_core()` give the early H₂ inventory (README §6) |
 | D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
 | D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ included by default** (PI 10-29); `f` and `include_less_volatile` (21 species, `data/comet67p_volatility.csv`) added 10-31 |
-| D9 | **Spin-up** before tidal cycling; doubles as the King et al. forward check (reconstruction §8 item 8) | 10-06 review §4 | Worth doing as a modelling option; not needed for convergence |
+| D9 | **Spin-up** before tidal cycling | 10-06 review §4 | **Optional** (D6 closed: not needed for realism); kept as the use for the King et al. (2015) CI forward check (reconstruction §8 item 8) |
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
 | D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | README §6 (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 78 yr (243 yr before the ×φ fix of 10-29) against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange); the ×φ in the flow rate was a bug, **fixed 10-29** | **10-31: D7 and D12 merged into one (φ, d, strain_scale) sweep:** Kozeny–Carman k and geometric surface areas from the grain size (item 3; README §6).
@@ -1246,11 +1246,9 @@ rate, rock table and `rec_eqb` default have all changed since.
   core in the first orbit (concentration factor 1.06–1.09), from the instantaneous metal corrosion and
   fast hydration of the 69 km skin. The ocean per kg of rock follows the skin (restarts scale the
   ocean, 10-31); the drift of whole-system totals is reported per chunk (≤ 6e-6).
-- **N10.** D6 (metal corrosion rate): until it is decided, every gas-phase
-  result is dominated by the t = 0 metal pulse (Part 7).
-- **N12 (after D6).** A third `pore_gas_fate`, `"retain_to_pore_volume"`: keep
-  gas up to the available pore volume and send the excess to the ocean. Build it
-  once D6 is fixed, because the bubble is metal H₂.
+- ~~N10. D6~~ **Closed 10-29**: the t = 0 metal pulse is the accepted early-outgassing idealisation.
+- ~~N12~~ **Implemented 10-31:** `pore_gas_fate = "retain_to_pore_volume"` (tidal_kinetic and its
+  restart; mass balance in `tests/gas_mass_balance_check.R`). The default stays `"to_ocean"`.
 - **N11.** Fluorite and Fluorapatite have no molar volume (not production
   phases). ~~The IOM density for `bulk_density()` is UNSOURCED~~: **sourced 10-29**,
   Delarue et al. (2026) Eq. 10 at the residual IOM's H/C (1.320 g/cm³ at t = 0;

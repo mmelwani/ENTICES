@@ -7,6 +7,8 @@
 #     solutions, plus the solids, IOM and pore gas of the REACT row and the seafloor solids and ocean
 #     gas of the MIX 4 row; under to_ocean the pore bubble is counted once, in the ocean. t = 0 is the
 #     two initial solutions plus the .pqi's kinetic m0 and equilibrium-phase amounts.
+#     (2026-10-31) Also for "retain_to_pore_volume": the pore gas after each orbit's removal is read from
+#     <base>_poregas.csv and replaces the REACT row's bubble in the sum; the excess is in MIX 4's ocean.
 #  2. No-bubble identity. The same at 25 C with the Fe and Ni metal set to 0 (no H2 pulse), where no
 #     bubble forms: "retain" and "to_ocean" give the same output. Every element's system total in
 #     every row agrees to 1e-9 relative or within the run's mole-balance criterion (1e-8 x the
@@ -43,7 +45,9 @@ run <- function(pqi) {
   if (r$errors > 0) stop(basename(pqi), ": ", r$errors, " PHREEQC errors")
   csv <- sub("\\.pqi$", ".csv", pqi)
   x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x)); x$state <- trimws(x$state)
-  list(x = x, pq = pqi_initial_solids(pqi), seconds = r$seconds)
+  pg <- sub("\\.pqi$", "_poregas.csv", pqi)
+  y <- if (file.exists(pg)) { y <- utils::read.delim(pg, check.names = FALSE, strip.white = TRUE); names(y) <- trimws(names(y)); y } else NULL
+  list(x = x, pq = pqi_initial_solids(pqi), seconds = r$seconds, poregas = y)
 }
 gen <- function(dir, T, fate) quiet(ph$generate_phreeqc_input_tidal_kinetic(output_dir = file.path(od, dir), mode = "ungrouped",
                                     n_orbital_cycles = 2, porewater_temp = T, pore_gas_fate = fate, trace_C_molal = 1e-14))
@@ -69,6 +73,8 @@ orbit_totals <- function(R, fate) {
     i <- 4 * (o - 1)
     s <- sol(r, i + 3) + sol(r, i + 4) + (tot(r, i + 1) - sol(r, i + 1)) + (tot(r, i + 2) - sol(r, i + 2))
     if (fate == "to_ocean") s <- s - gas(r, i + 1)              # moved to the ocean, already in MIX 4's gas and solution
+    if (fate == "retain_to_pore_volume")                         # the pore gas after the removal replaces the REACT row's
+      s <- s - gas(r, i + 1) + gas(R$poregas, o)
     out[[sprintf("orbit %d", o)]] <- s
   }
   do.call(rbind, out)
@@ -76,7 +82,7 @@ orbit_totals <- function(R, fate) {
 
 # 1. Mass balance.
 runs <- list()
-for (fate in c("retain", "to_ocean")) {
+for (fate in c("retain", "to_ocean", "retain_to_pore_volume")) {
   R <- runs[[fate]] <- run(gen(paste0("mb_", fate), 160, fate))
   m <- orbit_totals(R, fate)
   for (o in 2:nrow(m)) {

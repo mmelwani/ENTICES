@@ -347,6 +347,13 @@ gas_phase_block <- function(n, comps, pressure_atm, temp_C, label) {
           sprintf("    %-10s 0", comps)), collapse = "\n")
 }
 # GAS_PHASE_MODIFY setting a restart's gas phase n to the moles in a parent row (its g_ columns).
+# retain_to_pore_volume: the parent's pore gas after its last removal (<base>_poregas.csv, last row).
+poregas_last_row <- function(prev_csv) {
+  f <- sub("\\.csv$", "_poregas.csv", prev_csv)
+  if (!file.exists(f)) stop("retain_to_pore_volume restart: no ", basename(f), " beside the parent")
+  x <- utils::read.delim(f, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  x[nrow(x), , drop = FALSE]
+}
 gas_restore_block <- function(n, comps, row, scale = 1) {
   # by make.names(), so a row read with or without check.names matches ("g_CO2(g)" / "g_CO2.g.")
   v <- vapply(comps, function(c) { k <- match(make.names(paste0("g_", c)), make.names(names(row)))
@@ -368,24 +375,47 @@ gas_so_line <- function(comps) sprintf("    -gases               %s", paste(comp
 # GAS_PHASE 1 is then redefined empty at the start of the next porewater step. Mass is conserved to
 # the integrator's precision (tested: < 1e-11 relative); there is never more than one gas reservoir
 # per reacting solution. Each component enters by its own formula (CO2, H2, Mtg, ...).
-gas_transfer_block <- function(comps) {
-  nm <- sprintf("PoreGasIn_%d", seq_along(comps))
+# out = TRUE (pore_gas_fate = "retain_to_pore_volume", PI 2026-10-31) adds KINETICS 4, which removes the
+# same moles from the porewater and its gas phase right after the porewater step (pore_gas_out_block()).
+gas_transfer_block <- function(comps, out = FALSE, poregas_file = NULL) {
+  nm <- sprintf("PoreGasIn_%d", seq_along(comps)); no <- sprintf("PoreGasOut_%d", seq_along(comps))
+  f <- sub("\\(g\\)$", "", comps)
   paste(c("RATES",
           unlist(lapply(seq_along(comps), function(j) c(nm[j], " -start",
                         sprintf(" 10 SAVE GET(%d) * TIME   # moles of %s in the pore bubble", 9100 + j, comps[j]), " -end"))),
+          if (out) unlist(lapply(seq_along(comps), function(j) c(no[j], " -start",
+                        sprintf(" 10 SAVE -GET(%d) * TIME   # the same moles out of the pore system", 9100 + j), " -end"))),
           "",
-          "KINETICS 3   # used only in the ocean step, when pore_gas_fate = to_ocean",
-          unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", nm[j]), sprintf("      -formula %s 1", sub("\\(g\\)$", "", comps[j])),
+          "KINETICS 3   # used only in the ocean step, when pore_gas_fate is to_ocean or retain_to_pore_volume",
+          unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", nm[j]), sprintf("      -formula %s 1", f[j]),
                                                          "      -m0 1e6"))),
-          "   -steps 1"), collapse = "\n")
+          "   -steps 1",
+          if (out) c("", "KINETICS 4   # retain_to_pore_volume: the excess leaves the porewater and its gas phase",
+                     unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", no[j]), sprintf("      -formula %s 1", f[j]), "      -m0 1e6"))),
+                     "   -steps 1",
+                     "# the pore gas left after the removal, one row per orbit (pore_gas_out_block())",
+                     "SELECTED_OUTPUT 3", sprintf("    -file %s", poregas_file), "    -reset false", "    -high_precision true", "    -state true", "    -solution true",
+                     "    -water true", gas_so_line(comps), "    -active false")), collapse = "\n")
+}
+# retain_to_pore_volume: right after the porewater step, remove the excess the step PUT (the gas beyond
+# the pore volume) from the porewater and its gas phase, which re-equilibrate; the ocean step then adds
+# it to the ocean (KINETICS 3). Its rows go to SELECTED_OUTPUT 3 (<base>_poregas.csv: the pore gas after
+# the removal, which whole-system bookkeeping and restarts read), not to the run's CSV.
+pore_gas_out_block <- function() {
+  paste0("SELECTED_OUTPUT 1\n    -active false\nSELECTED_OUTPUT 3\n    -active true\n",
+         "USE solution 1\nUSE gas_phase 1\nUSE kinetics 4\nUSE equilibrium_phases none\nUSE reaction none\n",
+         "USE reaction_temperature 1\nUSE reaction_pressure 1\nSAVE solution 1\nSAVE gas_phase 1\nEND\n",
+         "SELECTED_OUTPUT 3\n    -active false\nSELECTED_OUTPUT 1\n    -active true\n\n")
 }
 # USER_PUNCH columns for the gas phase of the simulation in use: its volume (L), pressure (atm; 0 when
 # there is no bubble) and volume over the pore volume (vpore_L, from the same normalisation as the
 # porewater mass, at 1 kg/L). On ocean rows Vgas_Vpore uses the same pore volume. put = TRUE adds the
 # PUT lines that store the pore bubble for the to_ocean transfer.
-gas_punch <- function(comps, vpore_L, put = FALSE) {
+gas_punch <- function(comps, vpore_L, put = FALSE, excess_only = FALSE) {
   sum_lines <- sprintf("   %d ng = ng + GAS(\"%s\")\n", 931 + seq_along(comps) - 1, comps)
-  put_lines <- if (put) sprintf("   %d PUT(GAS(\"%s\"), %d)\n", 970 + seq_along(comps) - 1, comps, 9100 + seq_along(comps)) else character(0)
+  # excess_only (retain_to_pore_volume): PUT only the fraction beyond the pore volume, 1 - Vpore/Vgas
+  fx_lines <- if (excess_only) sprintf("   952 fx = 0\n   953 IF vg > %.15g THEN fx = 1 - %.15g / vg\n", vpore_L, vpore_L) else "   952 fx = 1\n"
+  put_lines <- if (put) c(fx_lines, sprintf("   %d PUT(GAS(\"%s\") * fx, %d)\n", 970 + seq_along(comps) - 1, comps, 9100 + seq_along(comps))) else character(0)
   list(headings = " Vgas_L P_gas_atm Vgas_Vpore",
        lines = paste0(c("   930 ng = 0\n", sum_lines, "   950 vg = 0\n", "   951 IF ng > 0 THEN vg = GAS_VM * ng\n",
                         sprintf("   960 PUNCH vg, GAS_P, vg / %.15g\n", vpore_L), put_lines), collapse = ""))
@@ -1791,7 +1821,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
-                                                                     pore_gas_fate = c("to_ocean", "retain"), logfile = FALSE) {
+                                                                     pore_gas_fate = c("to_ocean", "retain", "retain_to_pore_volume"), logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
@@ -1992,7 +2022,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      if (cometary && is.null(trace_C_molal) && self$organic_wt_percent == 0)
                                        warning("cometary_ice_ocean() with a carbon-free porewater: give trace_C_molal = 1e-14 (without it the first porewater step did not converge in tests)")
                                      gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -2187,7 +2217,7 @@ REACTION_PRESSURE 2
 {cometary_block}{pore_gas_block}
 
 {ocean_main_block}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 # Define rate equations for each mineral
 RATES
@@ -2742,7 +2772,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
@@ -2761,10 +2791,11 @@ KNOBS
                                          iom_punch_lines,
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
                                          OCEAN_STEP_KNOBS_ON,
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
@@ -2936,7 +2967,7 @@ KNOBS
                                      if (cometary && is.null(trace_C_molal))
                                        warning("cometary_ice_ocean() in tidal_equil: give trace_C_molal = 1e-14 (without it the run failed to converge in tests)")
                                      gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -3072,7 +3103,7 @@ REACTION_PRESSURE 2
 {cometary_block}{pore_gas_block}
 
 {ocean_main_block}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
@@ -3407,7 +3438,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", SHARED_PUNCH_HEADINGS, gp$headings, "\n",
                                          sprintf("   10 PUNCH %.6f\n", cumulative_time),
@@ -3423,10 +3454,11 @@ KNOBS
                                          "   110 PUNCH total_initial\n",
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
                                          OCEAN_STEP_KNOBS_ON,
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
@@ -5069,7 +5101,7 @@ END
                                      carbon_mode         = NULL,
                                      ch4_cutoff_C        = 150,
                                      allow_pressure_change = FALSE,
-                                     pore_gas_fate       = c("to_ocean", "retain"),
+                                     pore_gas_fate       = c("to_ocean", "retain", "retain_to_pore_volume"),
                                      logfile             = FALSE,
                                      stop_on_depletion   = TRUE,
                                      refill_kg           = 0,
@@ -5084,7 +5116,7 @@ END
                                      .ph <- sub("\\.csv$", ".pqi", prev_csv)
                                      .pf <- if (file.exists(.ph)) grep("^# (parent )?pore_gas_fate: ", readLines(.ph, n = 200, warn = FALSE), value = TRUE) else character(0)
                                      .pf <- if (length(.pf)) sub("^# (parent )?pore_gas_fate: ", "", .pf[1]) else "unknown (generated before 2026-10-28: gases were equilibrium phases)"
-                                     if (.pf %in% c("retain", "to_ocean") && .pf != pore_gas_fate)
+                                     if (.pf %in% c("retain", "to_ocean", "retain_to_pore_volume") && .pf != pore_gas_fate)
                                        warning(sprintf("restart: the parent ran pore_gas_fate = \"%s\", this restart runs \"%s\"", .pf, pore_gas_fate))
                                      parent_fate_line <- sprintf("# parent pore_gas_fate: %s", .pf)
 
@@ -5204,7 +5236,7 @@ END
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
                                      # Ntg(g) when the parent carried it (a cometary-ice ocean)
                                      gas_comps <- gas_components(ch4_mode, if ("g_Ntg(g)" %in% names(row_mix4)) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -5735,11 +5767,11 @@ REACTION_PRESSURE 2
     {round(ocean_pressure_atm, 1)}
 
 {pore_gas_block}
-{if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
+{if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else if (pore_gas_fate == "retain_to_pore_volume") gas_restore_block(1, gas_comps, poregas_last_row(prev_csv)) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
 
 {ocean_gas_block}
 {gas_restore_block(2, gas_comps, row_mix4, ocean_scale)}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 {rates_block}
 
@@ -5805,7 +5837,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings_tidal, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
@@ -5818,8 +5850,9 @@ KNOBS
                                          iom_punch_lines_tidal,
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
                                          OCEAN_STEP_KNOBS_ON,
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
