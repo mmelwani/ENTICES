@@ -78,3 +78,20 @@ header for some entries: WebMineral (38 solids), Marion et al. 2005, 2008, 2009 
 Niter, Thenardite, Melanterite, Alum-K), McColm 2013 (CaUO4), Hovis et al. 2004 (NH4-muscovite) and
 WebElements (K, U). Many `-Vm` lines carry a comment naming `thermo.com.V8.R6+.tdat` or
 `Webmineral.com`, copied into the `source` column. For the rest: [provenance needed].
+
+## `layered_core_strain.csv`, `layered_core_strain_summary.csv`
+
+The core's tidal response in a layered model of Enceladus (PI item N, 2026-10-31), written by
+`scripts/layered_core_strain.py` (TidalPy 0.8.1's radial solver; Bagheri et al. 2025's structure and
+Table 5 ranges; README section 6, The strain). Regenerate with
+
+```
+python -I scripts/layered_core_strain.py data
+```
+
+(numpy and TidalPy; fixed seed, ~40 s). `layered_core_strain.csv`: `scenario` (`dissipative_core`,
+`dissipative_shell`), `eta_core_Pa_s`, `depth_km` (below the core surface, 0-180), `eps_v_pole_mean`,
+`eps_v_pole_sd` (pole amplitude of the volumetric strain over 500 samples). The summary, per scenario and
+viscosity: mean and sd of the core-surface and ocean-top radial displacements and their difference (m, pole),
+the seafloor normal stress (Pa), the strain at the core surface, 2 u_core / R_core, the tidal heat (W), the
+core's share of it, and |k2|, |h2|, |l2|. `EnceladusConfig$strain_model = "layered"` reads both.

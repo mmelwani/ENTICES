@@ -13,6 +13,11 @@
 #     k2 -> 3/2, so eps0 <= ~1.5e-4 and alpha eps_v <= ~1.7e-5 of V_layer), so it is exercised with phi = 1e-7
 #     and a huge k: x_half = 1, x_orbit = 1.
 #  5. The generated tidal_kinetic input stamps the exchange line.
+#  7. The layered core strain (PI item N, the default strain_model): the tables' grid; log-eta interpolation;
+#     eps_v = 0.19245 x the r^2-weighted mean of the strain over the box; the ocean load from the layered
+#     displacements; the exchange's min-of-three in the skin box; strain_scale; errors; the header.
+# Sections 3-4 and 6 check the Liao et al. (2020) isolated-core form (strain_model = "liao"), kept for reproducing
+# runs made before N.
 #
 # Generates inputs only; nothing is run in PHREEQC.
 # Run from the repo root:  Rscript tests/exchange_check.R
@@ -42,8 +47,8 @@ f_full <- FlowUtils$degree2_dilatation_factor(194.2e3, 194.2e3); f_thin <- FlowU
 check(abs(f_full - 0.19245 * 0.6) < 1e-5 && abs(f_thin - 0.19245) < 1e-4,
       sprintf("degree-2 dilatation factor: %.5f (full core), %.5f (thin layer)", f_full, f_thin))
 
-# 3. The three limits.
-cfg <- EnceladusConfig$new()
+# 3. The three limits (Liao strain).
+cfg <- EnceladusConfig$new(list(strain_model = "liao"))
 expect <- c("1e-14" = "darcy", "1e-13" = "darcy", "1e-12" = "darcy", "1e-11" = "darcy", "1e-07" = "poro")
 for (k in c(1e-14, 1e-13, 1e-12, 1e-11, 1e-7)) {
   sim <- quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg, reactive_depth = "layer"); s$run_simulation(); s })
@@ -97,7 +102,7 @@ ok <- abs(x1$dP_strain / (s1$biot_alpha() * x1$eps_v / s1$skin_depth()$S) - 1) <
   abs(x1$dP - x1$dP_strain - x1$dP_load) < 1e-9 &&
   abs(x1$strain_factor - FlowUtils$degree2_dilatation_factor(cfg$core_radius, x1$delta)) < 1e-15 && abs(x1$strain_factor - 0.19245) < 1e-4 &&
   abs(sl$exchange$strain_factor - 0.19245 * 0.6) < 1e-5 && abs(x1$dV_storage / x1$dV_poro - 1) < 1e-3
-ov <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(max_tidal_stress = 1e5))); s$run_simulation(); s })
+ov <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(strain_model = "liao", max_tidal_stress = 1e5))); s$run_simulation(); s })
 check(ok && ov$exchange$dP == 1e5 && ov$exchange$dP_source == "override",
       sprintf("dP = alpha eps_v M: %.4g Pa (skin, factor %.4f), %.4g Pa (layer, factor %.4f); storage / strain %.4f in the skin; override %g Pa",
               x1$dP, x1$strain_factor, sl$exchange$dP, sl$exchange$strain_factor, x1$dV_storage / x1$dV_poro, ov$exchange$dP))
@@ -107,14 +112,14 @@ check(ok && ov$exchange$dP == 1e5 && ov$exchange$dP_source == "override",
 #     the strain's dP; ocean_load = FALSE removes it; it is ~0.3% of the strain's dP here.
 ld <- s1$tidal_load_pressure(); w <- 2 * pi / cfg$orbital_period
 us_hand <- 0.0459 * 1.5 * cfg$radius^2 * w^2 * cfg$eccentricity / cfg$calculate_gravity(cfg$radius)
-nl0 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(ocean_load = FALSE))); s$run_simulation(); s })
+nl0 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(strain_model = "liao", ocean_load = FALSE))); s$run_simulation(); s })
 check(abs(ld$u_ocean / us_hand - 1) < 1e-12 && abs(x1$dP_load - ld$pole * x1$strain_factor) < 1e-9 &&
         nl0$exchange$dP_load == 0 && abs(nl0$exchange$dP - x1$dP_strain) < 1e-6 && x1$dP_load / x1$dP < 0.01,
       sprintf("ocean load: u_ocean %.4f m, u_core %.4f m, pole %.4g Pa, box mean %.4g Pa (%.2f%% of dP %.5g Pa); off: dP %.5g Pa",
               ld$u_ocean, ld$u_core, ld$pole, x1$dP_load, 100 * x1$dP_load / x1$dP, x1$dP, nl0$exchange$dP))
 
 # 3f. strain_scale (L, 2026-10-31) multiplies eps0, hence eps_v, the strain dP and the strain volume.
-sc <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(strain_scale = 0.046 / 0.29))); s$run_simulation(); s })
+sc <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = EnceladusConfig$new(list(strain_model = "liao", strain_scale = 0.046 / 0.29))); s$run_simulation(); s })
 check(abs(sc$exchange$eps0 / (x1$eps0 * 0.046 / 0.29) - 1) < 1e-12 && abs(sc$exchange$dP_strain / (x1$dP_strain * 0.046 / 0.29) - 1) < 1e-9,
       sprintf("strain_scale 0.159: eps0 %.4g (from %.4g), x_half %.4g (from %.4g)", sc$exchange$eps0, x1$eps0, sc$exchange$x_half, x1$x_half))
 
@@ -122,7 +127,7 @@ check(abs(sc$exchange$eps0 / (x1$eps0 * 0.046 / 0.29) - 1) < 1e-12 && abs(sc$exc
 eps_fluid <- FlowUtils$tidal_strain_amplitude(1e10, 1, cfg$core_density, cfg$core_radius, cfg$eccentricity, cfg$orbital_period)
 cat(sprintf("       (fluid-matrix limit: eps0 = %.3g; alpha = 1 gives %.3g of V_layer per half-orbit)\n",
             eps_fluid, eps_fluid * FlowUtils$degree2_dilatation_factor(194.2e3, 194.2e3)))
-big <- EnceladusConfig$new(list(core_viscosity = 1))
+big <- EnceladusConfig$new(list(strain_model = "liao", core_viscosity = 1))
 sim <- quiet({ s <- Simulator$new(k = 1, layer_thickness = 194200, porosity = 1e-7, config = big, alpha = 1); s$run_simulation(); s })
 check(sim$exchange$binding == "pore_volume" && sim$exchange$x_half == 1 && sim$exchange$x_orbit == 1,
       sprintf("pore-volume limit: %s, x_half %g, x_orbit %g", sim$exchange$binding, sim$exchange$x_half, sim$exchange$x_orbit))
@@ -149,6 +154,58 @@ f <- quiet({ s <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = cfg
   ph$generate_phreeqc_input_tidal_kinetic(output_dir = od, mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 25, trace_C_molal = 1e-14) })
 check(any(grepl("^# Exchange per half-orbit .*limited by poro", readLines(f))) && any(grepl("^# Reacting box: top ", readLines(f))),
       "tidal_kinetic header stamps the reacting box and the exchange (limited by poro)")
+unlink(od, recursive = TRUE)
+
+# 7. The layered core strain (PI item N, 2026-10-31).
+prof <- read.csv("data/layered_core_strain.csv"); summ <- read.csv("data/layered_core_strain_summary.csv")
+ec <- sort(unique(prof$eta_core_Pa_s[prof$scenario == "dissipative_core"])); es <- sort(unique(prof$eta_core_Pa_s[prof$scenario == "dissipative_shell"]))
+check(length(ec) == 8 && abs(min(ec) / 4.4e11 - 1) < 1e-6 && abs(max(ec) / 2.3e12 - 1) < 1e-6 && length(es) == 10 && min(es) == 3e13 && max(es) == 1e22 &&
+        all(table(prof$scenario, prof$eta_core_Pa_s)[table(prof$scenario, prof$eta_core_Pa_s) > 0] == 181) && all(prof$eps_v_pole_mean > 0) &&
+        nrow(summ) == 18 && all(summ$n_samples == 500),
+      sprintf("layered tables: %d + %d viscosities, depths 0-180 km, 500 samples each", length(ec), length(es)))
+cl <- EnceladusConfig$new(); R <- cl$core_radius
+st <- function(cfg, k = 1e-14, depth = "skin") quiet({ s <- Simulator$new(k = k, layer_thickness = 194200, config = cfg, reactive_depth = depth); s$run_simulation(); s })
+d1 <- st(cl); x <- d1$exchange
+row <- function(e) prof[prof$scenario == "dissipative_core" & abs(prof$eta_core_Pa_s / e - 1) < 1e-6, ]
+i <- findInterval(12, log10(ec)); w <- (12 - log10(ec[i])) / (log10(ec[i + 1]) - log10(ec[i]))
+e_hand <- (1 - w) * row(ec[i])$eps_v_pole_mean + w * row(ec[i + 1])$eps_v_pole_mean
+g3 <- st(EnceladusConfig$new(list(core_viscosity = ec[3])))
+check(cl$strain_model == "layered" && cl$tidal_scenario == "dissipative_core" && abs(x$eps0 / e_hand[1] - 1) < 1e-12 &&
+        abs(g3$exchange$eps0 / row(ec[3])$eps_v_pole_mean[1] - 1) < 1e-12,
+      sprintf("layered eps0 at eta 1e12 = log-eta interpolation by hand: %.5e (%.5e); at a tabulated eta, the table's %.5e", x$eps0, e_hand[1], g3$exchange$eps0))
+# eps_v: r^2-weighted mean over the box, by hand with integrate() on the interpolated profile
+vm <- function(L) { f <- approxfun(row(ec[i])$depth_km * 1e3, (1 - w) * row(ec[i])$eps_v_pole_mean + w * row(ec[i + 1])$eps_v_pole_mean, rule = 2)
+  integrate(function(d) f(d) * (R - d)^2, 0, L, subdivisions = 2000)$value / integrate(function(d) (R - d)^2, 0, L)$value }
+dl <- st(cl, depth = "layer"); d7 <- st(cl, k = 1e-7)
+ok <- abs(x$eps_v / (0.19245009 * vm(x$L_eff)) - 1) < 1e-6 && abs(dl$exchange$eps_v / (0.19245009 * vm(194200)) - 1) < 1e-3 &&
+  abs(d7$exchange$eps_v / (0.19245009 * vm(d7$exchange$L_eff)) - 1) < 1e-4
+check(ok, sprintf("layered eps_v = 0.19245 x the volume mean over the box: %.4e (22 m skin), %.4e (69 km skin), %.4e (layer; held at 180 km below)",
+                  x$eps_v, d7$exchange$eps_v, dl$exchange$eps_v))
+sr <- summ[summ$scenario == "dissipative_core", ]
+du <- (1 - w) * sr$u_ocean_minus_core_m_mean[i] + w * sr$u_ocean_minus_core_m_mean[i + 1]
+ld <- d1$tidal_load_pressure()
+check(abs(ld$pole / (1000 * cl$calculate_gravity(R) * du) - 1) < 1e-12 && abs(x$dP_load / (ld$pole * FlowUtils$degree2_dilatation_factor(R, x$L_eff)) - 1) < 1e-12 &&
+        abs(x$dP - x$dP_strain - x$dP_load) < 1e-9 && abs(x$dP_strain / (d1$biot_alpha() * x$eps_v / d1$skin_depth()$S) - 1) < 1e-12,
+      sprintf("layered ocean load rho_w g_c |u_ocean - u_core|: %.4g Pa at the pole (u_ocean %.3f m, u_core %.3f m; whole normal stress %.4g Pa), %.4g Pa in the box; strain dP %.4g Pa",
+              ld$pole, ld$u_ocean, ld$u_core, ld$sigma_rr_pole, x$dP_load, x$dP_strain))
+for (k in c(1e-14, 1e-11, 1e-7)) {
+  s <- st(cl, k = k); y <- s$exchange; Le <- y$L_eff; Vs <- 4 / 3 * pi * (R^3 - (R - Le)^3)
+  check(y$dV == min(y$dV_poro, y$dV_darcy, y$dV_pore_volume) && abs(y$dV_poro / (s$biot_alpha() * y$eps_v * Vs + y$storage * y$dP_load * Le * 4 * pi * R^2) - 1) < 1e-12,
+        sprintf("layered skin box, k = %.0e: x_half %.3e (%s); circulation %.3g yr", k, y$x_half, y$binding, quiet(s$get_summary_metrics())$circulation_time_years))
+}
+s16 <- st(EnceladusConfig$new(list(strain_scale = 0.16))); sh <- st(EnceladusConfig$new(list(tidal_scenario = "dissipative_shell", core_viscosity = 1e17)))
+check(abs(s16$exchange$eps0 / (0.16 * x$eps0) - 1) < 1e-12 && abs(s16$exchange$dP_strain / (0.16 * x$dP_strain) - 1) < 1e-9 &&
+        abs(s16$exchange$dP_load / x$dP_load - 1) < 1e-12 && abs(sh$exchange$eps0 / row(ec[1])$eps_v_pole_mean[1] - 1) < 0.1,
+      sprintf("strain_scale 0.16 scales the strain (eps0 %.4g), not the load; dissipative_shell at eta 1e17: eps0 %.4g, x_half %.3e",
+              s16$exchange$eps0, sh$exchange$eps0, sh$exchange$x_half))
+er <- function(p) tryCatch({ st(EnceladusConfig$new(p)); "no error" }, error = function(e) conditionMessage(e))
+check(grepl("outside the dissipative_core range", er(list(core_viscosity = 1e13))) && grepl("outside the dissipative_shell range", er(list(tidal_scenario = "dissipative_shell"))) &&
+        grepl("not tabulated", er(list(tidal_scenario = "x"))) && grepl("must be", er(list(strain_model = "x"))),
+      "layered: core_viscosity outside the scenario's range, an unknown scenario and an unknown strain_model are errors")
+od <- file.path(tempdir(), "exchange_check7"); unlink(od, recursive = TRUE)
+f <- quiet({ s <- st(cl, k = 1e-7); ph <- PhreeqcIntegrator$new(s); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+  ph$generate_phreeqc_input_tidal_kinetic(output_dir = od, mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 25, trace_C_molal = 1e-14) })
+check(any(grepl("strain layered, dissipative_core; eps0 ", readLines(f))), "tidal_kinetic header stamps the layered strain and scenario")
 unlink(od, recursive = TRUE)
 
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))

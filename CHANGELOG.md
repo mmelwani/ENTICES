@@ -1125,3 +1125,14 @@ One commit per item; each commit message has its pass check.
   7.57, H2 0.065 saturated, porewater pH 11.04, 0.115 molal Na; example 2 ocean pH 10.63, DIC 3.4e-8 at orbit 12).
   README subsection "What tidal-only circulation can reach" (k, L_eff, T, exchange per half-orbit, circulation).
   PROGRESS Part 10: D6 closed, D7/D12 merged, N12 implemented, phi(t) implemented, buoyancy flow out of scope.
+- **N, core strain from a layered forward model** (PI 10-31): `scripts/layered_core_strain.py` (TidalPy 0.8.1
+  radial solver; Bagheri et al. 2025 structure: shell, ocean, core, compressible, Andrade, Table 5 ranges,
+  log-uniform, core density from the mass) writes `data/layered_core_strain.csv` (pole volumetric strain vs
+  depth 0-180 km, mean and sd, per scenario and core viscosity) and `data/layered_core_strain_summary.csv`.
+  Validation: Table 3 Love numbers and lags reproduced within 5% for both scenarios (heat 18-28 GW, >= 90% in
+  the scenario's layer). `EnceladusConfig$strain_model = "layered"` (default; `"liao"` keeps the old isolated
+  core) and `tidal_scenario`: eps_v = 0.19245 x the box's volume mean of the strain; the ocean load uses the
+  layered displacements. The volumetric strain is ~8e-9 at the core surface (any scenario or eta; set by K =
+  100 GPa), 2200x below Liao's eps0: the exchange per half-orbit falls from 8.3e-6 to 1.9e-8 at the
+  placeholders, circulation 6.2e8 yr at k 1e-14 and 2.9e5 yr at 1e-7. The h2 bracket is removed from the docs;
+  the N6 sweep takes the scenario and eta. `tests/exchange_check.R` section 7.

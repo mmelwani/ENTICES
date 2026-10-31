@@ -710,9 +710,17 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  # Ocean tidal loading at the seafloor (PI 2026-10-31): the whole-body surface Love number h2 of
                                  # Bagheri et al. (2025) Table 3, "dissipative core" (|h2| 0.0459 +- 0.0294, lag 2.95 +- 2.69 deg);
                                  # the ocean surface beneath the shell is taken to move with the surface. ocean_load = FALSE drops it.
-                                 # Scale on the core's tidal strain eps0 (PI 2026-10-31; N6 sweep). The isolated core's h2 behind eps0
-                                 # (0.29 at the placeholders) is 6x Bagheri et al. (2025)'s whole-body h2 (0.046): the bracket is
-                                 # strain_scale = 0.046/0.29 = 0.16 to 1 (README section 6). Default 1.
+                                 # The core's tidal strain (PI item N, 2026-10-31; README section 6, The strain):
+                                 #   "layered" (default): the volumetric strain of the core and the seafloor normal stress from a
+                                 #     layered forward model of Bagheri et al. (2025)'s structure (TidalPy; scripts/layered_core_strain.py,
+                                 #     data/layered_core_strain*.csv), mean over Table 5's parameter ranges for tidal_scenario
+                                 #     ("dissipative_core": core_viscosity 4.4e11-2.3e12 Pa s; "dissipative_shell": 3e13-1e22),
+                                 #     interpolated in log core_viscosity;
+                                 #   "liao": Liao et al. (2020)'s isolated uniform Maxwell core (the form used before N), with the
+                                 #     ocean load from surface_h2 below.
+                                 # strain_scale multiplies the strain (an override for sweeps; default 1).
+                                 strain_model = "layered",
+                                 tidal_scenario = "dissipative_core",
                                  strain_scale = 1,
                                  surface_h2 = 0.0459,
                                  surface_h2_lag_deg = 2.95,
@@ -920,6 +928,10 @@ GeometricUtils <- list(
   }
 )
 
+LAYERED_STRAIN_CSV <- "data/layered_core_strain.csv"
+LAYERED_STRAIN_SUMMARY_CSV <- "data/layered_core_strain_summary.csv"
+LAYERED_STRAIN <- new.env()   # cache of the two tables
+
 FlowUtils <- list(
   # Calculate Darcy flow
   # Polar tidal strain amplitude of the core, Liao et al. (2020) section 2.2 and Fig. 2 caption:
@@ -942,6 +954,47 @@ FlowUtils <- list(
   degree2_dilatation_factor = function(R, L) {
     x <- max(0, (R - L) / R)
     (1 / sqrt(3) - 1 / (3 * sqrt(3))) / 2 * 3 / 5 * (1 - x^5) / (1 - x^3)
+  },
+  # The angular part alone: the mean of max(P2, 0) over the sphere.
+  degree2_angular_factor = (1 / sqrt(3) - 1 / (3 * sqrt(3))) / 2,
+
+  # The layered core strain (PI item N; scripts/layered_core_strain.py): for a tidal scenario and core
+  # viscosity, the pole amplitude of the volumetric strain against depth below the core surface (0-180 km,
+  # mean over the Table 5 samples) and the per-viscosity summary (core-surface displacement, seafloor normal
+  # stress, ...), each interpolated linearly in log10(eta) between the tabulated viscosities. Outside the
+  # scenario's tabulated range it is an error.
+  layered_strain = function(scenario, eta) {
+    if (is.null(LAYERED_STRAIN$profile)) {
+      LAYERED_STRAIN$profile <- utils::read.csv(LAYERED_STRAIN_CSV, stringsAsFactors = FALSE)
+      LAYERED_STRAIN$summary <- utils::read.csv(LAYERED_STRAIN_SUMMARY_CSV, stringsAsFactors = FALSE)
+    }
+    s <- LAYERED_STRAIN$summary[LAYERED_STRAIN$summary$scenario == scenario, ]
+    if (nrow(s) == 0) stop(sprintf("tidal_scenario \"%s\" is not tabulated (dissipative_core, dissipative_shell)", scenario))
+    etas <- sort(unique(s$eta_core_Pa_s))
+    if (eta < min(etas) * (1 - 1e-9) || eta > max(etas) * (1 + 1e-9))
+      stop(sprintf("core_viscosity %.3g Pa s is outside the %s range tabulated for the layered strain (%.3g-%.3g)",
+                   eta, scenario, min(etas), max(etas)))
+    i <- max(1, min(length(etas) - 1, findInterval(log10(eta), log10(etas))))
+    w <- if (length(etas) == 1) 0 else min(1, max(0, (log10(eta) - log10(etas[i])) / (log10(etas[i + 1]) - log10(etas[i]))))
+    pick <- function(df, e) df[abs(df$eta_core_Pa_s / e - 1) < 1e-6, ]
+    p <- LAYERED_STRAIN$profile[LAYERED_STRAIN$profile$scenario == scenario, ]
+    a <- pick(p, etas[i]); b <- pick(p, etas[min(i + 1, length(etas))])
+    sa <- pick(s, etas[i]); sb <- pick(s, etas[min(i + 1, length(etas))])
+    num <- names(s)[vapply(s, is.numeric, TRUE)]
+    list(depth_m = a$depth_km * 1e3, eps = (1 - w) * a$eps_v_pole_mean + w * b$eps_v_pole_mean,
+         eps_sd = (1 - w) * a$eps_v_pole_sd + w * b$eps_v_pole_sd,
+         summary = as.list((1 - w) * unlist(sa[num]) + w * unlist(sb[num])))
+  },
+
+  # r^2-weighted (volume) mean of a profile f(depth) over the top L of a sphere of radius R, the profile held
+  # at its deepest value below the tabulated depths.
+  volume_mean_profile = function(depth_m, f, R, L) {
+    if (L <= 0) return(f[1])
+    d <- sort(unique(c(depth_m[depth_m < L], L)))
+    v <- stats::approx(depth_m, f, xout = pmin(d, max(depth_m)), rule = 2)$y
+    wgt <- (R - d)^2
+    if (length(d) == 1) return(v)
+    sum(diff(d) * (head(v * wgt, -1) + tail(v * wgt, -1)) / 2) / sum(diff(d) * (head(wgt, -1) + tail(wgt, -1)) / 2)
   },
 
   # q is the Darcy flux (volume per unit TOTAL area per unit time), so the volumetric flow through
@@ -1151,17 +1204,26 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              return(results)
                            },
                            
-                           # Tidal strain of the reacting box. eps0: Liao et al. (2020)'s polar strain amplitude. eps_v: the
-                           # volume mean of the compressed part of a degree-2 dilatation field with pole amplitude eps0 over the
-                           # box, eps0 * degree2_dilatation_factor(R, L): (mean |P2| over the sphere = 0.385) / 2 = 0.192 times
-                           # the radial mean of (r/R)^2 over the box: 0.192 for a thin skin, 0.115 for the full core (reactive
-                           # depth "layer", 194.2 km). PLACEHOLDER pending the PI (README section 6, The strain).
+                           # Tidal strain of the reacting box (README section 6, The strain). strain_model = "liao": eps0 is
+                           # Liao et al. (2020)'s polar strain amplitude, and eps_v the volume mean of the compressed part of a
+                           # degree-2 dilatation field with pole amplitude eps0 over the box, eps0 * degree2_dilatation_factor(R, L):
+                           # (mean |P2| over the sphere = 0.385) / 2 = 0.192 times the radial mean of (r/R)^2 over the box.
+                           # strain_model = "layered" (default, PI item N): eps0 is the layered model's volumetric strain at
+                           # the pole of the core surface, and eps_v = 0.19245 (angular) times the volume mean over the box
+                           # of its pole amplitude against depth (held at the 180 km value below that).
                            tidal_strain = function() {
                              cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
+                             if (identical(cfg$strain_model, "layered")) {
+                               ls <- FlowUtils$layered_strain(cfg$tidal_scenario, cfg$core_viscosity)
+                               eps0 <- cfg$strain_scale * ls$eps[1]
+                               eps_v <- cfg$strain_scale * FlowUtils$degree2_angular_factor * FlowUtils$volume_mean_profile(ls$depth_m, ls$eps, R, L)
+                               return(list(eps0 = eps0, factor = eps_v / eps0, eps_v = eps_v, model = "layered"))
+                             }
+                             if (!identical(cfg$strain_model, "liao")) stop("strain_model must be \"layered\" or \"liao\"")
                              eps0 <- cfg$strain_scale * FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
                                                                                     R, cfg$eccentricity, cfg$orbital_period)
                              f <- FlowUtils$degree2_dilatation_factor(R, L)
-                             list(eps0 = eps0, factor = f, eps_v = eps0 * f)
+                             list(eps0 = eps0, factor = f, eps_v = eps0 * f, model = "liao")
                            },
 
                            # Tidal pore-pressure amplitude (Pa) driving the Darcy flow: the undrained pressure of the strain,
@@ -1182,9 +1244,21 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # phases. The pole amplitude is averaged over the box like the strain (degree-2 factor), and that
                            # mean is ADDED to the strain's dP (amplitudes added: an upper bound, the relative phase of the
                            # loading and strain pressures in the matrix not being known). Self-gravity of the tide is left out.
+                           # strain_model = "layered" (PI item N): the same formula with both displacements from the layered
+                           # model, |u_ocean - u_core| its mean over the samples (pole, ocean top and core surface, with
+                           # their phases). (The layered model's whole normal stress on the core surface, ~880 Pa at the
+                           # pole, is larger: most of it is the tidal potential's hydrostatic pressure, which acts on the
+                           # pore fluid as a body force too and so drives no flow; README section 6.)
                            tidal_load_pressure = function() {
                              cfg <- self$config
                              if (!isTRUE(cfg$ocean_load)) return(list(pole = 0, mean = 0, u_ocean = 0, u_core = 0, h2_core = 0))
+                             if (identical(cfg$strain_model, "layered")) {
+                               s <- FlowUtils$layered_strain(cfg$tidal_scenario, cfg$core_viscosity)$summary
+                               pole <- CONSTANTS$FLUID$density * cfg$calculate_gravity(cfg$core_radius) * s$u_ocean_minus_core_m_mean
+                               return(list(pole = pole, mean = pole * FlowUtils$degree2_dilatation_factor(cfg$core_radius, self$reactive_thickness()),
+                                           u_ocean = s$u_ocean_top_m_mean, u_core = s$u_core_m_mean,
+                                           h2_core = NA_real_, h2_core_lag_deg = NA_real_, sigma_rr_pole = s$seafloor_sigma_rr_Pa_mean))
+                             }
                              w <- 2 * pi / cfg$orbital_period; e <- cfg$eccentricity; Rc <- cfg$core_radius; RE <- cfg$radius
                              U2 <- function(r) 1.5 * r^2 * w^2 * e
                              gE <- cfg$calculate_gravity(RE); gc <- cfg$calculate_gravity(Rc)
@@ -1276,10 +1350,14 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              x <- self$exchange
                              sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
                                             "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
-                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; eps0 %.3e, eps_v/eps0 %.4f, ",
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; strain %s; eps0 %.3e, eps_v/eps0 %.4f, ",
                                             "dP %.4g Pa (%s; ocean load %.3g Pa), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
-                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta, x$eps0, x$strain_factor,
+                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta,
+                                     if (identical(self$config$strain_model, "layered")) paste0("layered, ", self$config$tidal_scenario,
+                                       if (self$config$strain_scale != 1) sprintf(" x %.3g", self$config$strain_scale) else "")
+                                     else sprintf("liao x %.3g", self$config$strain_scale),
+                                     x$eps0, x$strain_factor,
                                      x$dP, x$dP_source, x$dP_load,
                                      self$config$core_rigidity / 1e9, self$config$core_viscosity, self$biot_alpha(), self$params$porosity)
                            },
