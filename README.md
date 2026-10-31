@@ -529,25 +529,45 @@ that it falls to 1e-4–1e-5 kg per orbit, still 10–100× the tidal exchange, 
 little porewater returned) without IOM. In this model, then, **hydration-driven inflow, not tidal
 pumping, sets how much ocean water enters the rock** while the primaries hydrate.
 
+**The ocean per kg of rock (PI, 2026-10-31).** The PHREEQC basis is per kg of the reacting box's rock, so
+the ocean box per kg of rock must be the ocean's mass ÷ the box's rock mass. It was 0.9914 of that at
+every k (k = 1e-14: 1002.2 against 1010.9; 1e-11: 31.80 against 32.08; 1e-7: 0.4619 against 0.4659),
+because it used the config's geometric ocean at 1000 kg/m³ (2.113e19 kg) instead of the profile's
+`Mocean_kg` (2.131e19 kg); it now uses the profile's (the Simulator's circulation time keeps the config's,
+0.9% lighter). And it was not updated between chunks: a restart carried the parent's ocean per kg of the
+*parent's* box, so when δ shrank (69 → 58 km) the real ocean silently shrank with it. Each restart now
+scales the parent's ocean water, ocean minerals and ocean gas by old box rock ÷ new box rock
+(`tidal_kinetic_restart(ocean_scale =)`; 1.07–1.38 after orbit 1, ~1.00–1.07 later).
+
+**Drift.** Each chunk's whole-system element totals (porewater, ocean, rock, IOM, both gases) are checked
+against its start (t = 0; or the parent's end with the ocean scaled), cumulatively (`drift_max`,
+`drift_element`), with a warning above 1e-4 relative; the production tolerance is unchanged. In the
+24-orbit runs below it is ≤ 7e-9 at 160 °C (the solver's tolerance, Al and C), and 4–6e-6 in H at the
+skin's temperature: there the skin's temperature changes between chunks, and a restart redefines the
+porewater at the new temperature from its pH, which moves its H by that much. `tests/porosity_evolution_check.R`
+requires < 1e-6 at 25 °C (measured 3.9e-10).
+
 **How much ocean water the refill takes (PI, 2026-10-31).** `refill_summary(chunks)` scales each chunk's
 refill to the whole core by the reacting box's rock mass (the skin is a shell over the whole core) and
-compares it with the profile's ocean mass (`Mocean_kg` = 2.13e19 kg). In the 24-orbit runs below:
+compares it with the profile's ocean mass (`Mocean_kg` = 2.13e19 kg). In the 24-orbit runs below (with the
+ocean scaling):
 
 | run | after orbit 1 | cumulative, 24 orbits | fraction of the ocean | ocean concentration factor (scaled / model's own ocean) |
 |---|---|---|---|---|
-| skin T, 15 wt% IOM | 1.42e18 kg | 1.48e18 kg | 6.97% | 1.07 / 1.08 |
-| skin T, no IOM | 1.41e18 kg | 1.42e18 kg | 6.65% | 1.07 / 1.08 |
-| 160 °C, 15 wt% IOM | 1.66e18 kg | 1.82e18 kg | 8.53% | 1.09 / 1.12 |
-| 160 °C, no IOM | 1.25e18 kg | 1.27e18 kg | 5.96% | 1.06 / 1.09 |
+| skin T, 15 wt% IOM | 1.42e18 kg | 1.49e18 kg | 6.97% | 1.0749 / 1.0749 |
+| skin T, no IOM | 1.41e18 kg | 1.42e18 kg | 6.65% | 1.0713 / 1.0713 |
+| 160 °C, 15 wt% IOM | 1.66e18 kg | 1.82e18 kg | 8.53% | 1.0933 / 1.0933 |
+| 160 °C, no IOM | 1.25e18 kg | 1.27e18 kg | 5.95% | 1.0633 / 1.0633 |
 
 **Some 6–8% of the ocean is drawn into the core in the first orbit**, as the 69 km skin's metal corrodes
 and its primaries hydrate (both nearly instantaneous here: D6 accepts instantaneous corrosion as an
 idealisation of early alteration). After that the refill adds only ~0.1–0.5% of the ocean over 23
-orbits, and is sometimes slightly negative without IOM. The ocean's solutes concentrate by the same
-factor (1.06–1.09; the model's own normalised ocean water gives 1.08–1.12, the difference being that the
-restarts keep the parent's normalised ocean while the box's rock mass shrinks with δ). The concentration
-factor follows from the water loss alone; the solutes the refilled water carries into the rock are in
-the chemistry.
+orbits, and is sometimes slightly negative without IOM. **The two concentration factors now agree** (to
+all four digits in every chunk): the one from the cumulative refill, M_ocean/(M_ocean − refilled), and the
+one from the model's own ocean water, M_ocean/(ocean per kg of rock × box rock). (Before the ocean
+scaling they were 1.06–1.09 and 1.08–1.12.) The ocean per kg of rock at a chunk's end is then the
+geometric one × 1/CF, the water the refill has drawn. The concentration factor follows from the water
+loss alone; the solutes the refilled water carries into the rock are in the chemistry.
 
 **24-orbit runs (production k = 1e-7 at φ0 = 0.32 via Kozeny–Carman with d = 1.59 cm, skin box, φc = 0.4,
 ΔP from the strain, refill on):**

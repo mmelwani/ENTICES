@@ -1078,3 +1078,13 @@ One commit per item; each commit message has its pass check.
 - **strain_scale** (PI, 10-31): config factor on eps0 (default 1) for the N6 sweep; the core h2 bracket is
   strain_scale 0.046/0.29 = 0.16 to 1, documented as the largest uncertainty in the exchange. At 0.16 the
   thin-skin exchange is 1.3e-6 per half-orbit (from 8.3e-6). exchange_check 3f.
+- **The ocean per kg of rock** (PI, 10-31): the PHREEQC basis now takes the profile's ocean mass (Mocean_kg,
+  2.131e19 kg; the config's geometric 2.113e19 gave 0.9914 of the geometric ratio at every k), and each
+  restart scales the parent's ocean (water, ocean minerals, ocean gas) by old box rock / new box rock
+  (`tidal_kinetic_restart(ocean_scale =)`, gas_restore_block(scale =)), applied by run_tidal_evolution(),
+  so the ocean per kg of rock follows the skin depth. The two concentration factors now agree to four
+  digits (1.0749, 1.0713, 1.0933, 1.0633 for the four 24-orbit runs).
+- **Cumulative drift diagnostic** (PI, K): run_tidal_evolution() checks each chunk's whole-system element
+  totals against its start (whole_system_parts(), whole_system_t0()) and reports the cumulative drift
+  (drift_max, drift_element), warning above 1e-4. 24-orbit runs: <= 7e-9 at 160 C; 4-6e-6 (H) at the
+  skin's changing temperature, from restarts redefining the porewater at the new T from its pH.

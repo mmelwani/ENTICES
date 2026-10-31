@@ -1244,7 +1244,8 @@ rate, rock table and `rec_eqb` default have all changed since.
   skin's temperature (k = 1e-7) φ 0.32 → 0.28 (IOM) / 0.26 (none) in 24 orbits; at 160 °C → 0.22 / 0.17.
   The refill moves ~2×10⁴ times the tidal exchange after orbit 1. It draws 6–8.5% of the ocean's mass into the
   core in the first orbit (concentration factor 1.06–1.09), from the instantaneous metal corrosion and
-  fast hydration of the 69 km skin.
+  fast hydration of the 69 km skin. The ocean per kg of rock follows the skin (restarts scale the
+  ocean, 10-31); the drift of whole-system totals is reported per chunk (≤ 6e-6).
 - **N10.** D6 (metal corrosion rate): until it is decided, every gas-phase
   result is dominated by the t = 0 metal pulse (Part 7).
 - **N12 (after D6).** A third `pore_gas_fate`, `"retain_to_pore_volume"`: keep

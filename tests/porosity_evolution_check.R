@@ -41,6 +41,14 @@ check(on$refill_in_kg[1] == 0 && n > 1 && all(abs(on$refill_in_kg[-1] - (on$wate
       sprintf("refill: %s kg before chunks 2..%d (exchange per orbit %s kg)", paste(sprintf("%.3g", on$refill_in_kg[-1]), collapse = ", "), n,
               paste(sprintf("%.2g", on$exchange_kg_per_orbit), collapse = ", ")))
 
+# Drift and the ocean per kg of rock (PI 2026-10-31): the cumulative whole-system drift stays within 1e-6
+# relative; each restart scales the ocean by old box rock / new box rock (ocean_scale), and the ocean per kg
+# of rock at a chunk's start is the profile's ocean / the box's rock (before that chunk's refill, below).
+os_ok <- n == 1 || all(abs(on$ocean_scale[-1] - on$layer_mass_kg[-n] / on$layer_mass_kg[-1]) < 1e-12)
+check(max(on$drift_max) < 1e-6 && on$ocean_scale[1] == 1 && os_ok,
+      sprintf("drift: max %.1e (%s); ocean_scale %s", max(on$drift_max), on$drift_element[which.max(on$drift_max)],
+              paste(sprintf("%.4f", on$ocean_scale), collapse = ", ")))
+
 off <- run_tidal_evolution(tmpl, organic_wt_percent = 15, n_orbits = 2, output_dir = file.path(od, "off"),
                            porosity_evolution = FALSE, k_of_phi = kc, porewater_temp = 25)$chunks
 check(all(off$phi_start == 0.32) && all(off$k == kc(0.32)) && sum(off$n_orbits) == 2,

@@ -337,11 +337,11 @@ gas_phase_block <- function(n, comps, pressure_atm, temp_C, label) {
           sprintf("    %-10s 0", comps)), collapse = "\n")
 }
 # GAS_PHASE_MODIFY setting a restart's gas phase n to the moles in a parent row (its g_ columns).
-gas_restore_block <- function(n, comps, row) {
+gas_restore_block <- function(n, comps, row, scale = 1) {
   # by make.names(), so a row read with or without check.names matches ("g_CO2(g)" / "g_CO2.g.")
   v <- vapply(comps, function(c) { k <- match(make.names(paste0("g_", c)), make.names(names(row)))
     if (!is.na(k)) suppressWarnings(as.numeric(row[[k]])) else NA_real_ }, 0)
-  v <- v[!is.na(v) & v > 0]
+  v <- v[!is.na(v) & v > 0] * scale
   if (!length(v)) return(sprintf("# gas phase %d: empty in the parent", n))
   paste(c(sprintf("GAS_PHASE_MODIFY %d   # the parent's gas phase %d", n, n),
           unlist(lapply(names(v), function(c) c(sprintf("    -component %s", c), sprintf("        -moles %.15e", v[[c]]))))),
@@ -1377,7 +1377,12 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                        warning("Circulation time not calculated, cannot determine rock_per_year")
                                      }
 
-                                     water_mass <- props$ocean_mass / layer_mass
+                                     # The ocean's mass for the PHREEQC basis: the profile's (Mocean_kg, PI 2026-10-31), so that the
+                                     # ocean per kg of the box's rock is the geometric ratio; the config's geometric ocean (at 1000
+                                     # kg/m3) is 0.9% lighter and is kept for the Simulator's circulation time.
+                                     ocean_mass_phreeqc <- tryCatch(profile_ocean_mass_kg(self$profile_file), error = function(e) NA_real_)
+                                     if (!is.finite(ocean_mass_phreeqc)) ocean_mass_phreeqc <- props$ocean_mass
+                                     water_mass <- ocean_mass_phreeqc / layer_mass
 
                                      # Store parameters
                                      self$organic_wt_percent <- organic_wt_percent
@@ -1396,7 +1401,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                        rock_per_year = rock_per_year,
                                        water_mass = water_mass,
                                        porewater_mass = porewater_mass,
-                                       ocean_mass = props$ocean_mass,
+                                       ocean_mass = ocean_mass_phreeqc,
                                        core_mass = props$core_mass
                                      )
 
@@ -4939,6 +4944,10 @@ END
                                    # @param refill_kg Water (kg, on the run's normalised basis) moved from the ocean into the porewater
                                    #   before the first orbit, by MIX (negative: from the porewater to the ocean), so that the porewater fills
                                    #   the pore volume again (run_tidal_evolution(); PI 2026-10-30). Default 0. The MIX rows are not punched.
+                                   # @param ocean_scale Factor on the parent's ocean (its water, the ocean's equilibrium phases and gas
+                                   #   phase 2) on the run's normalised basis: when the reacting box changes between chunks (the skin depth
+                                   #   moves with porosity), the real ocean is unchanged but the ocean per kg of the box's rock is not; the
+                                   #   driver passes old box rock mass / new box rock mass (PI 2026-10-31). Default 1.
                                    # @param stop_on_depletion TRUE (default): stop the run (USER_PRINT STOP, which PHREEQC reports as 2 errors, status 3) at the
                                    #   end of an orbit once depletion_mineral is exhausted. FALSE runs every orbit (run_tidal_evolution() uses it).
                                    # @param suffix Appended to the file name. Default "".
@@ -4970,7 +4979,8 @@ END
                                      pore_gas_fate       = c("to_ocean", "retain"),
                                      logfile             = FALSE,
                                      stop_on_depletion   = TRUE,
-                                     refill_kg           = 0
+                                     refill_kg           = 0,
+                                     ocean_scale         = 1
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -5202,7 +5212,8 @@ END
                                      soln1_h2o  <- as.numeric(row_mix1[["mass_H2O"]])
                                      soln2_pH   <- as.numeric(row_mix2[["pH"]])
                                      soln2_pe   <- as.numeric(row_mix2[["pe"]])
-                                     soln2_h2o  <- as.numeric(row_mix2[["mass_H2O"]])
+                                     if (!is.numeric(ocean_scale) || length(ocean_scale) != 1 || !(ocean_scale > 0)) stop("ocean_scale must be one positive number")
+                                     soln2_h2o  <- as.numeric(row_mix2[["mass_H2O"]]) * ocean_scale
                                      # Refill (PI 2026-10-30): move refill_kg of water ocean -> porewater (negative: porewater ->
                                      # ocean) by MIX before the first orbit. MIX scales whole solutions, so the moved water carries
                                      # its solutes and every element is conserved between the two. Its simulations run before the
@@ -5220,7 +5231,7 @@ END
                                               "MIX 2\n  2  1.0\n", sprintf("  1  %.15e\n", -refill_kg / soln1_h2o), "SAVE solution 2\nEND\n",
                                               "MIX 1\n", sprintf("  1  %.15e\n", 1 + refill_kg / soln1_h2o), "SAVE solution 1\nEND\n")
                                      } else ""
-                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6)", refill_kg)
+                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6); ocean_scale: %.15g", refill_kg, ocean_scale)
 
                                      # ---- Secondary minerals list ----
                                      secondary_minerals <- c(
@@ -5477,14 +5488,14 @@ END
                                      ep2_prim_lines <- if (length(equil_primary) > 0)
                                        paste(c("# --- Primary minerals (equilibrium, ocean) ---",
                                                sapply(equil_primary, function(m)
-                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
+                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, ocean_scale * get_ep_moles(m, row_mix4)))),
                                              collapse = "\n")
                                      else ""
                                      ep2_minerals <- c(secondary_minerals, extra_ocean_minerals)
                                      ep2_sec_lines <- paste(
                                        c("# --- Secondary minerals (ocean, from previous run) ---",
                                          sapply(ep2_minerals, function(m)
-                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_mix4)))),
+                                           sprintf("   %-20s 0 %.15e", m, ocean_scale * get_ep_moles(m, row_mix4)))),
                                        collapse = "\n"
                                      )
                                      ep2_block <- paste0("EQUILIBRIUM_PHASES 2\n",
@@ -5634,7 +5645,7 @@ REACTION_PRESSURE 2
 {if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
 
 {ocean_gas_block}
-{gas_restore_block(2, gas_comps, row_mix4)}
+{gas_restore_block(2, gas_comps, row_mix4, ocean_scale)}
 {if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
 
 {rates_block}
