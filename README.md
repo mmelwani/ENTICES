@@ -163,10 +163,14 @@ Run everything from the repo root.
 `ENTICES_runs.Rmd` has each as code with narrative and expected results:
 
 1. **A 25 °C smoke test** (minutes): `tidal_kinetic`, 2 orbits, 15 wt% IOM, `trace_C_molal = 1e-14`.
-2. **Lucas's production case:** k = 1e-7 m², full-core layer, 12 orbits, 160 °C, 15 wt% IOM. Expect
-   (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 11.3, ocean H₂ 6.5e-2 molal
-   (saturated), ocean DIC 1.3e-7 molal (the seed is 1e-14), 0.82 L of ocean gas; the pore bubble
-   0.34 L after the first orbit, 3e-4 L by orbit 12.
+   Expect at orbit 2 (`to_ocean`): porewater pH 11.04, Na 0.115 molal, ionic strength 0.26; ocean pH
+   7.57, H₂ 0.065 molal (saturated), DIC 9.6e-15 (the seed), 0.90 L of ocean gas; a pore bubble of
+   0.44 L (2.8 pore volumes) after orbit 1, none in orbit 2.
+2. **Lucas's production case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
+   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 10.63, ocean H₂
+   0.065 molal (saturated), ocean DIC 3.4e-8 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
+   bubble 0.56 L (3.6 pore volumes) after the first orbit, 5e-4 L by orbit 12; ρ_solid 2.92 → 2.76
+   g/cm³, ρ_bulk 2.31 → 2.24 (numbers of 2026-10-31: skin box, φc 0.4, ΔP from the strain).
 3. **A 100 °C organic vs blank pair** with `pair_organic_run()`.
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
    10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
@@ -887,6 +891,26 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
   11.3, of which the organics contribute 1.29e-7 molal. Whether the organic contribution can
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
   for.
+
+### What tidal-only circulation can reach
+
+The exchange in ENTICES is tidal only (buoyancy-driven flow is out of scope; Choblet et al. 2017 and
+others are for comparison). The tidal pressure reaches only the skin depth δ, so the rock that reacts and
+exchanges is the top L_eff = min(L, δ) of the layer (§6). At the current defaults (φ = 0.32, φc = 0.4, α =
+0.8, ΔP from the strain plus ocean loading, placeholders µ = 17 GPa, η = 1e12 Pa·s, `strain_scale` = 1):
+
+| k (m²) | L_eff | skin T | exchange per half-orbit | circulation time |
+|---|---|---|---|---|
+| 1e-14 | 22 m | 1.4 °C | 8.3e-6 | 1.4e6 yr |
+| 1e-12 | 219 m | 1.4 °C | 8.3e-6 | 1.4e5 yr |
+| 1e-11 | 692 m | 1.4 °C | 8.3e-6 | 4.6e4 yr |
+| 1e-7 | 69 km | 31.0 °C | 6.1e-6 | 908 yr |
+
+**Tidal pumping alone reaches only cold rock just below the seafloor unless k is at the top of the
+range**; deep, hot rock is reached only as δ approaches L. The strain limit binds throughout, so the
+exchange per half-orbit hardly depends on k; k sets how deep (and so how warm and how much rock) the
+reacting skin is, and with it the circulation time. At `strain_scale` = 0.16 (the core-h₂ bracket) every
+circulation time is ~6× longer.
 
 ## 8. Known limitations and open decisions
 

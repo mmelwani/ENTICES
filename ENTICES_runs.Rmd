@@ -48,11 +48,13 @@ x <- run_input(f)
 x[c(5, 8), c("soln", "pH", "Na", "mu", "m_H2", "C", "Vgas_L", "Vgas_Vpore")]   # orbit 2: porewater (REACT), ocean (MIX 2)
 ```
 
-Expect (67 s): at orbit 2 a porewater of pH 14.1, 2.0 molal Na, ionic strength 1.9; an ocean of pH
-10.1 with 3.8e-6 molal H₂ and DIC 1e-14 (the seed: the IOM releases almost none at 25 °C); a pore
-bubble of 0.24 L, 1.5× the pore volume. The porewater becomes a NaOH brine (albite dissolves, nothing takes up Na at
-25 °C): ionic strength well above the B-dot model's ~1 molal, so read its pH as qualitative. The
-metal's H₂ forms a pore bubble larger than the pore space in the first orbit.
+Expect (20 s; numbers of 2026-10-31: skin box, φc 0.4, ΔP from the strain, exchange 6e-6 per
+half-orbit): at orbit 2 a porewater of pH 11.04, 0.115 molal Na, ionic strength 0.26; an ocean of pH
+7.57 with 0.065 molal H₂ (saturated at 66.7 atm) and DIC 9.6e-15 (the seed: the IOM releases almost none
+at 25 °C); 0.90 L of ocean gas. The metal's H₂ forms a pore bubble of 0.44 L, 2.8× the pore volume, in
+the first orbit; under the default `pore_gas_fate = "to_ocean"` it goes to the ocean, which it
+saturates. `pore_gas_fate = "retain_to_pore_volume"` keeps the bubble up to the pore volume and still
+saturates the ocean (pH 9.55); `"retain"` leaves the ocean at 5.7e-7 molal H₂ (README §7, Gas).
 
 ## 2. Lucas's production case
 
@@ -69,10 +71,12 @@ data.frame(orbit = 1:12, pH = ocean$pH, H2 = ocean$m_H2, DIC = ocean$C, bubble_L
 bulk_density(sub("\\.pqi$", ".csv", f), porosity = sim$params$porosity)$summary[c(1, 13), ]
 ```
 
-Expect at orbit 12 (the default `pore_gas_fate = "to_ocean"`): ocean pH 11.3, H₂ 6.5e-2 molal
-(saturated at 66.7 atm), DIC 1.3e-7 molal, 0.82 L of ocean gas; a pore bubble of 0.34 L after the
-first orbit (2.1× the pore volume) that has gone to the ocean by orbit 12 (3e-4 L); ρ_solid 2.76
-g/cm³. The bubble is the metal's H₂: Fe and Ni corrode completely in the first step (D6).
+Expect at orbit 12 (the default `pore_gas_fate = "to_ocean"`; 718 s; numbers of 2026-10-31): ocean pH
+10.63, H₂ 0.065 molal (saturated at 66.7 atm), DIC 3.4e-8 molal, 0.84 L of ocean gas; a pore bubble of
+0.56 L after the first orbit (3.6× the pore volume) that has gone to the ocean by orbit 12 (5e-4 L);
+ρ_solid 2.92 → 2.76 g/cm³. The bubble is the metal's H₂: Fe and Ni corrode completely in the first step
+(D6, an accepted idealisation of early outgassing). `h2_budget()` and `scale_to_core()` give the H₂
+inventory (1.5e20 mol in the ocean gas for the whole core; README §6).
 
 ## 3. A 100 °C organic vs blank pair
 

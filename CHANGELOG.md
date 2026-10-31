@@ -1121,3 +1121,7 @@ One commit per item; each commit message has its pass check.
   kinetic primaries and equal temperatures). `steady_state_diagnostics()`: per-orbit net elemental flux into
   the ocean and secondary-mineral change in the porewater and in the ocean. Lucas's 160 C case: porewater
   secondaries +1.09 -> +0.0038 mol per orbit (orbit 1 -> 12); Na flux 2.4e-6 per orbit; C flux rising.
+- **Item 8, docs:** worked examples 1 and 2 refreshed (README section 4, ENTICES_runs.Rmd: e.g. example 1 ocean pH
+  7.57, H2 0.065 saturated, porewater pH 11.04, 0.115 molal Na; example 2 ocean pH 10.63, DIC 3.4e-8 at orbit 12).
+  README subsection "What tidal-only circulation can reach" (k, L_eff, T, exchange per half-orbit, circulation).
+  PROGRESS Part 10: D6 closed, D7/D12 merged, N12 implemented, phi(t) implemented, buoyancy flow out of scope.

@@ -1211,6 +1211,10 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | README §6 (Exchange) | Bagheri et al. 2025 Table 5 "dissipation in the core"; placeholders µ 17 GPa, η 1e12 Pa·s (geometric means). ε₀ depends on η only at these values (7.6e-6–3.8e-5); at production k the poroelastic limit binds, so η sets the exchange | **10-31:** the core's isolated h₂ behind ε₀ (0.29 at η 1e12) is 6× Bagheri's whole-body surface h₂ (0.046); **the largest uncertainty in the exchange** (it scales with ε_v): bracket ε₀ × (0.046/0.29) to ε₀, `strain_scale` 0.16–1 in the N6 sweep; the PI may supply core-surface displacements from Bagheri et al.'s model. Ocean loading adds 0.3% (README §6).
 | D14 | **Initial porosity φ0 and critical porosity φc** | README §6 (Porosity and the Biot coefficient) | φ0 = 0.32 is one PlanetProfile fit; sweep 0.1–0.4; Bagheri's 2160–2400 kg/m³ is an end-state check (φ 0.27–0.40 at t = 0 with 15 wt% IOM). α = min(1, φ/φc), **φc = 0.4** (PI 10-30; Dvorkin & Nur 2000: 36–40%); φ ≥ φc gives α = 1 (a suspension); placeholders pending the PI: ε_v/ε₀ (0.192 skin, 0.115 layer), η = 1e12 Pa·s, φc = 0.4 |
 
+**Buoyancy-driven flow is out of scope (PI 10-29):** ENTICES tests whether tidally driven circulation
+alone can drive the exchange; buoyancy-driven results (Choblet et al. 2017 and others) are for
+comparison, not implementation (README §7, What tidal-only circulation can reach).
+
 ## Next actions (code and tests), in order
 
 - ~~N1. Leak test~~ **Done 10-26** (Part 3).
