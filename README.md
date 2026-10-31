@@ -588,6 +588,46 @@ before (→ 0.22, 0.17), the new defaults changing little (the strain binds thro
 matter). In every case **the core closes and does not clog** in 24 orbits, and the strain limit binds.
 The first chunk takes 77 s at the skin's temperature and 190–515 s at 160 °C.
 
+**Permeability and surface area from grain size (item 3, PI 2026-10-29).** `Simulator$new(k =
+"kozeny_carman", grain_diameter = d)` sets the permeability from the grain size and the porosity by the
+Kozeny–Carman relation for granular, unconsolidated media, **k = d²φ³/(180(1 − φ)²)** (Carman 1937; the
+180 is 36 × Carman's constant 5 for packed spheres, with the specific surface 6/d; checked against
+secondary sources, the 1937 paper itself not seen). A number for `k` still works, so old runs reproduce.
+`kozeny_carman_k()`, `kozeny_carman_d()` (the inverse). The table (m²):
+
+| φ | d = 1 µm | 30 µm | 1 mm | 2 cm |
+|---|---|---|---|---|
+| 0.2 | 6.9e-17 | 6.2e-14 | 6.9e-11 | 2.8e-8 |
+| 0.3 | 3.1e-16 | 2.8e-13 | 3.1e-10 | 1.2e-7 |
+
+**At the production φ = 0.32, Choblet et al.'s preferred 1e-14–1e-13 m² needs grains of 5–16 µm, and the
+production k = 1e-7 m² implies grains of 1.6 cm: centimetre-scale gravel**, not a chondritic matrix.
+Fractures can dominate a real rock's permeability, so Kozeny–Carman is then a lower bound. Alteration
+reduces φ and k falls as φ³: with `run_tidal_evolution()` (item E) a Kozeny–Carman template follows
+φ(t) through k automatically.
+
+The surface area follows the same grain size: `ssa = "geometric"` sets each mineral's specific surface
+to **6/(ρᵢ·dᵢ) × `roughness`** (ρᵢ = molar mass/Vm from `data/mineral_molar_volumes.csv`; `roughness`,
+default 1, is the BET-over-geometric factor), with `grain_diameter_by_mineral` (a named vector, m) for
+per-mineral sizes, e.g. a fine matrix for feldspars and sulfides and coarser olivine and pyroxene;
+`PhreeqcIntegrator$apply_ssa()` writes it into every generated input. `ssa = "legacy"` (the default)
+keeps the current 0.1 and 5 m²/g (UNSOURCED, D7). The difference is large: at d = 1.6 cm (production k)
+the geometric area of forsterite is 1.2e-4 m²/g, 800× below the legacy 0.1; at 10 µm it is 0.19 m²/g.
+`tests/kozeny_carman_check.R` checks the table, the Simulator and the SSA lines.
+
+**The sweep (N6; design only, not run): one sweep over (φ, d, strain).** It replaces the separate k,
+surface-area and stress sweeps: φ 0.1–0.4, d 1 µm–1 cm (setting both k and the surface areas), and,
+since ΔP is now derived from the strain (F), `strain_scale` 0.16–1 (L) in place of ΔP. k (m²) over the
+grid, marked C (Choblet et al.'s preferred 1e-14–1e-13), F (Fisher et al.'s aquifers 1e-13–1e-10) and
+L (Liao et al.'s 1e-12–1e-7):
+
+| φ | 1 µm | 10 µm | 100 µm | 1 mm | 1 cm |
+|---|---|---|---|---|---|
+| 0.1 | 6.9e-18 | 6.9e-16 | 6.9e-14 C | 6.9e-12 F L | 6.9e-10 L |
+| 0.2 | 6.9e-17 | 6.9e-15 | 6.9e-13 F | 6.9e-11 F L | 6.9e-9 L |
+| 0.3 | 3.1e-16 | 3.1e-14 C | 3.1e-12 F L | 3.1e-10 L | 3.1e-8 L |
+| 0.4 | 9.9e-16 | 9.9e-14 C | 9.9e-12 F L | 9.9e-10 L | 9.9e-8 L |
+
 **Two assumptions, stated, not swept.**
 - **Ingested water has the bulk-ocean composition.** The water drawn in is not the fluid just
   expelled (bottom currents disperse that), but it is not fresh either: the ocean box carries the

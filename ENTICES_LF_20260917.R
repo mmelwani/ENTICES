@@ -131,6 +131,16 @@ SHARED_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n 
 # fail, neighbouring fractions run; 2026-10-29). -diagonal_scale true converges all fractions tested
 # (1e-8 to 1e-3) and leaves converging runs unchanged (a 160 C orbit agrees to 1e-8 relative). It is
 # switched off after the ocean step: set globally it shifted the porewater step's m_H2S by 0.9%.
+# Kozeny-Carman permeability (m2) of a granular medium of grain diameter d (m) and porosity phi (item 3, PI
+# 2026-10-29): k = d^2 phi^3 / (180 (1 - phi)^2). The 180 is Carman's (1937) value for packed spheres (36 x
+# his constant 5, with the specific surface 6/d); Carman, P.C. (1937), Fluid flow through granular beds,
+# Trans. Inst. Chem. Eng. 15, 150-166. A lower bound where fractures carry the flow.
+kozeny_carman_k <- function(d, phi) d^2 * phi^3 / (180 * (1 - phi)^2)
+# The grain diameter that gives permeability k at porosity phi (the inverse).
+kozeny_carman_d <- function(k, phi) sqrt(k * 180 * (1 - phi)^2 / phi^3)
+# Geometric specific surface area (m2/g) of spheres of diameter d (m) and density rho (g/cm3): 6 / (rho d).
+geometric_ssa_m2_g <- function(d, rho) 6 / (rho * 1e6 * d)
+
 OCEAN_STEP_KNOBS_ON  <- "KNOBS\n    -diagonal_scale true\n"
 OCEAN_STEP_KNOBS_OFF <- "KNOBS\n    -diagonal_scale false\n"
 
@@ -924,12 +934,35 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # the Biot coefficient is then min(1, phi / phi_c) (biot_alpha()); phi >= phi_c gives alpha = 1, a
                            # suspension rather than a frame.
                            # alpha: a number overrides that; it must be >= the porosity.
+                           # k: the permeability (m2), or "kozeny_carman" (item 3, PI 2026-10-29): k = d^2 phi^3 / (180 (1 - phi)^2)
+                           # from grain_diameter d (m) and the porosity (kozeny_carman_k()). ssa: "legacy" (default: the
+                           # per-mineral surface areas in the RATES blocks, 0.1 and 5 m2/g, UNSOURCED) or "geometric":
+                           # 6 / (rho_i d_i) per mineral (rho_i from data/mineral_molar_volumes.csv), times `roughness`
+                           # (default 1; BET over geometric area); d_i from grain_diameter_by_mineral (a named vector, m) or
+                           # grain_diameter (applied by PhreeqcIntegrator$apply_ssa() to every generated input).
                            initialize = function(k, layer_thickness, porosity = NULL, config = NULL,
-                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.4, alpha = NULL) {
+                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.4, alpha = NULL,
+                                                 grain_diameter = NULL, ssa = c("legacy", "geometric"), roughness = 1,
+                                                 grain_diameter_by_mineral = NULL) {
+                             phi_ <- if (is.null(porosity)) phi0 else porosity
+                             perm <- if (identical(k, "kozeny_carman")) "kozeny_carman" else "given"
+                             if (perm == "kozeny_carman") {
+                               if (!(is.numeric(grain_diameter) && length(grain_diameter) == 1 && grain_diameter > 0))
+                                 stop("k = \"kozeny_carman\" needs grain_diameter (m)")
+                               k <- kozeny_carman_k(grain_diameter, phi_)
+                             }
+                             ssa <- match.arg(ssa)
+                             if (ssa == "geometric" && is.null(grain_diameter) && is.null(grain_diameter_by_mineral))
+                               stop("ssa = \"geometric\" needs grain_diameter or grain_diameter_by_mineral")
                              self$params <- list(
                                k = k,
+                               permeability = perm,
+                               grain_diameter = grain_diameter,
+                               ssa = ssa,
+                               roughness = roughness,
+                               grain_diameter_by_mineral = grain_diameter_by_mineral,
                                layer_thickness = layer_thickness,
-                               porosity = if (is.null(porosity)) phi0 else porosity,
+                               porosity = phi_,
                                reactive_depth = match.arg(reactive_depth),
                                phi_c = phi_c,
                                alpha = alpha
@@ -1413,6 +1446,36 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      return(self$phreeqc_params)
                                    },
 
+                                   # Surface areas from the grain size (item 3): with the Simulator's ssa = "geometric", each RATES
+                                   # entry's "SSA = <value>" line gets 6 / (rho_i d_i) x roughness (m2/g); "legacy" leaves the input
+                                   # unchanged. rho_i = molar mass / Vm (data/mineral_molar_volumes.csv); a mineral without a
+                                   # density there is an error.
+                                   apply_ssa = function(content) {
+                                     pr <- self$simulator$params
+                                     if (!identical(pr$ssa, "geometric")) return(content)
+                                     v <- read_mineral_volumes()
+                                     l <- strsplit(content, "\n", fixed = TRUE)[[1]]
+                                     in_rates <- FALSE; cur <- NA_character_
+                                     for (i in seq_along(l)) {
+                                       if (grepl("^RATES\\b", l[i])) { in_rates <- TRUE; cur <- NA_character_; next }
+                                       if (in_rates && grepl("^(END|KINETICS|EQUILIBRIUM_PHASES|SOLUTION|SELECTED_OUTPUT|USER_PUNCH|USER_PRINT|USE|MIX|SAVE|KNOBS|GAS_PHASE|REACTION|PHASES|TITLE|INCREMENTAL)\\b", l[i]))
+                                         in_rates <- FALSE
+                                       if (!in_rates) next
+                                       if (grepl("^[A-Za-z]", l[i])) { cur <- sub("[ \t#].*$", "", l[i]); next }
+                                       if (!is.na(cur) && grepl("SSA = [0-9.eE+-]+", l[i])) {
+                                         j <- match(cur, v$phase)
+                                         if (is.na(j)) stop("apply_ssa: no density for ", cur)
+                                         rho <- v$molar_mass_g_mol[j] / v$Vm_cm3_mol[j]
+                                         d <- if (!is.null(pr$grain_diameter_by_mineral) && cur %in% names(pr$grain_diameter_by_mineral))
+                                           pr$grain_diameter_by_mineral[[cur]] else pr$grain_diameter
+                                         s <- pr$roughness * geometric_ssa_m2_g(d, rho)
+                                         l[i] <- sub("SSA = [0-9.eE+-]+.*$", sprintf("SSA = %.6g  # geometric 6/(rho d) x roughness: rho %.4g g/cm3, d %.4g m, roughness %g (item 3)",
+                                                                                   s, rho, d, pr$roughness), l[i])
+                                       }
+                                     }
+                                     paste(l, collapse = "\n")
+                                   },
+
                                    # Secondary minerals only stable/relevant above a temperature threshold —
                                    # returns the subset of names whose threshold is met at temp_C, for use in
                                    # a given block's EQUILIBRIUM_PHASES list (each block gated by its own
@@ -1776,7 +1839,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                                 pore_gas_fate = pore_gas_fate)
 
                                      # Write to file
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
 
                                      return(filename)
                                    },
@@ -2782,7 +2845,7 @@ KNOBS
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
                                                                                          initial_ocean = initial_ocean, charge_balance = charge_balance,
                                                                                          pore_gas_fate = pore_gas_fate, trace_C_molal = trace_C_molal)
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -3716,7 +3779,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -4333,7 +4396,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -4916,7 +4979,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -5772,7 +5835,7 @@ KNOBS
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
                                                                       ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    }
                                  )

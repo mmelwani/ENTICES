@@ -42,7 +42,9 @@
 evolution_simulator <- function(template, phi, k) {
   s <- Simulator$new(k = k, layer_thickness = template$params$layer_thickness, config = template$config,
                      reactive_depth = template$params$reactive_depth, phi0 = phi,
-                     phi_c = template$params$phi_c, alpha = template$params$alpha)
+                     phi_c = template$params$phi_c, alpha = template$params$alpha,
+                     grain_diameter = template$params$grain_diameter, ssa = template$params$ssa,
+                     roughness = template$params$roughness, grain_diameter_by_mineral = template$params$grain_diameter_by_mineral)
   invisible(capture.output(s$run_simulation()))
   s
 }
@@ -56,6 +58,9 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
                                 trace_C_molal = 1e-14, refill = porosity_evolution, ...) {
   quiet <- function(e) { invisible(capture.output(r <- suppressMessages(e))); r }
   phi0 <- template$params$porosity; phi <- phi0
+  # a Kozeny-Carman template follows phi(t) through k unless k_of_phi is given (item 3)
+  if (is.null(k_of_phi) && identical(template$params$permeability, "kozeny_carman"))
+    k_of_phi <- function(phi) kozeny_carman_k(template$params$grain_diameter, phi)
   k <- if (is.null(k_of_phi)) template$params$k else k_of_phi(phi)
   done <- 0; n <- first_chunk; prev_csv <- NULL; origin <- NULL; V_total <- NA; clogged <- FALSE
   m_pw0 <- NA; refill_next <- 0; n_prev <- NA; lm_prev <- NA; pq0 <- NULL; parts_prev <- NULL; drift <- NULL

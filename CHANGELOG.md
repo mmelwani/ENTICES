@@ -1088,3 +1088,12 @@ One commit per item; each commit message has its pass check.
   totals against its start (whole_system_parts(), whole_system_t0()) and reports the cumulative drift
   (drift_max, drift_element), warning above 1e-4. 24-orbit runs: <= 7e-9 at 160 C; 4-6e-6 (H) at the
   skin's changing temperature, from restarts redefining the porewater at the new T from its pH.
+
+### exchange-physics, items 3-8 (2026-10-31)
+
+- **Item 3, permeability and surface area from grain size:** `Simulator$new(k = "kozeny_carman", grain_diameter =)`
+  (k = d^2 phi^3 / (180 (1-phi)^2), Carman 1937); `ssa = "geometric"` (6/(rho_i d_i) x roughness, per-mineral
+  diameters optional; applied to every generated input by PhreeqcIntegrator$apply_ssa()), `ssa = "legacy"`
+  default. run_tidal_evolution() follows phi(t) through a Kozeny-Carman k. Choblet's 1e-14-1e-13 at phi 0.32
+  needs 5-16 um grains; production k 1e-7 implies 1.6 cm gravel. The N6 sweep is one (phi, d, strain_scale)
+  grid (README). `tests/kozeny_carman_check.R`.
