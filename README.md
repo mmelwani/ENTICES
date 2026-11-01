@@ -190,16 +190,23 @@ Run everything from the repo root.
    7.41, H₂ 0.065 molal (saturated), DIC 9.2e-15 (the seed), 0.90 L of ocean gas; a pore bubble of
    0.44 L (2.8 pore volumes) after orbit 1, none in orbit 2.
 2. **Lucas's production case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
-   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.15, ocean H₂
-   0.065 molal (saturated), ocean DIC 1.5e-10 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
+   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.51, ocean H₂
+   0.065 molal (saturated), ocean DIC 2.9e-10 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
    bubble 0.56 L (3.6 pore volumes) after the first orbit, 5e-4 L by orbit 12; ρ_solid 2.92 → 2.76
-   g/cm³, ρ_bulk 2.31 → 2.24 (numbers of 2026-10-31 with the layered strain, N: exchange 1.9e-8 per
-   half-orbit; under `strain_model = "liao"` the ocean reached pH 10.63 and DIC 3.4e-8).
-3. **A 100 °C organic vs blank pair** with `pair_organic_run()`.
+   g/cm³, ρ_bulk 2.31 → 2.24 (numbers of 2026-11-01: the layered strain at K_d, exchange 4.5e-8 per
+   half-orbit in the 69 km skin; at K = 100 GPa the ocean reached pH 8.15 and DIC 1.5e-10, under
+   `strain_model = "liao"` pH 10.63 and DIC 3.4e-8).
+3. **A 100 °C organic vs blank pair** with `pair_organic_run()` (2 orbits). Expect: the organics add
+   1.25e-15 molal DIC to the ocean (the blank's is the seed, 9.6e-15), 9.1e-15 molal CH₄ and 2.8e-16
+   molal NH₄⁺; the ocean gas holds 2.16 mol H₂ in both, from the metal. **An organic contribution of
+   ~1e-15 molal is what this exchange rate (~5e-8 of the pore volume per half-orbit) and these skin
+   temperatures give over a few orbits**: it is not a measure of what the organics can supply. The
+   organics question is answered by the long runs (PROGRESS N8), not by this example.
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
    10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
 5. **The pore-gas bracket:** the production case with `pore_gas_fate = "retain"` and `"to_ocean"`:
-   ocean H₂ 1.5e-5 vs 6.5e-2 molal at orbit 12, the same organic DIC.
+   ocean H₂ 1.5e-5 vs 6.5e-2 molal at orbit 12, the same organic DIC (numbers of 10-29, before the
+   exchange physics of this branch; not rerun).
 
 ## 5. Parameters
 
@@ -1004,15 +1011,17 @@ ocean (KINETICS 3, as `to_ocean`). The pore gas left after each removal is writt
 `<base>_poregas.csv`, which the mass balance (`tests/gas_mass_balance_check.R`) and restarts read. The
 default stays `"to_ocean"`.
 
-**Worked example 1 under the three fates** (25 °C, 2 orbits, end of orbit 2; computed before N, under
-the Liao strain, exchange 6e-6 per half-orbit; with the layered strain `to_ocean` gives ocean pH 7.41,
-the rest of its row unchanged):
+**Worked example 1 under the three fates** (25 °C, 2 orbits, end of orbit 2; numbers of 2026-11-01, the
+layered strain at K_d):
 
 | fate | ocean pH | ocean H₂ (molal) | ocean gas | porewater pH | pore gas |
 |---|---|---|---|---|---|
-| `to_ocean` | 7.57 | 0.065 (saturated) | 0.90 L | 11.04 | none |
-| `retain_to_pore_volume` | 9.55 | 0.065 (saturated) | 0.58 L | 14.06 | 0.67 pore volumes |
-| `retain` | 9.55 | 5.7e-7 | none | 14.06 | 2.46 pore volumes |
+| `to_ocean` | 7.41 | 0.065 (saturated) | 0.90 L | 11.04 | none |
+| `retain_to_pore_volume` | 7.62 | 0.065 (saturated) | 0.58 L | 14.06 | 0.66 pore volumes |
+| `retain` | 7.62 | 4.2e-9 | none | 14.06 | 2.47 pore volumes |
+
+(Under the Liao strain, with ~100× the exchange, the ocean pH was 7.57, 9.55, 9.55 and `retain`'s ocean
+H₂ 5.7e-7.)
 
 Under `"to_ocean"` the whole pore bubble reaches the ocean every orbit, whatever the transport rate, so
 the ocean's redox is set by the gas, not by the circulation. Under `"retain_to_pore_volume"` the excess
@@ -1035,10 +1044,10 @@ ocean (the change of the ocean side, water + minerals + gas, over the orbit; the
 with the porewater) and the net change of the secondary minerals in the porewater and in the ocean (mol
 of formula units per kg of the box's rock). In Lucas's 160 °C case (12 orbits): the porewater's
 secondary minerals grow by 1.09 mol in orbit 1, 0.26 in orbit 2, 0.014 in orbit 6 and 0.0038 in orbit
-12 (the hydration transient dying away); the ocean's by ~1e-10 per orbit from orbit 6; the Na flux into
-the ocean settles at 7.5e-9 per orbit (9.2e-9 in orbit 1), Si falls from 3.7e-10 to 6.8e-11, and C is
-~1e-11 per orbit (numbers with the layered strain, N; under the Liao strain, with 430× the exchange,
-they were Na 2.4e-6, Si 1.2e-7 to 2.1e-8 and C rising from 2.2e-10 to 2.5e-9). Twelve orbits are far
+12 (the hydration transient dying away); the ocean's by ~3e-10 per orbit from orbit 6; the Na flux into
+the ocean settles at 1.75e-8 per orbit (2.1e-8 in orbit 1), Si falls from 8.7e-10 to 1.6e-10, and C is
+~1-2e-11 per orbit (numbers of 11-01, the layered strain at K_d; under the Liao strain, with ~140× the
+exchange, they were Na 2.4e-6, Si 1.2e-7 to 2.1e-8 and C rising from 2.2e-10 to 2.5e-9). Twelve orbits are far
 from the steady state; the long runs (N8) are for that.
 
 ### Carbon
@@ -1053,8 +1062,8 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
 - the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 (2.08 with NH₃, the default since
   10-31) it is almost all CO₂(aq) (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no
   Cl; with the less volatile ices it is 0.56 molal at pH 5.8;
-- the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 1.5e-10 molal DIC at pH
-  8.15 (layered strain, N; 3.4e-8 at pH 10.63 under the Liao strain). Whether the organic contribution can
+- the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 2.9e-10 molal DIC at pH
+  8.51 (layered strain at K_d; 3.4e-8 at pH 10.63 under the Liao strain). Whether the organic contribution can
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
   for.
 

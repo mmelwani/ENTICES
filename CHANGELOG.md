@@ -1164,3 +1164,7 @@ One commit per item; each commit message has its pass check.
   Fe-bearing phase, z_Fe by charge balance, fe_valence(); dissolved Fe as Fe(II), bounded by dissolved_Fe_mol),
   H2_from_Ni, H2_from_P, H2_generated, H2_present and H2_other_redox. Lucas's 160 C case, orbit 12: generated 2.462
   mol/kg (Fe 2.444, P 0.018) = present 2.462 to 2.4e-4 (the lower bound was 2.04); 1.54e20 mol for the whole core.
+- **Worked examples refreshed (11-01, the layered strain at K_d):** example 1 ocean pH 7.41; example 2 ocean pH 8.51,
+  DIC 2.9e-10 at orbit 12; example 3 organics add 1.25e-15 molal DIC (expected at this exchange; the long runs N8
+  answer the organics question); the three-fates table (ocean pH 7.41 / 7.62 / 7.62); steady-state fluxes (Na
+  1.75e-8 per orbit).
