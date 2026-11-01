@@ -1136,3 +1136,7 @@ One commit per item; each commit message has its pass check.
   100 GPa), 2200x below Liao's eps0: the exchange per half-orbit falls from 8.3e-6 to 1.9e-8 at the
   placeholders, circulation 6.2e8 yr at k 1e-14 and 2.9e5 yr at 1e-7. The h2 bracket is removed from the docs;
   the N6 sweep takes the scenario and eta. `tests/exchange_check.R` section 7.
+- **Comparison rule for log-scale columns (PI 11-01):** column_differences() (phreeqc_tools.R): pe, pH, la_ and si_
+  columns are compared only where the relevant species is above 1e-10 molal in both runs (log_column_gate()), then
+  within 1e-4 log units; below the gate the molality floor applies. Replaces the la_-only gate.
+  gas_mass_balance_check 7/7 (the no-metal check had failed on la_SO4-2, 1.2e-4 log units at <= 4e-9 molal).

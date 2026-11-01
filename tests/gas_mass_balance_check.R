@@ -13,6 +13,8 @@
 #     bubble forms: "retain" and "to_ocean" give the same output. Every element's system total in
 #     every row agrees to 1e-9 relative or within the run's mole-balance criterion (1e-8 x the
 #     element's whole-system total), and every numeric column to 1e-6 relative or 1e-12 absolute
+#     (log-scale columns pe, pH, la_, si_: 1e-4 log units where the relevant species is above 1e-10 molal in
+#     both runs, PI 2026-11-01; column_differences() in phreeqc_tools.R)
 #     (molal; PI 2026-10-29: with the smaller exchange of exchange-physics the ocean's H2 is 2.6e-8
 #     molal and differs by 4e-14, 1.6e-6 relative). The ocean step of
 #     "to_ocean" integrates the (zero) transfer over 1 s, so PHREEQC solves the same equilibrium from
@@ -108,10 +110,10 @@ nometal <- function(pqi) {
 }
 A <- run(nometal(gen("nb_retain", 25, "retain"))); B <- run(nometal(gen("nb_to_ocean", 25, "to_ocean")))
 num <- names(A$x)[vapply(A$x, is.numeric, logical(1))]
-# a value passes if within 1e-6 relative or 1e-12 absolute (molal); d is each column's largest relative
-# difference among the values that are not within 1e-12 absolute
-d <- vapply(num, function(c) { a <- A$x[[c]]; b <- B$x[[c]]; k <- abs(a - b) > 1e-12
-  if (!any(k)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k]) }, 0)
+# column_differences() (phreeqc_tools.R; the rule is documented there): a value passes if within 1e-6 relative
+# or 1e-12 absolute (molal); log-scale columns (pe, pH, la_, si_) within 1e-4 log units where the relevant
+# species is above 1e-10 molal in both runs. d is each column's largest difference among the values that fail.
+d <- column_differences(A$x, B$x, num)
 d_all <- vapply(num, function(c) { a <- A$x[[c]]; b <- B$x[[c]]; k <- abs(a) > 1e-20 | abs(b) > 1e-20
   if (!any(k)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k]) }, 0)
 el <- intersect(A$pq$totals, names(A$x)); ra <- which(A$x$state == "react")

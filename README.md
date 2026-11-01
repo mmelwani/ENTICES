@@ -65,6 +65,14 @@ Run everything from the repo root.
    Rscript tests/gas_mass_balance_check.R # gas phases conserve mass, both pore_gas_fate options (~15 min)
    ```
 
+   **Comparing two runs column by column** (`column_differences()`, `phreeqc_tools.R`; PI 2026-11-01): a
+   value passes within 1e-6 relative or 1e-12 molal absolute. Log-scale columns (pe, pH, la_, si_) are
+   compared only where the species behind them is above 1e-10 molal in both runs (la_X: m_X; pH: the larger
+   of m_H⁺ and m_OH⁻; si_X: the scarcest dissolved element of X other than H and O; pe: any poising redox
+   pair with both members above 1e-10, H₂, Fe²⁺/Fe³⁺, SO₄²⁻/HS⁻ + H₂S, carbonate/Mtg or N₂/NH₄⁺ + NH₃), and
+   there pass within 1e-4 log units; below that gate the molality's absolute floor covers them (the log of a
+   trace or unpoised quantity carries solver noise: la_SO₄²⁻ differed by 1.2e-4 log units at ≤ 4e-9 molal).
+
 4. **Choose the profile.** `ph$profile_file` (default
    `profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt`, a PlanetProfile model,
    `profiles/README.md`) sets the porewater pressure (layer mean, 261.2 atm), the ocean pressure

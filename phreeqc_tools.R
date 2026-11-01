@@ -572,6 +572,47 @@ scale_to_core <- function(budget, sim, cols = setdiff(names(budget), c("orbit", 
   out
 }
 
+# Column-by-column comparison of two runs' rows (the comparison tests; PI 2026-11-01). A value passes if
+# within `rel` relative or `abs_floor` absolute (molal). Log-scale columns (pe, pH, la_*, si_*) are compared only
+# where the quantity they are the log of is poised: the relevant species above `gate` (1e-10 molal) in both
+# runs; there they pass within `log_abs` (1e-4) log units, and below the gate the molalities' absolute floor
+# covers them (the log of a trace or unpoised quantity carries solver noise: la_SO4-2 differed by 1.2e-4 log
+# units at <= 4e-9 molal). The relevant species (log_column_gate()):
+#   la_X   m_X;
+#   pH     the larger of m_H+ and m_OH- (water poises pH; always compared in practice);
+#   si_X   the smallest dissolved total (molal) of the elements of X's formula other than H and O;
+#   pe     a poising redox pair with both members above the gate: H2 (against water), Fe+2 + FeOH+ / Fe+3,
+#          SO4-2 / HS- + H2S, HCO3- + CO3-2 + CO2 / Mtg, N2 / NH4+ + NH3 (any one suffices).
+# Returns, per column, the largest relative difference among the values that fail (0 if none); a log-scale
+# column that fails is reported by its difference in log units.
+is_log_column <- function(name) name %in% c("pe", "pH") | startsWith(name, "la_") | startsWith(name, "si_")
+log_column_gate <- function(x, col, gate = 1e-10, formulas = NULL) {
+  m <- function(s) { k <- paste0("m_", s); v <- rep(0, nrow(x)); for (kk in k[k %in% names(x)]) v <- v + as.numeric(x[[kk]]); v }
+  if (startsWith(col, "la_")) { s <- sub("^la_", "", col); if (!paste0("m_", s) %in% names(x)) stop("log_column_gate: no m_", s); return(m(s) > gate) }
+  if (col == "pH") return(pmax(m("H+"), m("OH-")) > gate)
+  if (col == "pe") {
+    pairs <- list(cbind(m("H2"), Inf), cbind(m(c("Fe+2", "FeOH+")), m("Fe+3")), cbind(m("SO4-2"), m(c("HS-", "H2S"))),
+                  cbind(m(c("HCO3-", "CO3-2", "CO2")), m("Mtg")), cbind(m("N2"), m(c("NH4+", "NH3"))))
+    return(Reduce(`|`, lapply(pairs, function(pp) pmin(pp[, 1], pp[, 2]) > gate)))
+  }
+  if (startsWith(col, "si_")) {
+    ph <- sub("^si_", "", col); if (is.null(formulas)) formulas <- { v <- read_mineral_volumes(); stats::setNames(v$formula, v$phase) }
+    if (!ph %in% names(formulas)) stop("log_column_gate: no formula for ", ph)
+    el <- setdiff(names(unlist(formula_elements(formulas[[ph]]))), c("H", "O"))
+    if (!all(el %in% names(x))) stop("log_column_gate: no total column for ", paste(setdiff(el, names(x)), collapse = ", "), " (", ph, ")")
+    return(Reduce(pmin, lapply(el, function(e) as.numeric(x[[e]]))) > gate)
+  }
+  stop("log_column_gate: not a log-scale column: ", col)
+}
+column_differences <- function(A, B, cols, abs_floor = 1e-12, log_abs = 1e-4, gate = 1e-10) {
+  v <- read_mineral_volumes(); fm <- stats::setNames(v$formula, v$phase)
+  vapply(cols, function(c) { a <- as.numeric(A[[c]]); b <- as.numeric(B[[c]])
+    if (is_log_column(c)) { k <- abs(a - b) > log_abs & log_column_gate(A, c, gate, fm) & log_column_gate(B, c, gate, fm)
+      return(if (any(k, na.rm = TRUE)) max(abs(a - b)[k], na.rm = TRUE) else 0) }
+    k <- abs(a - b) > abs_floor
+    if (!any(k, na.rm = TRUE)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k], na.rm = TRUE) }, 0)
+}
+
 # Approach to steady state (item 7, PI 2026-10-29), per orbit, on the run's normalised basis: the net
 # elemental flux into the ocean (the change of the ocean side, its water, minerals and gas, over the orbit:
 # the ocean exchanges only with the porewater), and the net change of the secondary minerals in the
