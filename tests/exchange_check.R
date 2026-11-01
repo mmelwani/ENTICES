@@ -168,17 +168,18 @@ st <- function(cfg, k = 1e-14, depth = "skin") quiet({ s <- Simulator$new(k = k,
 d1 <- st(cl); x <- d1$exchange
 row <- function(e) prof[prof$scenario == "dissipative_core" & abs(prof$eta_core_Pa_s / e - 1) < 1e-6, ]
 i <- findInterval(12, log10(ec)); w <- (12 - log10(ec[i])) / (log10(ec[i + 1]) - log10(ec[i]))
-e_hand <- (1 - w) * row(ec[i])$eps_v_pole_mean + w * row(ec[i + 1])$eps_v_pole_mean
+kr <- prof$K_core_Pa[1] / d1$frame_moduli()$K_d   # the tables' K_core over the run's K_d (1 to ~1e-7 at phi0)
+e_hand <- kr * ((1 - w) * row(ec[i])$eps_v_pole_mean + w * row(ec[i + 1])$eps_v_pole_mean)
 g3 <- st(EnceladusConfig$new(list(core_viscosity = ec[3])))
 check(cl$strain_model == "layered" && cl$tidal_scenario == "dissipative_core" && abs(x$eps0 / e_hand[1] - 1) < 1e-12 &&
-        abs(g3$exchange$eps0 / row(ec[3])$eps_v_pole_mean[1] - 1) < 1e-12,
+        abs(g3$exchange$eps0 / (kr * row(ec[3])$eps_v_pole_mean[1]) - 1) < 1e-12,
       sprintf("layered eps0 at eta 1e12 = log-eta interpolation by hand: %.5e (%.5e); at a tabulated eta, the table's %.5e", x$eps0, e_hand[1], g3$exchange$eps0))
 # eps_v: r^2-weighted mean over the box, by hand with integrate() on the interpolated profile
 vm <- function(L) { f <- approxfun(row(ec[i])$depth_km * 1e3, (1 - w) * row(ec[i])$eps_v_pole_mean + w * row(ec[i + 1])$eps_v_pole_mean, rule = 2)
   integrate(function(d) f(d) * (R - d)^2, 0, L, subdivisions = 2000)$value / integrate(function(d) (R - d)^2, 0, L)$value }
 dl <- st(cl, depth = "layer"); d7 <- st(cl, k = 1e-7)
-ok <- abs(x$eps_v / (0.19245009 * vm(x$L_eff)) - 1) < 1e-6 && abs(dl$exchange$eps_v / (0.19245009 * vm(194200)) - 1) < 1e-3 &&
-  abs(d7$exchange$eps_v / (0.19245009 * vm(d7$exchange$L_eff)) - 1) < 1e-4
+ok <- abs(x$eps_v / (kr * 0.19245009 * vm(x$L_eff)) - 1) < 1e-6 && abs(dl$exchange$eps_v / (kr * 0.19245009 * vm(194200)) - 1) < 1e-3 &&
+  abs(d7$exchange$eps_v / (kr * 0.19245009 * vm(d7$exchange$L_eff)) - 1) < 1e-4
 check(ok, sprintf("layered eps_v = 0.19245 x the volume mean over the box: %.4e (22 m skin), %.4e (69 km skin), %.4e (layer; held at 180 km below)",
                   x$eps_v, d7$exchange$eps_v, dl$exchange$eps_v))
 sr <- summ[summ$scenario == "dissipative_core", ]
@@ -195,7 +196,7 @@ for (k in c(1e-14, 1e-11, 1e-7)) {
 }
 s16 <- st(EnceladusConfig$new(list(strain_scale = 0.16))); sh <- st(EnceladusConfig$new(list(tidal_scenario = "dissipative_shell", core_viscosity = 1e17)))
 check(abs(s16$exchange$eps0 / (0.16 * x$eps0) - 1) < 1e-12 && abs(s16$exchange$dP_strain / (0.16 * x$dP_strain) - 1) < 1e-9 &&
-        abs(s16$exchange$dP_load / x$dP_load - 1) < 1e-12 && abs(sh$exchange$eps0 / row(ec[1])$eps_v_pole_mean[1] - 1) < 0.1,
+        abs(s16$exchange$dP_load / x$dP_load - 1) < 1e-12 && abs(sh$exchange$eps0 / (kr * row(ec[1])$eps_v_pole_mean[1]) - 1) < 0.1,
       sprintf("strain_scale 0.16 scales the strain (eps0 %.4g), not the load; dissipative_shell at eta 1e17: eps0 %.4g, x_half %.3e",
               s16$exchange$eps0, sh$exchange$eps0, sh$exchange$x_half))
 er <- function(p) tryCatch({ st(EnceladusConfig$new(p)); "no error" }, error = function(e) conditionMessage(e))
@@ -205,8 +206,41 @@ check(grepl("outside the dissipative_core range", er(list(core_viscosity = 1e13)
 od <- file.path(tempdir(), "exchange_check7"); unlink(od, recursive = TRUE)
 f <- quiet({ s <- st(cl, k = 1e-7); ph <- PhreeqcIntegrator$new(s); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
   ph$generate_phreeqc_input_tidal_kinetic(output_dir = od, mode = "ungrouped", n_orbital_cycles = 1, porewater_temp = 25, trace_C_molal = 1e-14) })
-check(any(grepl("strain layered, dissipative_core; eps0 ", readLines(f))), "tidal_kinetic header stamps the layered strain and scenario")
+check(any(grepl("strain layered, dissipative_core, K_core 9.798 GPa (K_d); eps0 ", readLines(f), fixed = TRUE)), "tidal_kinetic header stamps the layered strain, scenario and K_core")
 unlink(od, recursive = TRUE)
+
+# 8. The core's bulk modulus (PI 2026-11-01): K_d = K_grain (1 - phi/phi_c), K_grain the Hill average, by volume,
+#    of the reconstruction's minerals with moduli in data/mineral_elastic_moduli.csv (troilite included; Ni and
+#    schreibersite out) and the IOM (15 wt% at t = 0, at its Delarue density); the strain scales as 1/K_core;
+#    core_bulk_modulus = <number> overrides; phi >= phi_c is an error; mu_d against Table 5.
+mm <- read.csv("data/mineral_elastic_moduli.csv"); rk <- read.csv("reconstruction/rock_mol_per_kg.csv", comment.char = "#")
+vv <- read.csv("data/mineral_molar_volumes.csv"); vmv <- setNames(vv$Vm_cm3_mol, vv$phase); vmv["Iron"] <- vmv[["Fe"]]; vmv["Nickel"] <- vmv[["Ni"]]
+fv <- rk$mol_per_kg * vmv[rk$phase]; fv <- fv / sum(fv); Kg <- mm$K_GPa[match(rk$phase, mm$phase)]; Gg <- mm$G_GPa[match(rk$phase, mm$phase)]
+cov <- sum(fv[!is.na(Kg)])
+v_iom <- 150 / iom_density_delarue2026(IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]); v_min <- 0.85 * sum(rk$mol_per_kg * vmv[rk$phase])
+fi <- v_iom / (v_iom + v_min)
+fc <- c(fv[!is.na(Kg)] / cov * (1 - fi), fi); Kc <- c(Kg[!is.na(Kg)], mm$K_GPa[mm$phase == "IOM"]); Gc <- c(Gg[!is.na(Gg)], mm$G_GPa[mm$phase == "IOM"])
+KH <- (sum(fc * Kc) + 1 / sum(fc / Kc)) / 2 * 1e9; GH <- (sum(fc * Gc) + 1 / sum(fc / Gc)) / 2 * 1e9
+fm <- d1$frame_moduli()
+check(abs(fm$K_grain / KH - 1) < 1e-12 && abs(fm$mu_grain / GH - 1) < 1e-12 && abs(fm$K_d / (KH * 0.2) - 1) < 1e-12 && abs(fm$mu_d / (GH * 0.2) - 1) < 1e-12 &&
+        abs(cov - 0.988) < 1e-3 && abs(fm$iom_volume_fraction / fi - 1) < 1e-12 && fm$mu_d_in_table5 && x$K_core_source == "K_d" && abs(x$K_core / fm$K_d - 1) < 1e-12,
+      sprintf("grain moduli (Hill; minerals %.1f%% of their volume sourced; IOM %.3f of the solid): K %.4g GPa, mu %.4g GPa; at phi 0.32: K_d %.4g GPa, mu_d %.4g GPa (in Table 5's 4-70: %s)",
+              100 * cov, fi, KH / 1e9, GH / 1e9, fm$K_d / 1e9, fm$mu_d / 1e9, fm$mu_d_in_table5))
+# the IOM fraction follows the remaining IOM (run_tidal_evolution() passes iom_vol_frac each chunk)
+s10 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cl, iom_vol_frac = 0.1); s$run_simulation(); s })
+g10 <- grain_elastic_moduli(0.1)
+check(abs(s10$frame_moduli()$K_d / (0.2 * g10$K) - 1) < 1e-12 && abs(s10$exchange$eps0 / (x$eps0 * fm$K_d / (0.2 * g10$K)) - 1) < 1e-12 &&
+        abs(iom_volume_fraction(15, iom_g = 75) / ((75 / 150) * v_iom / ((75 / 150) * v_iom + v_min)) - 1) < 1e-12,
+      sprintf("iom_vol_frac 0.1: K_d %.4g GPa, eps0 %.4g (t = 0: %.4g GPa, %.4g); half the IOM left: fraction %.4f",
+              s10$frame_moduli()$K_d / 1e9, s10$exchange$eps0, fm$K_d / 1e9, x$eps0, iom_volume_fraction(15, iom_g = 75)))
+o100 <- st(EnceladusConfig$new(list(core_bulk_modulus = 100e9)))
+p20 <- quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cl, phi0 = 0.2); s$run_simulation(); s })
+check(abs(o100$exchange$eps0 / (x$eps0 * fm$K_d / 100e9) - 1) < 1e-12 && o100$exchange$K_core_source == "override" &&
+        abs(p20$frame_moduli()$K_d / (KH * 0.5) - 1) < 1e-12 && abs(p20$exchange$eps0 / (x$eps0 * fm$K_d / (KH * 0.5)) - 1) < 1e-12,
+      sprintf("strain ~ 1/K_core: eps0 %.4g (K_d %.4g GPa), %.4g (override 100 GPa), %.4g (phi 0.2: K_d %.4g GPa); x_half %.3e, %.3e",
+              x$eps0, fm$K_d / 1e9, o100$exchange$eps0, p20$exchange$eps0, p20$frame_moduli()$K_d / 1e9, x$x_half, o100$exchange$x_half))
+e45 <- tryCatch({ quiet({ s <- Simulator$new(k = 1e-14, layer_thickness = 194200, config = cl, phi0 = 0.4); s$run_simulation() }); "no error" }, error = function(e) conditionMessage(e))
+check(grepl("reached the critical porosity", e45), sprintf("phi0 = phi_c: an error, not K_d = 0 (%s)", substr(e45, 1, 60)))
 
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))
 if (failures > 0) quit(status = 1)

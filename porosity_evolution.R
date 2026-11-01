@@ -35,16 +35,22 @@
 # drift_max is the largest element's cumulative difference relative to its current whole-system total
 # (drift_element names it). A warning is given above 1e-4. The production tolerance is unchanged.
 #
+# The core's drained frame moduli follow phi(t) (PI 2026-11-01): each chunk's Simulator has K_d = K_grain (1 -
+# phi/phi_c), which sets the layered strain (K_d_Pa and mu_d_Pa columns). If phi reaches phi_c (alpha = 1, no
+# frame) the run is flagged and stopped: a warning, and the chunks so far are returned with
+# stopped = "phi reached phi_c".
+#
 # porosity_evolution: TRUE for production runs (default, PI 10-30, once the refill passed its checks);
 # FALSE keeps phi0 (and no refill) and reports the phi the solids imply; the quick self-tests use both.
 
 # One Simulator for porosity phi and permeability k, with everything else from the template simulator.
-evolution_simulator <- function(template, phi, k) {
+evolution_simulator <- function(template, phi, k, iom_vol_frac = template$params$iom_vol_frac) {
   s <- Simulator$new(k = k, layer_thickness = template$params$layer_thickness, config = template$config,
                      reactive_depth = template$params$reactive_depth, phi0 = phi,
                      phi_c = template$params$phi_c, alpha = template$params$alpha,
                      grain_diameter = template$params$grain_diameter, ssa = template$params$ssa,
-                     roughness = template$params$roughness, grain_diameter_by_mineral = template$params$grain_diameter_by_mineral)
+                     roughness = template$params$roughness, grain_diameter_by_mineral = template$params$grain_diameter_by_mineral,
+                     iom_wt_percent = template$params$iom_wt_percent, iom_vol_frac = iom_vol_frac)
   invisible(capture.output(s$run_simulation()))
   s
 }
@@ -64,10 +70,19 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
   k <- if (is.null(k_of_phi)) template$params$k else k_of_phi(phi)
   done <- 0; n <- first_chunk; prev_csv <- NULL; origin <- NULL; V_total <- NA; clogged <- FALSE
   m_pw0 <- NA; refill_next <- 0; n_prev <- NA; lm_prev <- NA; pq0 <- NULL; parts_prev <- NULL; drift <- NULL
-  rows <- list(); files <- character(0); chunk <- 0
+  rows <- list(); files <- character(0); chunk <- 0; stopped <- NA_character_
+  # the IOM's share of the solid volume for the frame moduli: t = 0 from the template, then from each chunk's
+  # remaining IOM at the Delarue density (bulk_density()); the minerals' volume is the reconstruction's
+  iom_vf <- template$params$iom_vol_frac
   while (done < n_orbits) {
+    if (phi >= template$params$phi_c) {
+      stopped <- "phi reached phi_c"
+      warning(sprintf("run_tidal_evolution: after chunk %d (orbit %g) phi = %.4g has reached phi_c = %.4g: no frame (alpha = 1, K_d = 0); stopped",
+                      chunk, done, phi, template$params$phi_c))
+      break
+    }
     n <- min(n, n_orbits - done)
-    sim <- evolution_simulator(template, phi, k)
+    sim <- evolution_simulator(template, phi, k, iom_vf)
     ph <- quiet(PhreeqcIntegrator$new(sim)); quiet(ph$calculate_phreeqc_parameters(organic_wt_percent = organic_wt_percent))
     ocean_scale <- if (is.na(lm_prev)) 1 else lm_prev / ph$phreeqc_params$layer_mass
     dir <- file.path(output_dir, sprintf("chunk%03d_orb%g-%g", chunk + 1, done + 1, done + n))
@@ -116,6 +131,8 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
       refill_in_kg = refill_next, refill_kg_per_orbit = if (is.na(n_prev)) 0 else refill_next / n_prev,
       exchange_kg_per_orbit = xch$x_orbit * ph$phreeqc_params$porewater_mass / ph$phreeqc_params$layer_mass,
       layer_mass_kg = ph$phreeqc_params$layer_mass, ocean_scale = ocean_scale,
+      K_d_Pa = sim$frame_moduli()$K_d, mu_d_Pa = sim$frame_moduli()$mu_d, eps_v = xch$eps_v,
+      iom_vol_frac = sim$iom_volume_fraction(),
       ocean_per_rock = w_oc, ocean_per_rock_geometric = ph$phreeqc_params$ocean_mass / ph$phreeqc_params$layer_mass,
       drift_max = max(rel_d), drift_element = names(rel_d)[which.max(rel_d)],
       seconds = r$seconds)
@@ -126,10 +143,11 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
       if (!is.null(k_of_phi)) k <- k_of_phi(phi)
     }
     refill_next <- if (refill) m_pw0 * phi / phi0 - w_ph else 0
+    nb <- nrow(bd); iom_vf <- iom_volume_fraction(template$params$iom_wt_percent, iom_g = bd$iom_g[nb], iom_density = bd$iom_density[nb])
     n_prev <- n; lm_prev <- ph$phreeqc_params$layer_mass
     n <- if (rel > 0) max(1, min(max_chunk, floor(n * phi_tol / rel))) else min(max_chunk, 2 * n)
   }
-  list(chunks = do.call(rbind, rows), files = files)
+  list(chunks = do.call(rbind, rows), files = files, stopped = stopped)
 }
 
 # The ocean mass in a PlanetProfile profile's header (Mocean_kg).

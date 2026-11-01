@@ -1208,7 +1208,7 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
 | D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | README §6 (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 78 yr (243 yr before the ×φ fix of 10-29) against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange); the ×φ in the flow rate was a bug, **fixed 10-29** | **10-31: D7 and D12 merged into one (φ, d, strain_scale) sweep:** Kozeny–Carman k and geometric surface areas from the grain size (item 3; README §6).
-| D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | README §6 (The strain) | **N (10-31):** the strain and the ocean load come from a layered forward model of Bagheri et al. 2025's structure (TidalPy), validated against their Table 3; `tidal_scenario` and η select it; placeholders µ 17 GPa, η 1e12 Pa·s pending the PI. **Open:** the core's bulk modulus (100 GPa in Bagheri; the volumetric strain, 8e-9, scales as 1/K) |
+| D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | README §6 (The strain) | **N (10-31):** the strain and the ocean load come from a layered forward model of Bagheri et al. 2025's structure (TidalPy), validated against their Table 3; `tidal_scenario` and η select it; placeholders µ 17 GPa, η 1e12 Pa·s pending the PI. **11-01:** the core's bulk modulus is the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM (49.0 GPa; K_d 9.80 GPa at φ 0.32, μ_d 5.2 GPa inside Table 5's 4–70); troilite μ an estimate, IOM μ 1–5 GPa from terrestrial kerogen (Othman et al. 2022; Yan & Han 2013) |
 | D14 | **Initial porosity φ0 and critical porosity φc** | README §6 (Porosity and the Biot coefficient) | φ0 = 0.32 is one PlanetProfile fit; sweep 0.1–0.4; Bagheri's 2160–2400 kg/m³ is an end-state check (φ 0.27–0.40 at t = 0 with 15 wt% IOM). α = min(1, φ/φc), **φc = 0.4** (PI 10-30; Dvorkin & Nur 2000: 36–40%); φ ≥ φc gives α = 1 (a suspension); placeholders pending the PI: ε_v/ε₀ (0.192 skin, 0.115 layer), η = 1e12 Pa·s, φc = 0.4 |
 
 **Buoyancy-driven flow is out of scope (PI 10-29):** ENTICES tests whether tidally driven circulation
@@ -1236,8 +1236,8 @@ comparison, not implementation (README §7, What tidal-only circulation can reac
     HCOO⁻);
   - `carbon_mode = "coupled"` as the methanation bound;
   - the tidal scenario and core viscosity (D13, N): `"dissipative_core"` at η 4.4e11, 1e12, 2.3e12
-    Pa·s and `"dissipative_shell"` at 3e13, 1e16, 1e22 (layered strain; exchange 3.4e-8 to 1.4e-8
-    per half-orbit); optionally the core's bulk modulus (the strain scales as 1/K);
+    Pa·s and `"dissipative_shell"` at 3e13, 1e16, 1e22 (layered strain at K_d; exchange 6.8e-8 to
+    4.8e-8 per half-orbit); the troilite and IOM shear moduli at their bracket ends;
   - flow driving (D12): k·ΔP/L over ΔP 1e4–1e5 Pa and k 1e-15–1e-7 m², each
     case reported as k·ΔP/L, mean Darcy flux and exchange per orbit, with its
     ocean circulation time (README §6 has the design and the equivalents).

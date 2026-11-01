@@ -719,6 +719,11 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  #   "liao": Liao et al. (2020)'s isolated uniform Maxwell core (the form used before N), with the
                                  #     ocean load from surface_h2 below.
                                  # strain_scale multiplies the strain (an override for sweeps; default 1).
+                                 # core_bulk_modulus: NULL (default) = the drained frame modulus K_d = K_grain (1 - phi/phi_c)
+                                 # of the Simulator's porosity (PI 2026-11-01; K_grain the Hill average of the reconstruction's
+                                 # minerals, grain_elastic_moduli()); a number [Pa] overrides it. The layered strain scales as
+                                 # 1/K_core from the tables' K_core_Pa.
+                                 core_bulk_modulus = NULL,
                                  strain_model = "layered",
                                  tidal_scenario = "dissipative_core",
                                  strain_scale = 1,
@@ -928,6 +933,54 @@ GeometricUtils <- list(
   }
 )
 
+# Grain elastic moduli of the core's solid (PI 2026-11-01): the Hill average (mean of the Voigt and Reuss
+# bounds), by volume fraction, of data/mineral_elastic_moduli.csv over the reconstruction's minerals
+# (reconstruction/rock_mol_per_kg.csv, molar volumes from data/mineral_molar_volumes.csv) and the IOM.
+# Sources: Abers & Hacker (2016), G-cubed 17, 616-624 (silicates); Bass (1995), AGU Reference Shelf 2 (Fe metal,
+# tephroite, chromite as the PROXY for magnesiochromite); troilite K0 from Holland & Powell via Perple_X 7.2.1
+# hp634ver.dat (entry tro; the file's title: "Holland & Powell, JMG 2011 (TC-DS633, 23 Jun 2017) + additional data"),
+# its G an estimate (27-35.5 GPa from Bass's monosulfide G/K); IOM K0 from Delarue et al. (2026) EPSL 691, 120227
+# (Eq. 7, an anthracite coal), its G 1-5 GPa from terrestrial kerogen (Othman et al. 2022, ACS Omega 7, 32829-32839;
+# Yan & Han 2013, SEG Expanded Abstracts). Ni and schreibersite
+# (~1.2% of the minerals' volume) have no sourced modulus and are left out (the minerals renormalised).
+# iom_volume_fraction: the IOM's share of the solid volume (Simulator$iom_volume_fraction()). mu_case = "low",
+# "central" or "high" takes the troilite and IOM shear moduli at their bracket's end. Abers & Hacker's and Holland &
+# Powell's bulk moduli are isothermal, Bass's adiabatic (~1% apart).
+GRAIN_MODULI_CSV <- "data/mineral_elastic_moduli.csv"
+grain_elastic_moduli <- function(iom_volume_fraction = 0, mu_case = c("central", "low", "high"),
+                                 rock_csv = "reconstruction/rock_mol_per_kg.csv") {
+  mu_case <- match.arg(mu_case)
+  m <- utils::read.csv(GRAIN_MODULI_CSV, stringsAsFactors = FALSE)
+  if (mu_case != "central") { b <- if (mu_case == "low") m$G_low_GPa else m$G_high_GPa; m$G_GPa <- ifelse(is.na(b), m$G_GPa, b) }
+  r <- utils::read.csv(rock_csv, comment.char = "#", stringsAsFactors = FALSE)
+  v <- utils::read.csv("data/mineral_molar_volumes.csv", stringsAsFactors = FALSE)
+  vm <- stats::setNames(v$Vm_cm3_mol, v$phase); vm["Iron"] <- vm[["Fe"]]; vm["Nickel"] <- vm[["Ni"]]
+  if (any(is.na(vm[r$phase]))) stop("grain_elastic_moduli: no molar volume for ", paste(r$phase[is.na(vm[r$phase])], collapse = ", "))
+  r$f <- r$mol_per_kg * vm[r$phase]; r$f <- r$f / sum(r$f)
+  x <- merge(r, m, by = "phase", all.x = TRUE); y <- x[!is.na(x$K_GPa), ]
+  if (!(iom_volume_fraction >= 0 && iom_volume_fraction < 1)) stop("iom_volume_fraction must be in [0, 1)")
+  f <- c(y$f / sum(y$f) * (1 - iom_volume_fraction), iom_volume_fraction)
+  K <- c(y$K_GPa, m$K_GPa[m$phase == "IOM"]); G <- c(y$G_GPa, m$G_GPa[m$phase == "IOM"])
+  KV <- sum(f * K); KR <- 1 / sum(f / K); GV <- sum(f * G); GR <- 1 / sum(f / G)
+  list(K = (KV + KR) / 2 * 1e9, G = (GV + GR) / 2 * 1e9, K_voigt = KV * 1e9, K_reuss = KR * 1e9,
+       G_voigt = GV * 1e9, G_reuss = GR * 1e9, iom_volume_fraction = iom_volume_fraction,
+       covered = sum(y$f), missing = x$phase[is.na(x$K_GPa)])
+}
+# The IOM's share of the solid volume for iom_g grams of IOM at density iom_density (g/cm3) beside the minerals of
+# 1 kg of rock carrying iom_wt_percent of IOM at t = 0 (the minerals scaled by (100 - iom_wt_percent)/100, as
+# calculate_phreeqc_parameters() does; their volume from the reconstruction's molar volumes, fixed).
+iom_volume_fraction <- function(iom_wt_percent, iom_g = 10 * iom_wt_percent,
+                                iom_density = iom_density_delarue2026(IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]),
+                                rock_csv = "reconstruction/rock_mol_per_kg.csv") {
+  r <- utils::read.csv(rock_csv, comment.char = "#", stringsAsFactors = FALSE)
+  v <- utils::read.csv("data/mineral_molar_volumes.csv", stringsAsFactors = FALSE)
+  vm <- stats::setNames(v$Vm_cm3_mol, v$phase); vm["Iron"] <- vm[["Fe"]]; vm["Nickel"] <- vm[["Ni"]]
+  v_min <- (1 - iom_wt_percent / 100) * sum(r$mol_per_kg * vm[r$phase])
+  v_iom <- iom_g / iom_density
+  v_iom / (v_iom + v_min)
+}
+GRAIN_MODULI <- new.env()   # cache
+
 LAYERED_STRAIN_CSV <- "data/layered_core_strain.csv"
 LAYERED_STRAIN_SUMMARY_CSV <- "data/layered_core_strain_summary.csv"
 LAYERED_STRAIN <- new.env()   # cache of the two tables
@@ -981,7 +1034,7 @@ FlowUtils <- list(
     a <- pick(p, etas[i]); b <- pick(p, etas[min(i + 1, length(etas))])
     sa <- pick(s, etas[i]); sb <- pick(s, etas[min(i + 1, length(etas))])
     num <- names(s)[vapply(s, is.numeric, TRUE)]
-    list(depth_m = a$depth_km * 1e3, eps = (1 - w) * a$eps_v_pole_mean + w * b$eps_v_pole_mean,
+    list(depth_m = a$depth_km * 1e3, K_table = a$K_core_Pa[1], eps = (1 - w) * a$eps_v_pole_mean + w * b$eps_v_pole_mean,
          eps_sd = (1 - w) * a$eps_v_pole_sd + w * b$eps_v_pole_sd,
          summary = as.list((1 - w) * unlist(sa[num]) + w * unlist(sb[num])))
   },
@@ -1056,7 +1109,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            initialize = function(k, layer_thickness, porosity = NULL, config = NULL,
                                                  reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.4, alpha = NULL,
                                                  grain_diameter = NULL, ssa = c("legacy", "geometric"), roughness = 1,
-                                                 grain_diameter_by_mineral = NULL) {
+                                                 grain_diameter_by_mineral = NULL, iom_wt_percent = 15, iom_vol_frac = NULL) {
                              phi_ <- if (is.null(porosity)) phi0 else porosity
                              perm <- if (identical(k, "kozeny_carman")) "kozeny_carman" else "given"
                              if (perm == "kozeny_carman") {
@@ -1078,7 +1131,13 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                porosity = phi_,
                                reactive_depth = match.arg(reactive_depth),
                                phi_c = phi_c,
-                               alpha = alpha
+                               alpha = alpha,
+                               # the IOM in the frame moduli (PI 2026-11-01): iom_wt_percent at t = 0 (15, the production
+                               # value; independent of PHREEQC's organic_wt_percent, so a run and its organic-free blank
+                               # share one exchange); iom_vol_frac, if given, the IOM's current share of the solid volume
+                               # (run_tidal_evolution() passes it each chunk)
+                               iom_wt_percent = iom_wt_percent,
+                               iom_vol_frac = iom_vol_frac
                              )
                              self$config <- config  # Store configuration
                              if(is.null(self$config)) {
@@ -1215,15 +1274,42 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
                              if (identical(cfg$strain_model, "layered")) {
                                ls <- FlowUtils$layered_strain(cfg$tidal_scenario, cfg$core_viscosity)
-                               eps0 <- cfg$strain_scale * ls$eps[1]
-                               eps_v <- cfg$strain_scale * FlowUtils$degree2_angular_factor * FlowUtils$volume_mean_profile(ls$depth_m, ls$eps, R, L)
-                               return(list(eps0 = eps0, factor = eps_v / eps0, eps_v = eps_v, model = "layered"))
+                               kc <- self$core_bulk_modulus(); sk <- cfg$strain_scale * ls$K_table / kc$K   # strain ~ 1/K_core
+                               eps0 <- sk * ls$eps[1]
+                               eps_v <- sk * FlowUtils$degree2_angular_factor * FlowUtils$volume_mean_profile(ls$depth_m, ls$eps, R, L)
+                               return(list(eps0 = eps0, factor = eps_v / eps0, eps_v = eps_v, model = "layered", K_core = kc$K, K_source = kc$source))
                              }
                              if (!identical(cfg$strain_model, "liao")) stop("strain_model must be \"layered\" or \"liao\"")
                              eps0 <- cfg$strain_scale * FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
                                                                                     R, cfg$eccentricity, cfg$orbital_period)
                              f <- FlowUtils$degree2_dilatation_factor(R, L)
                              list(eps0 = eps0, factor = f, eps_v = eps0 * f, model = "liao")
+                           },
+
+                           # Drained frame moduli of the porous core (PI 2026-11-01), the critical-porosity model's
+                           # K_d = K_grain (1 - phi/phi_c), mu_d = mu_grain (1 - phi/phi_c), with the grain moduli the Hill
+                           # average of the reconstruction's minerals (grain_elastic_moduli()). At phi >= phi_c there is no
+                           # frame (alpha = 1): an error, not K_d -> 0. mu_d is a consistency check against Bagheri et al.
+                           # (2025) Table 5's core rigidity, 4-70 GPa (mu_d_in_table5); it is not used elsewhere.
+                           frame_moduli = function() {
+                             phi <- self$params$porosity; pc <- self$params$phi_c
+                             if (phi >= pc) stop(sprintf("porosity %.4g has reached the critical porosity phi_c = %.4g: no frame (alpha = 1, K_d = 0); stopping (PI 2026-11-01)", phi, pc))
+                             fv <- self$iom_volume_fraction(); key <- sprintf("%.15g", fv)
+                             if (is.null(GRAIN_MODULI[[key]])) GRAIN_MODULI[[key]] <- grain_elastic_moduli(fv)
+                             g <- GRAIN_MODULI[[key]]; fr <- 1 - phi / pc
+                             list(K_grain = g$K, mu_grain = g$G, frame_factor = fr, K_d = g$K * fr, mu_d = g$G * fr,
+                                  mu_d_in_table5 = g$G * fr >= 4e9 && g$G * fr <= 70e9, covered = g$covered, iom_volume_fraction = fv)
+                           },
+                           # The IOM's share of the solid volume: params$iom_vol_frac if given, else the t = 0 value for
+                           # params$iom_wt_percent at the bulk IOM's Delarue density.
+                           iom_volume_fraction = function() {
+                             if (!is.null(self$params$iom_vol_frac)) return(self$params$iom_vol_frac)
+                             iom_volume_fraction(self$params$iom_wt_percent)
+                           },
+                           # The core's bulk modulus for the layered strain: config$core_bulk_modulus if a number, else K_d.
+                           core_bulk_modulus = function() {
+                             if (!is.null(self$config$core_bulk_modulus)) return(list(K = self$config$core_bulk_modulus, source = "override"))
+                             list(K = self$frame_moduli()$K_d, source = "K_d")
                            },
 
                            # Tidal pore-pressure amplitude (Pa) driving the Darcy flow: the undrained pressure of the strain,
@@ -1303,6 +1389,8 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                   dP_strain = if (is.null(cfg$max_tidal_stress)) dP - dP_load else NA_real_, dP_load = dP_load,
                                   dP_load_pole = ld$pole, u_ocean = ld$u_ocean, u_core = ld$u_core, h2_core = ld$h2_core,
                                   dP_source = if (is.null(cfg$max_tidal_stress)) "strain" else "override",
+                                  K_core = if (is.null(st$K_core)) NA_real_ else st$K_core, K_core_source = if (is.null(st$K_source)) NA_character_ else st$K_source,
+                                  mu_d = if (identical(cfg$strain_model, "layered")) self$frame_moduli()$mu_d else NA_real_,
                                   V_layer = V_layer, V_pore = V_pore,
                                   delta = sd$delta, L_eff = sd$L_eff, storage = sd$S,
                                   # cross-check: the volume the pressure change stores in the skin, S * dP * delta * A
@@ -1355,6 +1443,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
                                      x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta,
                                      if (identical(self$config$strain_model, "layered")) paste0("layered, ", self$config$tidal_scenario,
+                                       sprintf(", K_core %.4g GPa (%s)", x$K_core / 1e9, x$K_core_source),
                                        if (self$config$strain_scale != 1) sprintf(" x %.3g", self$config$strain_scale) else "")
                                      else sprintf("liao x %.3g", self$config$strain_scale),
                                      x$eps0, x$strain_factor,

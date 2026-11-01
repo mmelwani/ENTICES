@@ -196,6 +196,7 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `layer_thickness` | none (production 194200) | m | permeable layer; 194.2 km is the whole core | production choice | — | yes |
 | `core_rigidity`, `core_viscosity` (`EnceladusConfig`) | 17e9, 1e12 | Pa, Pa·s | η selects the layered strain within `tidal_scenario`; µ enters the skin depth (and the `"liao"` strain) | Bagheri et al. 2025 Table 5 | **placeholders** at the geometric means of 4–70 GPa and 4.4e11–2.3e12 | yes (η over the scenario's range) |
 | `strain_model`, `tidal_scenario` (`EnceladusConfig`) | `"layered"`, `"dissipative_core"` | — | the core's strain and the ocean load from a layered forward model (or `"liao"`: the isolated core used before N) | PI item N, 2026-10-31; Bagheri et al. 2025 structure, TidalPy (§6, The strain) | decided (N) | yes (both scenarios) |
+| `core_bulk_modulus` (`EnceladusConfig`); `iom_wt_percent`, `iom_vol_frac` (`Simulator`) | NULL (= K_d); 15; NULL | Pa; wt%; — | the core's bulk modulus for the strain: the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM | PI 2026-11-01; Abers & Hacker 2016, Bass 1995, Holland & Powell (Perple_X hp634ver.dat), Delarue et al. 2026 (§6, The strain) | decided; troilite μ an estimate, IOM μ a terrestrial-kerogen bracket | optional (μ brackets) |
 | `reactive_depth` (`Simulator`) | `"skin"` | — | the reacting box: the top min(L, δ), or `"layer"` | PI 2026-10-29 | decided | — |
 | `strain_scale` (`EnceladusConfig`) | 1 | — | factor on the core's tidal strain (not the ocean load) | an override for sweeps (PI, N) | — | optional |
 | `phi0` (`Simulator`; was `porosity`) | 0.32 | — | initial porosity: k, α, storage, δ, strain volume, pore water | PlanetProfile `phiRockMax` (one fit) | **one fit**; end-state check against Bagheri's core density | yes (0.1–0.4) |
@@ -393,38 +394,80 @@ across the ocean), mean ± 3 sd:
 
 Every mean is within 5% of Table 3; the spreads are somewhat wider because the libration and J₃
 constraints of their MCMC are not applied. (A static or a dynamic ocean changes k₂ by < 1%; an
-incompressible model lowers |h₂| by 5%.) Bagheri et al.'s Eq. 8, as printed, is not used: the energy flux
-gives the core's heat directly.
+incompressible model lowers |h₂| by 5%.)
+
+*Bagheri et al.'s Eq. 8 is not used.* As printed, Im(k̂₂^core) = 4πGρ_core R_core⁴ / (5R_E³) · Im(ΔR_core)⁴
+(and their B4) is not dimensionally consistent: the right side carries a displacement to the fourth power
+and is not a pure number. The core's share of the heat comes instead from the time-averaged energy flux
+through a sphere of radius r, F(r) ∝ r²·Im[y₁*y₂ + 6y₃*y₄ + y₅*y₆/(4πG)], the power dissipated inside r: it
+equals their Eq. 5 total at the surface (−5R·Im k₂/(4πG), to 1e-15), is continuous across the inviscid
+ocean (to 1e-13) and vanishes for an elastic core (1e-4 of the total at η = 1e25, Andrade's residual). The
+core's share is F(R_core)/F(R_E) (`scripts/layered_core_strain.py` documents the same).
 
 *Outputs* (`data/layered_core_strain.csv`, `data/layered_core_strain_summary.csv`; 500 samples per
 viscosity): for each scenario and core viscosity (dissipative core: 8 values over 4.4e11–2.3e12 Pa·s;
 dissipative shell: 3e13, 1e14 … 1e22), the pole amplitude of the **volumetric strain** ∇·u = dy₁/dr +
 (2y₁ − 6y₃)/r (times U_pole = (3/2)(nR)²e) against depth below the core surface, 0–180 km, and the
 core-surface radial displacement, the ocean-top displacement, the seafloor normal stress and the Love
-numbers, each as mean ± sd. Over the top 100 km:
+numbers, each as mean ± sd. The tables are computed at K_core = K_d = 9.798 GPa (below); over the top 100 km:
 
 | scenario, η (Pa·s) | ∇·u at 0 km | 50 km | 100 km | u_r core surface (pole) |
 |---|---|---|---|---|
-| core, 4.4e11 | 7.65e-9 ± 0.84e-9 | 4.42e-9 | 2.07e-9 | 2.15 ± 0.24 m |
-| core, 1e12 (placeholder) | 7.84e-9 ± 0.85e-9 | 4.43e-9 | 1.99e-9 | 0.97 ± 0.11 m |
-| core, 2.3e12 | 7.77e-9 ± 0.85e-9 | 4.39e-9 | 1.97e-9 | 0.43 ± 0.05 m |
-| shell, 3e13 | 7.97e-9 ± 0.90e-9 | 4.50e-9 | 2.02e-9 | 0.036 ± 0.005 m |
-| shell, 1e16–1e22 | 7.8–7.9e-9 ± 0.85e-9 | 4.4e-9 | 2.0e-9 | 0.003–0.005 m |
+| core, 4.4e11 | 7.81e-8 ± 0.86e-8 | 4.52e-8 | 2.11e-8 | 2.15 ± 0.24 m |
+| core, 1e12 (placeholder) | 8.00e-8 ± 0.87e-8 | 4.52e-8 | 2.03e-8 | 0.97 ± 0.11 m |
+| core, 2.3e12 | 7.93e-8 ± 0.87e-8 | 4.49e-8 | 2.02e-8 | 0.43 ± 0.05 m |
+| shell, 3e13 | 8.12e-8 ± 0.92e-8 | 4.59e-8 | 2.06e-8 | 0.035 ± 0.004 m |
+| shell, 1e16–1e22 | 6.9–7.3e-8 | 3.9–4.1e-8 | 1.8e-8 | 0.002–0.003 m |
 
-**The volumetric strain is ~8e-9 at the core surface whatever the scenario and η, three orders of
-magnitude below Liao's ε₀ (1.7e-5).** The core-surface displacement does follow η (2.2 to 0.4 m over the
-dissipative-core range), but the deformation is almost all shear: the dilatation is set by the mean-stress
-change, ~900 Pa, over the core's bulk modulus, 100 GPa (Bagheri's fixed value), and scales as 1/K exactly
-(3.5e-8 at K = 20 GPa, 3.5e-7 at 2 GPa, a drained porous matrix's order; displacement and Love numbers
-unchanged). Liao's ε₀ = 2u_r/R is a linear strain, ~1e-5 for the layered model's displacements too; the
-fluid is expelled by the dilatation. **The bulk modulus of the porous core is therefore what sets the
-strain-driven exchange** (a decision for the PI: the tables are for K = 100 GPa).
+**The volumetric strain does not follow η or the scenario; it is set by the core's bulk modulus.** The
+core-surface displacement follows η (2.2 to 0.4 m over the dissipative-core range), but the deformation
+is almost all shear: the dilatation is the mean-stress change, ~900 Pa, over K_core, and scales as 1/K_core
+exactly (checked over 2–100 GPa to 0.2%; the displacements and Love numbers do not change, and the Table 3
+validation is identical at 9.8 GPa and at Bagheri's 100 GPa). Liao's ε₀ = 2u_r/R is a linear strain, ~1e-5
+for these displacements too; the fluid is expelled by the dilatation.
+
+**The core's bulk modulus (PI, 2026-11-01): the drained frame, K_d = K_grain·(1 − φ/φc)**, not Bagheri's
+100 GPa (an intact-rock value the Love numbers do not constrain); the same factor gives μ_d = μ_grain·(1 −
+φ/φc), checked against Bagheri's Table 5 core rigidity (4–70 GPa). K_grain and μ_grain are Hill averages
+(mean of the Voigt and Reuss bounds), by volume, over the reconstruction's minerals and the IOM
+(`grain_elastic_moduli()`, `data/mineral_elastic_moduli.csv`):
+
+| phase (vol% of the minerals) | K (GPa) | μ (GPa) | source |
+|---|---|---|---|
+| forsterite (26.2), enstatite (26.5), diopside (6.8), anorthite (2.3), low albite (11.9), orthoclase for K-feldspar (0.8) | 127.3, 107.9, 116.5, 81.9, 60.1, 58.3 | 81.6, 77.9, 72.8, 36.0, 36.0, 28.1 | Abers & Hacker (2016), G-cubed 17, 616–624 (their database; isothermal K) |
+| α-iron (6.2) | 166.7 | 81.5 | Bass (1995), AGU Reference Shelf 2, Table 1 |
+| tephroite (0.5) | 128 | 54 | Bass (1995) Table 7 |
+| magnesiochromite (0.6) | 203.3 | 104.9 | **proxy:** chromite FeCr₂O₄, Bass (1995) Table 1 (MgCr₂O₄ not listed) |
+| troilite (16.9) | 65.8 (K′ 4.17) | **31.5, an estimate** (27–35.5) | K₀: Holland & Powell data via Perple_X 7.2.1 `hp634ver.dat`, cited as found: the file's title is "Holland & Powell, JMG 2011 (TC-DS633, 23 Jun 2017) + additional data"; entry `tro`, b6 = 658000 bar, b8 = 4.17 (trot, lot, trov identical). μ: no measurement found; K₀ × the μ/K of Bass (1995)'s monosulfides, sphalerite 0.41 and galena 0.54 |
+| IOM (33.3% of the solid at 15 wt%) | 10.2 (K′ 7.7) | **3 (1–5)**, terrestrial-kerogen analogue | K₀: Delarue et al. (2026), EPSL 691, 120227, Eq. 7 / Fig. 1 (a Murnaghan fit to an anthracite coal in a diamond-anvil cell to 7 GPa; their text then assumes 10 GPa for low-temperature carbonaceous matter). μ: terrestrial kerogen. Yan & Han (2013), SEG Expanded Abstracts (doi:10.1190/segam2013-1319.1), invert K = 3.5–5.0 GPa for Green River kerogen and speculate μ ≈ K/2 (1.75–2.5 GPa; μ was not measured). Othman et al. (2022), ACS Omega 7, 32829–32839, tabulate nanoindentation E = 1.9–2.2 GPa (porous) to 6–15 GPa (non-porous kerogen), i.e. μ ≈ 0.7–6.3 GPa at ν 0.2–0.3, and atomistic type II kerogen μ = 4–7.5 GPa; their table quotes Yan & Han's μ as half of Young's modulus, where Yan & Han wrote half of the bulk modulus. The 1–5 GPa bracket spans the experimental values; the simulations reach higher |
+
+Ni (0.7%) and schreibersite (0.5%) have no sourced modulus and are left out (the minerals renormalised:
+98.8% of their volume is covered). The IOM's volume is the remaining IOM at the Delarue et al. density
+(1.320 g/cm³ for the bulk IOM), beside the reconstruction's mineral volume, as `bulk_density()` computes
+it. Results at φ = 0.32, φc = 0.4 (frame factor 0.2):
+
+| | K_grain | μ_grain | K_d | μ_d (Table 5: 4–70 GPa) |
+|---|---|---|---|---|
+| minerals only, without troilite (10-31, superseded) | 107.5 | 67.8 | 21.5 | 13.6 |
+| minerals with troilite | 99.0 | 59.5 (57.9–60.8) | 19.8 | 11.9 (11.6–12.2) |
+| **with the IOM (default)** | **49.0** | **26.1 (22.9–28.9)** | **9.80** | **5.21 (4.57–5.79), inside** |
+
+(ranges: the troilite and IOM shear moduli at their bracket ends). The IOM halves the grain moduli; with it the
+Voigt and Reuss bounds are far apart (K 72.8 and 25.2 GPa), so the Hill average is a coarse estimate.
+**K_d follows φ(t) and the IOM:** each Simulator takes the IOM's share of the solid volume
+(`iom_wt_percent`, default 15, the production value, independent of PHREEQC's `organic_wt_percent` so that
+a run and its organic-free blank share one exchange; or `iom_vol_frac`), and `run_tidal_evolution()` passes
+each chunk's remaining IOM and φ; the chunk table reports `K_d_Pa`, `mu_d_Pa` and `iom_vol_frac`. **At φ ≥
+φc there is no frame (α = 1):** the Simulator stops with an error and `run_tidal_evolution()` flags the
+run (`stopped = "phi reached phi_c"`) and returns the chunks so far, rather than letting K_d go to zero.
+`config$core_bulk_modulus = <number>` overrides K_d.
 
 In the code, ε₀ is the pole value at the core surface (interpolated in log η between the tabulated
-viscosities of `tidal_scenario`; outside that range it is an error) and **ε_v = 0.19245 × the r²-weighted
-mean over the reacting box of the pole amplitude against depth** (held at its 180 km value below that),
-replacing (r/R)² × ε₀. `strain_scale` multiplies it (an override; default 1). `tests/exchange_check.R`
-section 7 checks the interpolation, the mean and the load.
+viscosities of `tidal_scenario`; outside that range it is an error), times K_table/K_core, and **ε_v =
+0.19245 × the r²-weighted mean over the reacting box of the pole amplitude against depth** (held at its
+180 km value below that), replacing (r/R)² × ε₀. `strain_scale` multiplies it (an override; default 1).
+`tests/exchange_check.R` sections 7 and 8 check the interpolation, the mean, the load, the grain moduli,
+the 1/K scaling, the override and the stop at φc; `tests/porosity_evolution_check.R` the per-chunk K_d.
 
 **The Liao strain (`strain_model = "liao"`; the form used before N, for reproducing earlier runs).**
 ε₀ is Liao et al. (2020)'s polar strain amplitude (§2.2, Fig. 2a):
@@ -472,8 +515,8 @@ gives ε₀ ≈ 1.5e-4, so α·ε_v ≤ 1.7e-5 of the box per half-orbit, agains
 independent parameter: it is the undrained pore pressure of the same strain, **ΔP = α·ε_v·M**, with the
 Biot modulus M = 1/S = (K_u − K_m)/α² of Liao et al. (2020) Table A1 (their Eq. A5 with no change of
 fluid content). `max_tidal_stress = <number>` still overrides it (for reproducing old runs or a sweep).
-Under the layered strain (default) the strain's ΔP is small: 6.2 Pa in a thin skin at the placeholders
-(4.6 Pa in the 69 km skin), against the ocean load's 26 Pa (below). Under `"liao"`: at the placeholders
+Under the layered strain (default, K_d = 9.8 GPa) the strain's ΔP is 64 Pa in a thin skin at the
+placeholders (47 Pa in the 69 km skin), against the ocean load's 26 Pa (below); at 100 GPa it was 6 Pa. Under `"liao"`: at the placeholders
 (φ = 0.32, φc = 0.4, α = 0.80, M = 5.2 GPa, ε₀ = 1.73e-5) the pole amplitude
 α·M·ε₀ is 7.2e4 Pa and the box mean 1.4e4 Pa in a thin skin (ε_v/ε₀ = 0.192), 1.0e4 Pa in the 69 km
 skin at k = 1e-7 and 8.3e3 Pa over the whole layer (0.115). **Against Liao et al.'s ~3e4 Pa (Fig.
@@ -503,8 +546,8 @@ cos 2φ + sin ωt sin 2φ)], ω = n the mean motion, here 5.289e-5 rad/s from th
 and the core surface, with their phases; |u_ocean − u_core| averaged over the samples): u_ocean 0.57 m,
 u_core 0.97 m, **ΔP_load = 133 Pa at the pole** at the placeholders (262 and 87 Pa at η = 4.4e11 and
 2.3e12; ~130 Pa in the dissipative-shell scenario, where the core hardly moves and the ocean top moves
-1.04 m), 26 Pa in a thin skin. It now **dominates the strain's ΔP (6 Pa)**: without it the exchange would
-be 5× smaller. The layered model's whole normal stress on the core surface is larger, ~880 Pa at the
+1.04 m), 26 Pa in a thin skin, against the strain's 64 Pa at K_d (6 Pa at 100 GPa); without it the
+exchange would be 29% smaller. The layered model's whole normal stress on the core surface is larger, ~880 Pa at the
 pole, because it includes the tidal potential's own pressure in the ocean; that part acts on the pore
 fluid as a body force too and drives no flow, so the column-thickness form is kept (an approximation:
 the poroelastic split of a boundary load between the matrix and the pore fluid is not modelled).
@@ -516,11 +559,18 @@ FALSE` drops it. Under `"liao"`, at every k and η tested the load is 0.3% of th
 1.38e4 + load 41 = 1.38e4 Pa in a thin skin at the placeholders; 1.00e4 + 30 Pa at k = 1e-7; 8,257 + 25 Pa
 over the layer).
 
-**The exchange under the layered strain (N).** At the placeholders the exchange per half-orbit is
-**1.9e-8 of the pore volume** in the skin at every k (against 8.3e-6 under `"liao"`, 430× more), 3.4e-8
-to 1.4e-8 over η = 4.4e11–2.3e12, and 1.9e-8 in the dissipative-shell scenario at any η; the strain limit
-("poro") still binds in the skin. `strain_scale` = 0.16 lowers it only to 1.6e-8, the load being most of
-it.
+**The exchange under the layered strain (N, K_d).** Per half-orbit, in the skin, at the placeholders:
+
+| K_core | ε₀ | k = 1e-14: exchange, circulation | k = 1e-11 | k = 1e-7 |
+|---|---|---|---|---|
+| 100 GPa (Bagheri) | 7.8e-9 | 1.93e-8, 6.2e8 yr | 1.93e-8, 2.0e7 yr | 1.93e-8, 2.9e5 yr |
+| K_d, minerals only (19.8 GPa) | 4.0e-8 | 3.46e-8, 3.5e8 yr | 3.45e-8, 1.1e7 yr | 3.05e-8, 1.8e5 yr |
+| **K_d with the IOM (9.80 GPa, default)** | **8.0e-8** | **5.40e-8, 2.2e8 yr** | **5.39e-8, 7.1e6 yr** | **4.49e-8, 1.2e5 yr** |
+| `"liao"` (before N) | 1.7e-5 | 8.3e-6, 1.4e6 yr | 8.3e-6, 4.6e4 yr | 6.1e-6, 908 yr |
+
+At the default the exchange is 6.8e-8 to 4.8e-8 over η = 4.4e11–2.3e12 (k = 1e-14) and 4.8–5.4e-8 in the
+dissipative-shell scenario; the strain limit ("poro") still binds in the skin. `strain_scale` = 0.16
+lowers it to 2.2e-8.
 
 With ΔP derived, the three volumes are tied together: the storage volume S·ΔP·δ·A = α·ε_v·δ·A equals
 the strain volume α·ε_v·V_skin to O(δ/R), and the Darcy volume is 2/f ≈ 2.3 times the storage volume
@@ -611,9 +661,9 @@ refill of +0.02 or −0.01 kg ends its orbit with the same whole-system element 
 rock, pore and ocean gas) as without it, and that the water moved. Each chunk reports the refill
 (`refill_in_kg`, and per orbit of the previous chunk) next to the tidal exchange (`exchange_kg_per_orbit`).
 **The refill dwarfs the tidal exchange:** after orbit 1 it moves 0.033–0.044 kg of ocean water into the
-porewater (normalised basis), against a tidal exchange of 1.9e-6 kg per orbit, ~2×10⁴ times more; after
-that it falls to 1e-4–1e-5 kg per orbit, still 10–100× the tidal exchange, and is sometimes negative (a
-little porewater returned) without IOM. In this model, then, **hydration-driven inflow, not tidal
+porewater (normalised basis), against a tidal exchange of ~1e-8 kg per orbit (layered strain at K_d; 1.9e-6
+kg under the Liao strain), ~10⁶ times more; after that it falls to 1e-4–1e-5 kg per orbit, still ~10⁴× the
+tidal exchange, and is sometimes negative (a little porewater returned) without IOM. In this model, then, **hydration-driven inflow, not tidal
 pumping, sets how much ocean water enters the rock** while the primaries hydrate.
 
 **The ocean per kg of rock (PI, 2026-10-31).** The PHREEQC basis is per kg of the reacting box's rock, so
@@ -706,9 +756,9 @@ the geometric area of forsterite is 1.2e-4 m²/g, 800× below the legacy 0.1; at
 surface-area and stress sweeps: φ 0.1–0.4, d 1 µm–1 cm (setting both k and the surface areas), and,
 since ΔP is now derived from the strain (F), the **tidal scenario and core viscosity** (N) in place of
 ΔP: `tidal_scenario = "dissipative_core"` with `core_viscosity` 4.4e11, 1e12, 2.3e12 Pa·s and
-`"dissipative_shell"` with 3e13, 1e16, 1e22 (the exchange: 3.4e-8, 1.9e-8, 1.4e-8 and ~1.9e-8 per
-half-orbit), and, if the PI wants it, the core's bulk modulus (the tables are for 100 GPa; the strain
-scales as 1/K). k (m²) over the
+`"dissipative_shell"` with 3e13, 1e16, 1e22 (the exchange at k = 1e-14: 6.8e-8, 5.4e-8, 4.8e-8 and
+5.4, 5.1, 4.8e-8 per half-orbit), and the troilite and IOM shear moduli at their bracket
+ends (`grain_elastic_moduli(mu_case =)`; they move μ_d, not K_d). k (m²) over the
 grid, marked C (Choblet et al.'s preferred 1e-14–1e-13), F (Fisher et al.'s aquifers 1e-13–1e-10) and
 L (Liao et al.'s 1e-12–1e-7):
 
@@ -985,22 +1035,22 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
 The exchange in ENTICES is tidal only (buoyancy-driven flow is out of scope; Choblet et al. 2017 and
 others are for comparison). The tidal pressure reaches only the skin depth δ, so the rock that reacts and
 exchanges is the top L_eff = min(L, δ) of the layer (§6). At the current defaults (φ = 0.32, φc = 0.4, α =
-0.8, the layered strain, `"dissipative_core"`, placeholders µ = 17 GPa, η = 1e12 Pa·s; ΔP from the strain
-plus ocean loading):
+0.8, the layered strain at K_d = 9.8 GPa, `"dissipative_core"`, placeholders µ = 17 GPa, η = 1e12 Pa·s;
+ΔP from the strain plus ocean loading):
 
-| k (m²) | L_eff | skin T | exchange per half-orbit | circulation time | (under `"liao"`, before N) |
-|---|---|---|---|---|---|
-| 1e-14 | 22 m | 1.4 °C | 1.9e-8 | 6.2e8 yr | 8.3e-6, 1.4e6 yr |
-| 1e-12 | 219 m | 1.4 °C | 1.9e-8 | 6.2e7 yr | 8.3e-6, 1.4e5 yr |
-| 1e-11 | 692 m | 1.4 °C | 1.9e-8 | 2.0e7 yr | 8.3e-6, 4.6e4 yr |
-| 1e-7 | 69 km | 31.0 °C | 1.9e-8 | 2.9e5 yr | 6.1e-6, 908 yr |
+| k (m²) | L_eff | skin T | exchange per half-orbit | circulation time | (at K = 100 GPa) | (under `"liao"`, before N) |
+|---|---|---|---|---|---|---|
+| 1e-14 | 22 m | 1.4 °C | 5.4e-8 | 2.2e8 yr | 1.9e-8, 6.2e8 yr | 8.3e-6, 1.4e6 yr |
+| 1e-12 | 219 m | 1.4 °C | 5.4e-8 | 2.2e7 yr | 1.9e-8, 6.2e7 yr | 8.3e-6, 1.4e5 yr |
+| 1e-11 | 692 m | 1.4 °C | 5.4e-8 | 7.1e6 yr | 1.9e-8, 2.0e7 yr | 8.3e-6, 4.6e4 yr |
+| 1e-7 | 69 km | 31.0 °C | 4.5e-8 | 1.2e5 yr | 1.9e-8, 2.9e5 yr | 6.1e-6, 908 yr |
 
 **Tidal pumping alone reaches only cold rock just below the seafloor unless k is at the top of the
 range**; deep, hot rock is reached only as δ approaches L. The strain limit binds throughout, so the
 exchange per half-orbit hardly depends on k; k sets how deep (and so how warm and how much rock) the
 reacting skin is, and with it the circulation time. **With the coupled body's strain, only k near the top
-of the range circulates the ocean through the core within Enceladus's age** (2.9e5 yr at 1e-7; 2e7 yr at
-1e-11, 6e8 yr at 1e-14); over η = 4.4e11–2.3e12 the times are 0.55–1.4× these.
+of the range circulates the ocean through the core within Enceladus's age** (1.2e5 yr at 1e-7; 7e6 yr at
+1e-11, 2.2e8 yr at 1e-14); over η = 4.4e11–2.3e12 the times are 0.75–1.15× these.
 
 ## 8. Known limitations and open decisions
 

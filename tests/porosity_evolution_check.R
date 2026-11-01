@@ -63,6 +63,19 @@ bd <- suppressWarnings(bulk_density(sub("\\.pqi$", ".csv", last), porosity = on$
 phi_re <- 1 - bd$solid_volume_cm3[nrow(bd)] / on$V_total_cm3[n]
 check(abs(phi_re - on$phi_end_solids[n]) < 1e-12, sprintf("phi from the solids: %.6f (recomputed %.6f)", on$phi_end_solids[n], phi_re))
 
+# 4. The frame moduli follow the chunk (PI 2026-11-01): K_d = K_grain(IOM fraction) (1 - phi/phi_c) with the IOM's
+#    share of the solid volume at t = 0 from 15 wt%, then from each chunk's remaining IOM (bulk_density()); at
+#    phi >= phi_c the run is flagged and stopped.
+kd_ok <- all(vapply(seq_len(n), function(i) abs(on$K_d_Pa[i] / (grain_elastic_moduli(on$iom_vol_frac[i])$K * (1 - on$phi_start[i] / 0.4)) - 1) < 1e-12, TRUE))
+bd_prev <- if (n > 1) suppressWarnings(bulk_density(sub("\\.pqi$", ".csv", f[grepl(sprintf("chunk%03d", n - 1), f)]), porosity = on$phi_start[n - 1], origin_pqi = first))$summary else NULL
+vf_ok <- abs(on$iom_vol_frac[1] / iom_volume_fraction(15) - 1) < 1e-12 &&
+  (n == 1 || abs(on$iom_vol_frac[n] / iom_volume_fraction(15, iom_g = bd_prev$iom_g[nrow(bd_prev)], iom_density = bd_prev$iom_density[nrow(bd_prev)]) - 1) < 1e-12)
+st <- suppressWarnings(run_tidal_evolution(Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new(), phi0 = 0.4),
+                                           organic_wt_percent = 15, n_orbits = 1, output_dir = file.path(od, "pc"), k_of_phi = kc, porewater_temp = 25))
+check(kd_ok && vf_ok && identical(st$stopped, "phi reached phi_c") && is.null(st$chunks),
+      sprintf("frame moduli per chunk: IOM fraction %s, K_d %s GPa; phi0 = phi_c: stopped (%s)",
+              paste(sprintf("%.4f", on$iom_vol_frac), collapse = ", "), paste(sprintf("%.4g", on$K_d_Pa / 1e9), collapse = ", "), st$stopped))
+
 unlink(od, recursive = TRUE)
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))
 if (failures > 0) quit(status = 1)

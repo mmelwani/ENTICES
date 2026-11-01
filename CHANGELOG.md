@@ -1140,3 +1140,12 @@ One commit per item; each commit message has its pass check.
   columns are compared only where the relevant species is above 1e-10 molal in both runs (log_column_gate()), then
   within 1e-4 log units; below the gate the molality floor applies. Replaces the la_-only gate.
   gas_mass_balance_check 7/7 (the no-metal check had failed on la_SO4-2, 1.2e-4 log units at <= 4e-9 molal).
+- **Core bulk modulus = the drained frame (PI 11-01):** K_d = K_grain (1 - phi/phi_c), mu_d likewise, K_grain and
+  mu_grain the Hill average, by volume, of the reconstruction's minerals and the IOM (data/mineral_elastic_moduli.csv:
+  Abers & Hacker 2016; Bass 1995, chromite as the magnesiochromite proxy; troilite K0 65.8 GPa from Perple_X 7.2.1
+  hp634ver.dat ("TC-DS633, 23 Jun 2017"), its mu an estimate 27-35.5; IOM K0 10.2 GPa from Delarue et al. 2026, its mu 1-5 (terrestrial kerogen: Othman et al. 2022, Yan & Han 2013); Ni and
+  schreibersite out). K_grain 49.0 GPa, K_d 9.80 GPa, mu_d 5.21 GPa (Table 5's 4-70: inside); minerals only 19.8 /
+  11.9. K_d follows phi(t) and the remaining IOM in run_tidal_evolution(); phi >= phi_c stops (flagged);
+  config$core_bulk_modulus overrides. Layered tables regenerated at K_d (Table 3 still matched); strain 8.0e-8,
+  exchange 5.4e-8 per half-orbit, circulation 2.2e8 / 7.1e6 / 1.2e5 yr at k 1e-14 / 1e-11 / 1e-7. Bagheri Eq. 8's
+  dimensional inconsistency and the energy-flux alternative documented (README, the script).
