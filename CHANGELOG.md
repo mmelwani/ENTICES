@@ -1157,3 +1157,6 @@ One commit per item; each commit message has its pass check.
 - **Item 2, restart_closure_check rerun on the final tree (11-01):** all 8 checks pass (tidal orbit 2 element
   totals to 2e-13 in REACT; refill +0.02 / -0.01 kg to 2.5e-11 / 5.8e-12; restart at a new temperature 5.4e-10; bulk
   6.6e-12).
+- **Item 3, restart reproducibility documented (PI 11-01):** a restart reproduces the continuous run to ~1e-9 in
+  whole-system totals and ~1e-5 relative in solution composition, for every pore_gas_fate (not specific to
+  retain_to_pore_volume: to_ocean Na 6e-6): the CVODE integrator's accuracy (README, Restarts).

@@ -142,6 +142,13 @@ Run everything from the repo root.
     H by 4–6e-6 at every restart: in the 24-orbit skin-temperature evolution the per-chunk drift fell from
     4.0e-6 (H) to ≤ 2.1e-9, and a restart at 130 °C from a 160 °C parent keeps the whole-system totals to
     5.4e-10 (`tests/restart_closure_check.R`).
+    **Restart reproducibility (item 3):** the whole-system element totals of a restart agree with the
+    continuous run to ~1e-9 (closure), but its solution composition only to ~1e-5 relative (porewater Na
+    6e-6 after a 1 + 1-orbit restart at 25 °C, under every `pore_gas_fate`). That is the kinetic
+    integrator's accuracy, not a lost digit: CVODE restarts its step history at a restart, and its own
+    tolerance moves the continuous run by ~4e-4 in Na between `-tol` 1e-8 and 1e-12 while the restart
+    difference does not converge with it (6e-6, 1e-6, 1.3e-5 at 1e-8, 1e-10, 1e-12). The solutions and the
+    pore gas carry over exactly.
 12. **Runtimes** (this machine, PHREEQC 3.8.6): Lucas's production case (12 orbits, 15 wt% IOM)
     320–515 s at 150–160 °C; 2 orbits at 160 °C 140–290 s; equilibrium generators seconds. The
     first orbit (the metal pulse into the gas phase) is the slowest.
