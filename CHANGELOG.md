@@ -1154,3 +1154,6 @@ One commit per item; each commit message has its pass check.
   temperature only by REACTION_TEMPERATURE; parents without a dump fall back to the CSV redefinition with a warning.
   H drift per chunk 4.0e-6 -> <= 2.1e-9 (24-orbit skin-temperature evolution); restart_closure_check: a restart at
   130 C from a 160 C parent keeps whole-system totals to 5.4e-10.
+- **Item 2, restart_closure_check rerun on the final tree (11-01):** all 8 checks pass (tidal orbit 2 element
+  totals to 2e-13 in REACT; refill +0.02 / -0.01 kg to 2.5e-11 / 5.8e-12; restart at a new temperature 5.4e-10; bulk
+  6.6e-12).
