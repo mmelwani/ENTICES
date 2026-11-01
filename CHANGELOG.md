@@ -1160,3 +1160,7 @@ One commit per item; each commit message has its pass check.
 - **Item 3, restart reproducibility documented (PI 11-01):** a restart reproduces the continuous run to ~1e-9 in
   whole-system totals and ~1e-5 relative in solution composition, for every pore_gas_fate (not specific to
   retain_to_pore_volume: to_ocean Na 6e-6): the CVODE integrator's accuracy (README, Restarts).
+- **Item 4, H2 by electron balance (PI 11-01):** h2_budget() adds H2_from_Fe (half the change of sum n z_Fe over every
+  Fe-bearing phase, z_Fe by charge balance, fe_valence(); dissolved Fe as Fe(II), bounded by dissolved_Fe_mol),
+  H2_from_Ni, H2_from_P, H2_generated, H2_present and H2_other_redox. Lucas's 160 C case, orbit 12: generated 2.462
+  mol/kg (Fe 2.444, P 0.018) = present 2.462 to 2.4e-4 (the lower bound was 2.04); 1.54e20 mol for the whole core.
