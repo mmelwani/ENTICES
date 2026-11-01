@@ -2,8 +2,12 @@
 
 Living document: the current state. History lives in git and in `docs/reviews/`.
 
-**Last updated: 2026-10-28** (`gas-ice-docs`: profile pressure, initial pe,
-mineral volumes and rock density, the mineral `-Vm` strip, restart closure,
+**Last updated: 2026-11-01** (`exchange-physics`: the exchange (min of three limits, skin depth,
+porosity and Biot coefficient, ΔP from the strain, ocean loading), evolving porosity with the refill,
+Kozeny–Carman, the cometary extensions, D6 closed and the H₂ budget by electron balance,
+`retain_to_pore_volume`, the steady-state diagnostic, the core strain from a layered forward model (N)
+with the drained frame modulus, exact restarts). Before that, 2026-10-28 (`gas-ice-docs`: profile
+pressure, initial pe, mineral volumes and rock density, the mineral `-Vm` strip, restart closure,
 fixed-pressure gas phases, the cometary-ice option; Parts 6–10).
 The 2026-10-27 revision folded in the review exchanges of
 2026-09-30 → 2026-10-27 (all in `docs/reviews/`) and the merged branches
