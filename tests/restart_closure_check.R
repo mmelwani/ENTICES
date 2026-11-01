@@ -98,6 +98,18 @@ for (rk in c(0.02, -0.01)) {
                 dpw, doc, nrow(R1$x)))
 }
 
+# Exact restarts at a new temperature (item 1 of 10-31, PI 2026-11-01): the restart reads the parent's end state
+# from its DUMP (SOLUTION_RAW 1 and 2, <base>_dump.txt) and changes temperature only through REACTION_TEMPERATURE,
+# so a restart 30 C below the parent ends its orbit with the parent's whole-system totals, H and O included
+# (redefining the solutions from pH, pe and totals at the new temperature changed total H by 4-6e-6).
+RT <- run(quiet(ph$generate_phreeqc_input_tidal_kinetic_restart(output_dir = file.path(od, "tidal_RT"), prev_csv = P$csv,
+                                                               n_orbital_cycles = 1, porewater_temp = TEMP_C - 30, depletion_mineral = "Troilite")))
+rt_pqi <- readLines(sub("\\.csv$", ".pqi", RT$csv))
+j <- judge(whole(P), whole(RT), scale)
+check(j$ok && sum(grepl("^SOLUTION_RAW", rt_pqi)) == 2 && file.exists(sub("\\.csv$", "_dump.txt", RT$csv)),
+      sprintf("restart at %g C from a %g C parent: SOLUTION_RAW from the parent's dump; whole-system totals max rel. diff. %.1e (%s)%s",
+              TEMP_C - 30, TEMP_C, j$rel, j$worst, if (length(j$fails)) paste0(", beyond tolerance: ", paste(j$fails, collapse = " ")) else ""))
+
 # Bulk (porewater mode).
 bk <- function(n, dir) quiet(ph$generate_phreeqc_input_bulk_kinetic(output_dir = file.path(od, dir), n_orbital_cycles = n, mode = "porewater",
                                                                     water_rock_ratio = 1, porewater_temp = TEMP_C, trace_C_molal = 1e-14))

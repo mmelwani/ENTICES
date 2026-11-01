@@ -133,7 +133,15 @@ Run everything from the repo root.
     `generate_phreeqc_input_tidal_kinetic_restart()`, `generate_phreeqc_input_bulk_kinetic_restart()`.
     They carry every element at 15 digits, the equilibrium phases, kinetic reactants, IOM channels
     and both gas phases, and refuse a parent run in another carbon mode or at other pressures
-    unless told (`carbon_mode`, `allow_pressure_change`).
+    unless told (`carbon_mode`, `allow_pressure_change`). **The solutions carry over exactly** (PI
+    2026-11-01): every `tidal_kinetic` input and its restart end by DUMPing solutions 1 and 2 as
+    SOLUTION_RAW to `<base>_dump.txt` beside the CSV, and the restart reads them back verbatim, so total
+    H, total O and the charge balance are the parent's; a new temperature enters only through
+    REACTION_TEMPERATURE. Redefining the solutions from pH, pe and totals at a new temperature (the
+    behaviour before, and still the fallback, with a warning, for a parent without a dump) changed total
+    H by 4–6e-6 at every restart: in the 24-orbit skin-temperature evolution the per-chunk drift fell from
+    4.0e-6 (H) to ≤ 2.1e-9, and a restart at 130 °C from a 160 °C parent keeps the whole-system totals to
+    5.4e-10 (`tests/restart_closure_check.R`).
 12. **Runtimes** (this machine, PHREEQC 3.8.6): Lucas's production case (12 orbits, 15 wt% IOM)
     320–515 s at 150–160 °C; 2 orbits at 160 °C 140–290 s; equilibrium generators seconds. The
     first orbit (the metal pulse into the gas phase) is the slowest.

@@ -1149,3 +1149,8 @@ One commit per item; each commit message has its pass check.
   config$core_bulk_modulus overrides. Layered tables regenerated at K_d (Table 3 still matched); strain 8.0e-8,
   exchange 5.4e-8 per half-orbit, circulation 2.2e8 / 7.1e6 / 1.2e5 yr at k 1e-14 / 1e-11 / 1e-7. Bagheri Eq. 8's
   dimensional inconsistency and the energy-flux alternative documented (README, the script).
+- **Item 1, exact restarts (PI 11-01):** tidal_kinetic inputs and restarts DUMP solutions 1 and 2 (SOLUTION_RAW,
+  <base>_dump.txt); restarts read them back (restart_raw_solutions(); ocean_scale applied by MIX) and change the
+  temperature only by REACTION_TEMPERATURE; parents without a dump fall back to the CSV redefinition with a warning.
+  H drift per chunk 4.0e-6 -> <= 2.1e-9 (24-orbit skin-temperature evolution); restart_closure_check: a restart at
+  130 C from a 160 C parent keeps whole-system totals to 5.4e-10.

@@ -141,6 +141,28 @@ kozeny_carman_d <- function(k, phi) sqrt(k * 180 * (1 - phi)^2 / phi^3)
 # Geometric specific surface area (m2/g) of spheres of diameter d (m) and density rho (g/cm3): 6 / (rho d).
 geometric_ssa_m2_g <- function(d, rho) 6 / (rho * 1e6 * d)
 
+# The exact end state for restarts (item 1 of 10-31, PI 2026-11-01): every tidal_kinetic input (and its restart)
+# ends by DUMPing solutions 1 and 2 as SOLUTION_RAW to <base>_dump.txt, next to its CSV. A restart reads them
+# back verbatim (restart_raw_solutions()), so total H, total O and the charge balance carry over exactly and a
+# new temperature enters only through REACTION_TEMPERATURE. Redefining the solutions from pH, pe and element
+# totals at a new temperature changed total H by 4-6e-6 per restart.
+dump_block <- function(filename) {
+  sprintf("\n# End state for restarts (restart_raw_solutions())\nDUMP\n    -file %s_dump.txt\n    -solution 1 2\nEND\n",
+          tools::file_path_sans_ext(basename(filename)))
+}
+# The parent's SOLUTION_RAW 1 and 2 from <prev_csv base>_dump.txt, as text, or NULL if there is no dump (runs made
+# before 2026-11-01): the restart then falls back to redefining the solutions from the CSV row, with a warning.
+restart_raw_solutions <- function(prev_csv) {
+  f <- sub("\\.csv$", "_dump.txt", prev_csv)
+  if (!file.exists(f)) return(NULL)
+  l <- readLines(f, warn = FALSE)
+  starts <- grep("^SOLUTION_RAW", l); if (length(starts) != 2) stop("restart_raw_solutions: ", f, " has ", length(starts), " SOLUTION_RAW blocks, not 2")
+  kw <- grep("^[A-Z_]+", l); blk <- function(s) { e <- min(c(kw[kw > s], length(l) + 1)) - 1; l[s:e] }
+  b <- lapply(starts, blk); n <- as.integer(sub("^SOLUTION_RAW\\s+([0-9]+).*", "\\1", vapply(b, `[`, "", 1)))
+  if (!setequal(n, 1:2)) stop("restart_raw_solutions: ", f, " holds solutions ", paste(n, collapse = ", "))
+  list(file = f, solution1 = paste(b[[which(n == 1)]], collapse = "\n"), solution2 = paste(b[[which(n == 2)]], collapse = "\n"))
+}
+
 OCEAN_STEP_KNOBS_ON  <- "KNOBS\n    -diagonal_scale true\n"
 OCEAN_STEP_KNOBS_OFF <- "KNOBS\n    -diagonal_scale false\n"
 
@@ -2066,7 +2088,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                                 pore_gas_fate = pore_gas_fate)
 
                                      # Write to file
-                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(paste0(content, dump_block(filename))), logfile), filename)
 
                                      return(filename)
                                    },
@@ -5525,6 +5547,40 @@ END
                                      } else ""
                                      refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6); ocean_scale: %.15g", refill_kg, ocean_scale)
 
+                                     # The solutions: the parent's exact end state (SOLUTION_RAW from its DUMP; the ocean scaled
+                                     # by ocean_scale with a MIX, which scales water, solutes, H and O together), else, for parents
+                                     # without a dump, redefined from the CSV rows (pH, pe, totals; not exact in H and O).
+                                     raw <- restart_raw_solutions(prev_csv)
+                                     soln_defs <- if (!is.null(raw)) {
+                                       paste0("# Solutions 1 and 2: the parent's end state, SOLUTION_RAW from ", basename(raw$file), "\n",
+                                              raw$solution1, "\n\n", raw$solution2, "\n",
+                                              if (ocean_scale != 1) paste0("END\n# ocean_scale\nMIX 2\n", sprintf("  2  %.15e\n", ocean_scale), "SAVE solution 2\nEND\n") else "")
+                                     } else {
+                                       warning("no ", sub("\\.csv$", "_dump.txt", basename(prev_csv)), " next to prev_csv: the solutions are redefined from the CSV (pH, pe, totals), which is not exact in total H and O")
+                                       glue::glue('
+SOLUTION 1 Enceladus porewater (restarted)
+    temp      {round(porewater_temp_C, 2)}
+    pH        {sprintf("%.15g", soln1_pH)}
+    pe        {sprintf("%.15g", soln1_pe)}
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     {sprintf("%.15g", soln1_h2o)}
+    pressure  {round(pore_pressure_atm, 1)}
+{soln1_elem_lines}
+
+SOLUTION 2 Enceladus ocean (restarted)
+    temp      {round(ocean_temp_C, 2)}
+    pH        {sprintf("%.15g", soln2_pH)}
+    pe        {sprintf("%.15g", soln2_pe)}
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     {sprintf("%.15g", soln2_h2o)}
+    pressure  {round(ocean_pressure_atm, 1)}
+{soln2_elem_lines}')
+                                     }
+
                                      # ---- Secondary minerals list ----
                                      secondary_minerals <- c(
                                        "Analcime", "Anhydrite", "Aragonite", "Bassanite",
@@ -5895,27 +5951,7 @@ KNOBS
 # mode: {mode}
 # time_step: {sprintf("%.4e", time_step_years)} years
 
-SOLUTION 1 Enceladus porewater (restarted)
-    temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.15g", soln1_pH)}
-    pe        {sprintf("%.15g", soln1_pe)}
-    redox     pe
-    units     mol/kgw
-    density   1
-    water     {sprintf("%.15g", soln1_h2o)}
-    pressure  {round(pore_pressure_atm, 1)}
-{soln1_elem_lines}
-
-SOLUTION 2 Enceladus ocean (restarted)
-    temp      {round(ocean_temp_C, 2)}
-    pH        {sprintf("%.15g", soln2_pH)}
-    pe        {sprintf("%.15g", soln2_pe)}
-    redox     pe
-    units     mol/kgw
-    density   1
-    water     {sprintf("%.15g", soln2_h2o)}
-    pressure  {round(ocean_pressure_atm, 1)}
-{soln2_elem_lines}
+{soln_defs}
 {refill_block}
 
 REACTION_TEMPERATURE 1
@@ -6065,7 +6101,7 @@ KNOBS
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
                                                                       ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(paste0(content, dump_block(filename))), logfile), filename)
                                      return(filename)
                                    }
                                  )
