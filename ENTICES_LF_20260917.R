@@ -107,14 +107,18 @@ SCHREIBERSITE_RATE_BODY <- paste(
   "\t-end", sep = "\n")
 SCHREIBERSITE_RATE <- paste0("Schreibersite\n", SCHREIBERSITE_RATE_BODY)
 schreibersite_kinetics_entry <- function(m0) {
-  sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.6e\n      -step_divide 1", m0)
+  sprintf("   Schreibersite\n      -formula Fe 3 P 1\n      -m0 %.15e\n      -step_divide 1", m0)
 }
 
-# Fe metal is punched as Fe_metal / d_Fe_metal rather than listed in -equilibrium_phases, where its
-# column was headed "Fe", the same as the -totals Fe (dissolved iron) column. The phase is still
-# called Fe in the databases and in EQUILIBRIUM_PHASES blocks.
-FE_METAL_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal"
-FE_METAL_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n'
+# USER_PUNCH columns every generator ends with. Fe metal is punched as Fe_metal / d_Fe_metal rather
+# than listed in -equilibrium_phases, where its column was headed "Fe", the same as the -totals Fe
+# (dissolved iron) column. The phase is still called Fe in the databases and in EQUILIBRIUM_PHASES
+# blocks. Rho_soln is the solution density PHREEQC reports (RHO, g/cm3), the fluid term of
+# bulk_density() (phreeqc_tools.R). H_total_mol / O_total_mol are the solution's total H and O in
+# moles, water included (TOT("H") x kg water); the -totals H and O columns are the H+ and H2O master
+# species' totals, which leave the water out.
+SHARED_PUNCH_HEADINGS <- " Fe_metal d_Fe_metal Rho_soln H_total_mol O_total_mol"
+SHARED_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n   920 PUNCH RHO\n   925 PUNCH TOT("H") * TOT("water"), TOT("O") * TOT("water")\n'
 # Optional trace carbon in the initial SOLUTIONs of the kinetic generators (trace_C_molal, mol/kgw;
 # NULL = pure water). A numerical seed, not a composition: the science case is pure water, so that
 # all ocean carbon can be attributed to the organics. Returns the SOLUTION line, with its leading
@@ -128,6 +132,14 @@ trace_C_solution_line <- function(trace_C_molal) {
 trace_C_header_line <- function(trace_C_molal) {
   sprintf("# trace_C_molal: %s", if (is.null(trace_C_molal)) "NULL (no initial C)" else
     sprintf("%.6e mol/kgw C added to every initial SOLUTION", trace_C_molal))
+}
+# KNOBS -logfile (the generators' logfile argument). PHREEQC's phreeqc.log records every solver
+# iteration: 258-346 MB per 12-orbit production run at 150-160 C, and 11.9 GB from one stalled run.
+# The templates write "-logfile false"; logfile = TRUE switches it on (for convergence debugging).
+knobs_logfile <- function(content, logfile = FALSE) {
+  if (!is.logical(logfile) || length(logfile) != 1 || is.na(logfile)) stop("logfile must be TRUE or FALSE")
+  if (!logfile) return(content)
+  gsub("\n   -logfile false\n", "\n   -logfile true\n", content)
 }
 
 # A restart's record of its parent's initial fluid: the trace_C_molal and initial_ocean header lines
@@ -144,6 +156,35 @@ parent_fluid_header_lines <- function(prev_csv) {
     else sub(sprintf("^# (parent )?%s: ", k), "", l[1])
   }, character(1))
   paste(sprintf("# parent %s: %s", keys, vals), collapse = "\n")
+}
+
+# Every element a database defines: its element-level SOLUTION_MASTER_SPECIES, pseudo-elements
+# (Mtg, Ntg, Hdg, Oxg, Sg) included, E and Alkalinity not. The three coreclath databases define the
+# same 36. Every generator punches all of them (totals_block()), so a restart can carry every element
+# whatever the run contained; before 2026-10-28 the totals were a fixed list without K, Mn, Cl, Ni
+# and (in the equilibrium generators) Mtg, so restarts dropped those elements.
+database_elements <- function(database) {
+  g <- names(element_gfw(database))
+  g[grepl("^[A-Z][a-z]*$", g) & !g %in% c("E", "Alkalinity")]
+}
+# The SELECTED_OUTPUT -totals option listing database_elements(database).
+totals_block <- function(database) {
+  el <- database_elements(database)
+  rows <- vapply(split(el, ceiling(seq_along(el) / 16)), paste, "", collapse = " ")
+  paste0("    -totals              ", paste(rows, collapse = "\n                         "))
+}
+# Elements that ENTICES inputs can contain (rock, IOM, initial fluids): a restart warns if its parent
+# CSV has no column for one of them (a parent generated before 2026-10-28), since it cannot carry it.
+ENTICES_ELEMENTS <- c("Al", "C", "Ca", "Cl", "Fe", "K", "Mg", "Mn", "N", "Na", "Ni", "P", "S", "Si", "Mtg", "Ntg")
+# The elements a restart sets in its SOLUTIONs: every database element but H and O (which come from
+# the water mass, pH and pe) that the parent CSV has a column for.
+restart_elements <- function(database, csv_names, prev_csv) {
+  el <- setdiff(database_elements(database), c("H", "O"))
+  miss <- setdiff(intersect(ENTICES_ELEMENTS, el), csv_names)
+  if (length(miss))
+    warning("restart: the parent CSV has no total for ", paste(miss, collapse = ", "), " (", prev_csv,
+            "; generated before 2026-10-28): these elements are not carried into the restart")
+  intersect(el, csv_names)
 }
 
 # A parent run's carbon mode, from the database its .pqi header names ("# Database:", else
@@ -186,6 +227,10 @@ check_restart_carbon_mode <- function(prev_csv, ch4_mode) {
 # total PHREEQC then adjusts to balance SOLUTION 2's charge.
 # Returns the SOLUTION lines, each with its leading newline ("" for "pure_water").
 initial_ocean_solution_lines <- function(initial_ocean, trace_C_molal = NULL, charge_balance = NULL) {
+  if (inherits(initial_ocean, "cometary_ice")) {           # SOLUTION 2 is pure water; the ices enter by REACTION
+    if (!is.null(charge_balance)) stop("charge_balance is not used with cometary_ice_ocean()")
+    return("")
+  }
   check_ocean_charge_balance(initial_ocean, charge_balance)
   if (identical(initial_ocean, "pure_water")) return("")
   nm <- names(initial_ocean)
@@ -212,6 +257,10 @@ ocean_pH_charge <- function(charge_balance) if (identical(charge_balance, "pH"))
 initial_ocean_header_line <- function(initial_ocean, charge_balance = NULL) {
   cb <- if (is.null(charge_balance)) "" else sprintf("; charge balance on %s", charge_balance)
   if (identical(initial_ocean, "pure_water")) return(paste0("# initial_ocean: pure_water", cb))
+  if (inherits(initial_ocean, "cometary_ice"))
+    return(sprintf("# initial_ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s): %s mol/kgw, reacted into the pure-water ocean at ocean T and P (Miller et al. 2026 Table 5; Rubin et al. 2019)",
+                   initial_ocean$v, initial_ocean$include_NH3, initial_ocean$include_O2,
+                   paste(sprintf("%s=%.4e", names(initial_ocean$mol_per_kgw), initial_ocean$mol_per_kgw), collapse = ", ")))
   sprintf("# initial_ocean: %s mol/kgw in the ocean SOLUTION 2 only%s",
           paste(sprintf("%s=%.6e", names(initial_ocean), unlist(initial_ocean)), collapse = ", "), cb)
 }
@@ -230,8 +279,160 @@ ep_column <- function(phase, col_names) {
     hits <- which(col_names == "Fe" | grepl("^Fe\\.[0-9]+$", col_names))
     return(if (length(hits) > 1) tail(hits, 1) else NA_integer_)
   }
-  hits <- which(make.names(col_names) == make.names(phase))
+  # A phase named like an element (Ni) shares its name with that element's -totals column, which comes
+  # first; read.delim's default check.names renames the second "Ni.1". Either way, take the last.
+  mn <- make.names(col_names); mp <- make.names(phase)
+  hits <- which(mn == mp | startsWith(mn, paste0(mp, ".")) & grepl("^\\.[0-9]+$", substring(mn, nchar(mp) + 1)))
   if (length(hits) > 0) tail(hits, 1) else NA_integer_
+}
+
+#===============================================================================
+# Gas phases (2026-10-28)
+#===============================================================================
+# Gases are a fixed-pressure GAS_PHASE in each reservoir, not EQUILIBRIUM_PHASES. An "X(g) 0 0"
+# equilibrium phase is an infinite gas reservoir at 1 atm: it capped dissolved gases at their 1-atm
+# solubility and kept whatever exsolved, whatever the pressure. A fixed-pressure gas phase (Parkhurst
+# & Appelo 2013, GAS_PHASE) forms a bubble only when the partial pressures sum to more than the
+# reservoir's pressure, and holds a finite amount. Every gas is Peng-Robinson (Peng & Robinson 1976;
+# critical constants from scripts/gas_eos.py), which PHREEQC requires of all components of a phase.
+#
+# GAS_PHASE 1: porewater, at pore_pressure_atm; GAS_PHASE 2: ocean, at ocean_pressure_atm (tidal
+# generators; never emptied: the PI's default, plume loss being unknown). Both start empty. The bulk
+# generators have one, GAS_PHASE 1, at their solution's pressure. pore_gas_fate (tidal; default "to_ocean",
+# PI 2026-10-29):
+#   "retain"   -- the pore bubble stays with the porewater and is carried to the next orbit (MIX
+#                 moves solution only). When the bubble is larger than the pore space (Vgas_Vpore > 1)
+#                 this is an upper bound on retention, not a physical state.
+#   "to_ocean" -- after each porewater step the bubble's moles go to the ocean step (see
+#                 gas_transfer_block()) and the porewater starts the next orbit with an empty phase.
+
+# The components: the gases the EQUILIBRIUM_PHASES lists carried before 2026-10-28, with methane as
+# Mtg(g) when it is decoupled, and only those the carbon mode's database defines (c4_only has no CO(g)
+# or C2-C3 gases). extra: more components (Ntg(g) for an initial ocean holding Ntg).
+GAS_COMPONENTS <- c("C2H4(g)", "C2H6(g)", "C3H8(g)", "CH4(g)", "CO(g)", "CO2(g)", "H2(g)", "H2S(g)", "N2(g)",
+                    "NH3(g)", "SO2(g)")
+gas_components <- function(ch4_mode, extra = character(0)) {
+  g <- c(GAS_COMPONENTS, extra)
+  if (ch4_mode$decoupled) g[g == "CH4(g)"] <- "Mtg(g)"
+  unique(intersect(g, database_names(ch4_mode$database)$phases))
+}
+# An empty fixed-pressure GAS_PHASE block.
+gas_phase_block <- function(n, comps, pressure_atm, temp_C, label) {
+  paste(c(sprintf("GAS_PHASE %d %s", n, label),
+          "    -fixed_pressure",
+          sprintf("    -pressure    %.1f", pressure_atm),
+          "    -volume      1e-6      # negligible: every component starts at partial pressure 0, so the phase is empty",
+          sprintf("    -temperature %s", format(round(temp_C, 2))),
+          sprintf("    %-10s 0", comps)), collapse = "\n")
+}
+# GAS_PHASE_MODIFY setting a restart's gas phase n to the moles in a parent row (its g_ columns).
+gas_restore_block <- function(n, comps, row) {
+  # by make.names(), so a row read with or without check.names matches ("g_CO2(g)" / "g_CO2.g.")
+  v <- vapply(comps, function(c) { k <- match(make.names(paste0("g_", c)), make.names(names(row)))
+    if (!is.na(k)) suppressWarnings(as.numeric(row[[k]])) else NA_real_ }, 0)
+  v <- v[!is.na(v) & v > 0]
+  if (!length(v)) return(sprintf("# gas phase %d: empty in the parent", n))
+  paste(c(sprintf("GAS_PHASE_MODIFY %d   # the parent's gas phase %d", n, n),
+          unlist(lapply(names(v), function(c) c(sprintf("    -component %s", c), sprintf("        -moles %.15e", v[[c]]))))),
+        collapse = "\n")
+}
+# SELECTED_OUTPUT -gases: the component moles (g_ columns), with the phase's pressure, total moles
+# and volume.
+gas_so_line <- function(comps) sprintf("    -gases               %s", paste(comps, collapse = " "))
+# pore_gas_fate = "to_ocean". PHREEQC has no keyword that adds one gas phase's moles to another, so
+# the transfer goes through the ocean step's solution: the porewater step's USER_PUNCH stores each
+# component's moles with PUT (gas_punch(put = TRUE)), and KINETICS 3, used in the ocean step, adds
+# them to the mixed ocean solution at a constant rate over 1 s (a constant rate integrates exactly),
+# after which they partition between the ocean solution and GAS_PHASE 2 at the ocean's pressure.
+# GAS_PHASE 1 is then redefined empty at the start of the next porewater step. Mass is conserved to
+# the integrator's precision (tested: < 1e-11 relative); there is never more than one gas reservoir
+# per reacting solution. Each component enters by its own formula (CO2, H2, Mtg, ...).
+gas_transfer_block <- function(comps) {
+  nm <- sprintf("PoreGasIn_%d", seq_along(comps))
+  paste(c("RATES",
+          unlist(lapply(seq_along(comps), function(j) c(nm[j], " -start",
+                        sprintf(" 10 SAVE GET(%d) * TIME   # moles of %s in the pore bubble", 9100 + j, comps[j]), " -end"))),
+          "",
+          "KINETICS 3   # used only in the ocean step, when pore_gas_fate = to_ocean",
+          unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", nm[j]), sprintf("      -formula %s 1", sub("\\(g\\)$", "", comps[j])),
+                                                         "      -m0 1e6"))),
+          "   -steps 1"), collapse = "\n")
+}
+# USER_PUNCH columns for the gas phase of the simulation in use: its volume (L), pressure (atm; 0 when
+# there is no bubble) and volume over the pore volume (vpore_L, from the same normalisation as the
+# porewater mass, at 1 kg/L). On ocean rows Vgas_Vpore uses the same pore volume. put = TRUE adds the
+# PUT lines that store the pore bubble for the to_ocean transfer.
+gas_punch <- function(comps, vpore_L, put = FALSE) {
+  sum_lines <- sprintf("   %d ng = ng + GAS(\"%s\")\n", 931 + seq_along(comps) - 1, comps)
+  put_lines <- if (put) sprintf("   %d PUT(GAS(\"%s\"), %d)\n", 970 + seq_along(comps) - 1, comps, 9100 + seq_along(comps)) else character(0)
+  list(headings = " Vgas_L P_gas_atm Vgas_Vpore",
+       lines = paste0(c("   930 ng = 0\n", sum_lines, "   950 vg = 0\n", "   951 IF ng > 0 THEN vg = GAS_VM * ng\n",
+                        sprintf("   960 PUNCH vg, GAS_P, vg / %.15g\n", vpore_L), put_lines), collapse = ""))
+}
+
+# Cometary-ice initial ocean (an option; the default ocean is pure water). Miller et al. (2026),
+# Icarus 449, 116961, Table 5, "molar abundance used (volatile depleted)": comet 67P ice from ROSINA
+# (Rubin et al. 2019, MNRAS 489, 594-607, the "67P" column below, mol per 100 mol H2O), with every
+# ice more volatile than NH3 at 273 K (Fray & Schmitt 2009) depleted by v_NH3 = 0.02. v_NH3 comes
+# from Titan's atmospheric N budget (Miller et al. 2026, eqs. 21-24): it is not an Enceladus
+# constraint. NH3 (0.67 per 100 H2O, Rubin et al. 2019 Table 4) is not in Miller's Table 5, whose
+# "Total N" (2 x N2) excludes it, while their text says v_NH3 applies to NH3 too: include_NH3
+# (default FALSE, Table 5 as printed) is pending the PI. include_O2 exists because O2 decides the
+# redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound (2.6 molal CO2 + 1.7 molal
+# CO, far above CO2-clathrate dissociation at 1.45 C).
+COMET_67P_PER_100_H2O <- c(CO2 = 4.7, CO = 3.1, O2 = 3.1, H2S = 1.1, CH4 = 0.34, C2H6 = 0.29, N2 = 8.9e-2, NH3 = 0.67)
+cometary_ice_ocean <- function(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE) {
+  if (!is.numeric(v) || length(v) != 1 || !isTRUE(v > 0 && v <= 1)) stop("v must be one number in (0, 1]")
+  sp <- setdiff(names(COMET_67P_PER_100_H2O), c(if (!include_NH3) "NH3", if (!include_O2) "O2"))
+  # mol per 100 mol H2O x v -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
+  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v / 100 / 0.0180153, v = v,
+                 include_NH3 = include_NH3, include_O2 = include_O2), class = "cometary_ice")
+}
+# REACTION lines for the ices, by carbon mode: CO2, CO, O2, H2S and NH3 are coupled (equilibrium
+# decides CO's fate; under c4_only C can only be +4, so CO + H2O -> CO2 + H2);
+# CH4 is Mtg and C2H6 is "Mtg 2 H -2" (the electron-count rule, as IOM_CHn) when methane is
+# decoupled, CH4 and C2H6 when coupled; N2 is Ntg (kinetically inert at ocean temperature) in every
+# mode. Amounts are mol/kgw x the ocean's water mass (kg). "Mtg 2 H -2" reduces ethane's C from -3
+# to -4, drawing 2 e- per C2H6 from the coupled system (0.0064 eq at v = 0.02): it oxidises 0.0008
+# molal more H2S to sulfate when O2 is present (tests/cometary_ocean_check.R).
+cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
+  m <- ice$mol_per_kgw * water_kg; g <- function(n) if (n %in% names(m)) m[[n]] else 0
+  dec <- ch4_mode$decoupled
+  # CO enters as CO2 minus O: REACTION matches phase names first, case-insensitively, and "CO" is
+  # the cobalt phase Co (tested 2026-10-28: it added 0.034 molal Co).
+  r <- c(CO2 = g("CO2") + g("CO"), O = -g("CO"), O2 = g("O2"), H2S = g("H2S"), Ntg = g("N2"), NH3 = g("NH3"),
+         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0, H = if (dec) -2 * g("C2H6") else 0,
+         CH4 = if (dec) 0 else g("CH4"), C2H6 = if (dec) 0 else g("C2H6"))
+  r <- r[r != 0]
+  c(sprintf("    %-5s %.15e", names(r), r), "    1 mol")
+}
+# The simulation that reacts the ices into the pure-water ocean SOLUTION 2 at ocean temperature and
+# pressure, with the ocean's gas phase (which it saves, so a bubble would be kept), and writes the
+# resulting ocean to <base>_initial_ocean.csv (SELECTED_OUTPUT 2, switched off afterwards).
+cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, base_name, database) {
+  comps <- gas_components(ch4_mode, "Ntg(g)")
+  paste(c("END",
+          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s), in mol/kgw: %s.",
+                  ice$v, ice$include_NH3, ice$include_O2,
+                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", ")),
+          "# Entered as a REACTION into pure water at ocean T and P, not as SOLUTION totals: the ice mixture",
+          "# is out of redox equilibrium (O2 with CO and H2S), and equilibrium decides the outcome. That is",
+          "# an assumption at 1.45 C, where the CO shift and O2 oxidation are kinetically slow.",
+          ocean_gas_block,
+          "USE solution 2",
+          "REACTION 9 Cometary ices", cometary_reaction_lines(ice, ch4_mode, water_kg),
+          "USE reaction_temperature 2", "USE reaction_pressure 2",
+          "SAVE solution 2", "SAVE gas_phase 2",
+          "SELECTED_OUTPUT 2",
+          sprintf("    -file %s_initial_ocean.csv", base_name),
+          "    -high_precision true", "    -state true", "    -solution true", "    -reaction true", "    -ph true", "    -pe true", "    -alkalinity true", "    -water true",
+          totals_block(database),
+          "    -molalities CO2 HCO3- CO3-2 Mtg H2 O2 HS- H2S SO4-2 HSO4- Ntg NH3 NH4+ HCOO- CO CH3COO- C2H6",
+          gas_so_line(comps),
+          "USER_PUNCH 2", "    -headings H_total_mol O_total_mol Vgas_L", "    10 PUNCH TOT(\"H\") * TOT(\"water\"), TOT(\"O\") * TOT(\"water\")",
+          "    20 ng = 0", sprintf("    %d ng = ng + GAS(\"%s\")", 20 + seq_along(comps), comps), "    90 PUNCH GAS_VM * ng",
+          "END",
+          "SELECTED_OUTPUT 2", "    -active false"), collapse = "\n")
 }
 
 #===============================================================================
@@ -344,6 +545,63 @@ ocean_floor_pressure_MPa <- function(profile_file) {
   rock$P_MPa[which.max(rock$r_m)]
 }
 
+# Porewater and ocean conditions from the PlanetProfile profile, used by every generator. There is
+# no fallback: without a profile there is no defensible pressure. (Before 2026-10-27 the generators
+# fell back to 70 atm, and five of the six wrote the ocean-floor pressure, 66.7 atm for the
+# Enceladus profile, into the porewater SOLUTION.)
+#   pore_temp_C        -- mean temperature of the permeable layer (porewater_temp = "profile")
+#   pore_pressure_atm  -- mean pressure of the permeable layer: the porewater SOLUTION, and the
+#                         reaction pressure of every porewater step
+#   ocean_pressure_atm -- pressure at the ocean floor (top of phase 50): the ocean SOLUTION
+MPA_PER_ATM <- 0.101325
+profile_conditions <- function(profile_file, layer_thickness) {
+  if (is.null(profile_file) || !nzchar(profile_file) || !file.exists(profile_file))
+    stop(sprintf(paste0("profile_file not found: '%s'. Set PhreeqcIntegrator$profile_file to a PlanetProfile ",
+                        "*Profile*.txt (the Enceladus profile is in profiles/). Pressures come only from ",
+                        "the profile; there is no default."),
+                 if (is.null(profile_file)) "NULL" else profile_file))
+  list(pore_temp_C        = mean_layer_temp_C(profile_file, layer_thickness),
+       pore_pressure_atm  = mean_layer_pressure_MPa(profile_file, layer_thickness) / MPA_PER_ATM,
+       ocean_pressure_atm = ocean_floor_pressure_MPa(profile_file) / MPA_PER_ATM)
+}
+
+# The two pressure lines stamp_pqi_header() writes, and parent_pressures_atm() reads back.
+pressure_header_lines <- function(pore_pressure_atm, ocean_pressure_atm) {
+  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the permeable layer)", pore_pressure_atm),
+    sprintf("# Ocean pressure: %.1f atm (profile, ocean floor)", ocean_pressure_atm))
+}
+# A parent run's pressures (atm), from its .pqi header. NA where there is no parent .pqi or no
+# stamp (inputs generated before 2026-10-27).
+parent_pressures_atm <- function(prev_csv) {
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  h <- if (file.exists(pqi)) readLines(pqi, n = 200, warn = FALSE) else character(0)
+  get <- function(rx) {
+    l <- grep(rx, h, value = TRUE)
+    if (length(l)) as.numeric(sub(".*pressure: ([0-9.eE+-]+) atm.*", "\\1", l[1])) else NA_real_
+  }
+  c(pore = get("^# (parent )?Porewater pressure: "), ocean = get("^# (parent )?Ocean pressure: "))
+}
+# A restart's pressures against its parent's, compared at the 0.1 atm written into the inputs. Like
+# check_restart_carbon_mode(): a mismatch is an error, or a warning with allow_pressure_change =
+# TRUE; a parent whose pressures can't be read is a warning. Returns the "# parent pressures:" line.
+check_restart_pressures <- function(prev_csv, pore_pressure_atm, ocean_pressure_atm, allow_pressure_change = FALSE) {
+  parent <- parent_pressures_atm(prev_csv)
+  if (anyNA(parent)) {
+    warning("restart: the parent's pressures are not stamped in ", sub("\\.csv$", ".pqi", prev_csv),
+            " (inputs generated before 2026-10-27, or no parent .pqi); not checked")
+    return("# parent pressures: unknown (not checked)")
+  }
+  line <- sprintf("# parent pressures: porewater %.1f atm, ocean %.1f atm", parent[["pore"]], parent[["ocean"]])
+  same <- sprintf("%.1f", parent) == sprintf("%.1f", c(pore_pressure_atm, ocean_pressure_atm))
+  if (all(same)) return(line)
+  msg <- sprintf("restart: the parent ran at porewater %.1f / ocean %.1f atm, this restart would run at %.1f / %.1f atm (from profile_file)",
+                 parent[["pore"]], parent[["ocean"]], pore_pressure_atm, ocean_pressure_atm)
+  if (!allow_pressure_change)
+    stop(msg, ". Set profile_file to the parent's profile, or give allow_pressure_change = TRUE to switch.")
+  warning(msg, "; continuing (allow_pressure_change = TRUE)")
+  paste0(line, sprintf(" (this restart switches to %.1f / %.1f atm)", pore_pressure_atm, ocean_pressure_atm))
+}
+
 #===============================================================================
 # Configuration Class for Enceladus Parameters
 #===============================================================================
@@ -355,12 +613,16 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  mass = 1.0802e20,        # Total mass [kg] 
                                  
                                  # Material properties
-                                 core_density = 2353,     # Core bulk density [kg/m³] #This and above parameters from 4 papers?
+                                 # radius, mass, core_radius and core_density are the PlanetProfile profile's, rounded (profiles/: R_m 252100,
+                                 # M_kg 1.08022e20, RsilMean_m 194243.7, rhoSil_kgm3 2353.19; Styczinski et al. 2023), a structure fitted
+                                 # to C/MR2 = 0.335 (Iess et al. 2014). Neither Iess et al. 2014 nor Bagheri et al. 2025 gives these
+                                 # values; both bracket them (Bagheri Table 5: core 2160-2400 kg/m3, 183-213 km). README section 7.
+                                 core_density = 2353,     # Core bulk density [kg/m³]
                                  core_porosity = 0.32,    # Core porosity [volume fraction] #Default assumed value from Stycinski et al 2023
                                  
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
-                                 max_tidal_stress = 1e5,  # [Pa]
+                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED as a value: tidal pressure amplitude, ~3x Liao et al. (2020) Fig. B3 peak; swept with k (README section 6, Flow driving; PROGRESS D12)
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 
@@ -782,7 +1044,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # organic wt% the mineral mass is scaled for; NULL = organic_wt_percent
                                    mineral_basis_wt_percent = NULL,
                                    iom_pools = NULL,
-                                   profile_file = "EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
+                                   profile_file = "profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
                                    
                                    # Factor applied to every primary mineral's moles (the rock minus its organics).
                                    mineral_scale_factor = function() {
@@ -934,11 +1196,14 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # the PHREEQC version these inputs are written for, and the database
                                    # they need. run_phreeqc() (phreeqc_tools.R) reads the version line back
                                    # and warns if the executable reports a different one.
-                                   stamp_pqi_header = function(content, database) {
+                                   # With pressures = list(pore =, ocean =) (atm), also the two pressure lines
+                                   # that a restart checks against (check_restart_pressures()).
+                                   stamp_pqi_header = function(content, database, pressures = NULL) {
                                      lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
                                      dropped <- attr(content, "dropped")
                                      stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
                                                 sprintf("# Database: %s", database),
+                                                if (!is.null(pressures)) pressure_header_lines(pressures$pore, pressures$ocean),
                                                 if (length(dropped)) sprintf("# Not defined in %s, so removed from this input: %s",
                                                                              basename(database), paste(dropped, collapse = " ")))
                                      at <- if (length(lines) && startsWith(lines[1], "TITLE")) 1 else 0
@@ -1170,12 +1435,40 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      unname(phase_names[names(stability)][overall_stable])
                                    },
 
+                                   # Writes the main ENTICES input: porewater reacting with the kinetic rock (silicates, troilite, schreibersite,
+                                   # IOM channels) and equilibrium phases, exchanging fluid with the ocean every step (REACT, MIX 4 ocean +
+                                   # seafloor phases, MIX 1, MIX 2). Porewater and ocean each have a fixed-pressure gas phase; pressures come
+                                   # from profile_file. Inputs only; run them with run_phreeqc().
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param mode "ocean_circulations" (default: auto grouping, n_circulations), "ungrouped" (1 orbit per step, n_orbital_cycles) or "grouped" (grouping_factor orbits per step; exchange compounds as 1 - (1 - x_tide)^G).
+                                   # @param n_circulations Number of ocean circulations (mode "ocean_circulations").
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param grouping_factor Orbits per step (mode "grouped").
+                                   # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param substeps KINETICS substeps per step. Default 1.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param trace_C_molal Numerical C seed in every initial SOLUTION, mol/kgw. Default NULL; production 1e-14 (the smallest tested to converge at 25 C).
+                                   # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
+                                   # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_tidal_kinetic(mode = "ungrouped", n_orbital_cycles = 2, porewater_temp = 25, trace_C_molal = 1e-14)
                                    generate_phreeqc_input_tidal_kinetic = function(output_dir = "phreeqc_inputs", mode = "ocean_circulations",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
-                                                                     initial_ocean = "pure_water", charge_balance = NULL) {
+                                                                     initial_ocean = "pure_water", charge_balance = NULL,
+                                                                     pore_gas_fate = c("to_ocean", "retain"), logfile = FALSE) {
+                                     pore_gas_fate <- match.arg(pore_gas_fate)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -1248,15 +1541,16 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # Generate input file content
                                      content <- self$create_phreeqc_template_tidal_kinetic(filename, n, mode, grouping_factor = gf, exchange_ratio = exchange_ratio, porewater_temp = porewater_temp, substeps = substeps, CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
-                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean, charge_balance = charge_balance)
+                                                                                trace_C_molal = trace_C_molal, initial_ocean = initial_ocean, charge_balance = charge_balance,
+                                                                                pore_gas_fate = pore_gas_fate)
 
                                      # Write to file
-                                     writeLines(content, filename)
+                                     writeLines(knobs_logfile(content, logfile), filename)
 
                                      return(filename)
                                    },
                                    
-                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL) {
+                                   create_phreeqc_template_tidal_kinetic = function(filename, n, mode = "ocean_circulations", grouping_factor = NULL, exchange_ratio = NULL, porewater_temp = "ocean", substeps = 1, CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL, initial_ocean = "pure_water", charge_balance = NULL, pore_gas_fate = "to_ocean") {
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics <- self$simulator$get_summary_metrics()
@@ -1343,27 +1637,13 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # Get base filename without extension for output
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
-                                     # Temperatures and pressures for SOLUTION blocks
-                                     ocean_temp_C <- 274.6 - 273.15  # ~1.45 °C (ocean-rock interface)
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C          <- mean_layer_temp_C(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       )
-                                       pore_pressure_atm    <- mean_layer_pressure_MPa(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       ) / 0.101325
-                                       ocean_pressure_atm   <- ocean_floor_pressure_MPa(
-                                         self$profile_file
-                                       ) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Temperatures and pressures for SOLUTION blocks. The ocean temperature is fixed.
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) {
@@ -1378,10 +1658,27 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
+                                     # Gas phases (see gas_components()): the porewater one, the ocean one, the
+                                     # punch columns, and the empty porewater phase to_ocean starts each orbit with.
+                                     cometary <- inherits(initial_ocean, "cometary_ice")
+                                     # Tested 2026-10-28: a cometary ocean with a carbon-free porewater (no seed, no IOM)
+                                     # left the first porewater step running for > 20 min without converging; with
+                                     # trace_C_molal = 1e-14 it completes.
+                                     if (cometary && is.null(trace_C_molal) && self$organic_wt_percent == 0)
+                                       warning("cometary_ice_ocean() with a carbon-free porewater: give trace_C_molal = 1e-14 (without it the first porewater step did not converge in tests)")
+                                     gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
+                                                                       "Porewater gas (fixed pressure, starts empty)")
+                                     ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
+                                                                        "Ocean gas (fixed pressure, starts empty, never removed)")
+                                     # A cometary-ice ocean: the ices react into the pure-water ocean in a simulation of their
+                                     # own, before any reactant is defined (cometary_ocean_simulation()), which also defines
+                                     # and saves GAS_PHASE 2; otherwise GAS_PHASE 2 is defined empty with the others.
+                                     cometary_block <- if (cometary) paste0(cometary_ocean_simulation(initial_ocean, ch4_mode, ocean_mass_norm,
+                                                                            ocean_gas_block, base_name, ch4_mode$database), "\n") else ""
+                                     ocean_main_block <- if (cometary) "# GAS_PHASE 2 (ocean): defined, and saved with the cometary ices, above" else ocean_gas_block
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -1498,10 +1795,12 @@ TITLE Enceladus hydrothermal simulation
 {trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean, charge_balance)}
 {ch4_db_note_line}
+# pore_gas_fate: {pore_gas_fate}
+# Gas phases (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Organic content: {self$organic_wt_percent} wt.%
@@ -1522,18 +1821,21 @@ KNOBS
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 Enceladus porewater
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}{trace_C_line}
+    pressure  {round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
-    temp      {round(ocean_temp_C, 2)}
+    temp      25
     pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
@@ -1548,6 +1850,20 @@ REACTION_TEMPERATURE 1
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
 
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
+
+{cometary_block}{pore_gas_block}
+
+{ocean_main_block}
+{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+
 # Define rate equations for each mineral
 RATES
 Forsterite
@@ -1555,7 +1871,7 @@ Forsterite
 	1   REM Ref PK04
 	10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
 	20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1
+	21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
 	22  mw = 140.6715
 	40  k = (kacid + kneut) * SSA * mw * M
 	50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))
@@ -1569,7 +1885,7 @@ Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters 
   2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
   3   REM Rate depends on H+ and Fe3+ activities
   25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-  26  SSA = 5
+  26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   27  mw = 87.913
   30  k = kacid * SSA * mw * M
   40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
@@ -1583,7 +1899,7 @@ Diopside
   1   REM Ref PK04
   10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
   20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 216.55
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
@@ -1597,7 +1913,7 @@ K-Feldspar
   10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
   20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-  31  SSA = 5
+  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   32  mw = 278.33
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
@@ -1620,10 +1936,12 @@ Tephroite
   11  REM value -- checked here, not assumed). For tephroite: -5.4 + 0.47*2 =
   12  REM -4.46. Hand-checked: 10^(-4.46)*ACT(H+)^0.47 at pH2 = 10^(-5.4), exact.
   13  REM
-  14  REM Ea: Casey find Ea that decreases with increasing pH, "Ea < 4" at pH 6.2. 
-  15  REM We used the pH, Ea pairs from Casey\'s Fig 4, assuming Ea = 0 at pH 6.2. 
-  16  REM A logarithmic fit to these 5 data points is used to calculate Ea, and we 
-  17  REM require Ea >= 0 (so generally Ea=0 for pH>~6).  
+  14  REM Ea: Casey et al. (1993) Fig. 4 gives Eexp = 54, 26, 22 and 4 kJ/mol at
+  15  REM pH 2.5, 3.5, 4.2 and 5.15, and < 4 at pH 6.2 (a slope not distinct from 0).
+  16  REM Taking 0 at pH 6.2, a least-squares fit Ea = a ln(pH) + b to these 5 points
+  17  REM gives a = -60.11, b = 106.17 (not the appendix rate table: see PROGRESS).
+  18  REM The fit is not forced through (6.2, 0): it reaches 0 at pH 5.85 and is
+  19  REM -3.5 at pH 6.2. Ea >= 0 is imposed, so Ea = 0 for pH > 5.85.
   22  REM
   23  REM ANOXIC CONDITIONS ONLY. Casey\'s experiments were run rigorously
   24  REM O2-free (N2-degassed, Fe-filing/hot-Cu scrubbed, <6e-6 mol/L O2);
@@ -1643,7 +1961,7 @@ Tephroite
   37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17
   38  IF Ea < 0 THEN Ea = 0
   40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
-  46  SSA = 0.1
+  46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   47  mw = 201.96
   50  k = kacid * SSA * mw * M
   60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
@@ -1658,7 +1976,7 @@ Enstatite
   1   REM Ref PK04
   10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
   20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 100.3725
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
@@ -1671,7 +1989,7 @@ Anorthite # Ca-endmember of plagioclase
   1   REM Ref PK04
   10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
   20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 5
+  21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   22  mw = 278.164
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
@@ -1688,7 +2006,7 @@ Albite # Na-endmember of plagioclase
   10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
   20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-  31  SSA = 5
+  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
   32  mw = 262.1798
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
@@ -1733,7 +2051,8 @@ KINETICS 1
 
     
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---
+# --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
+#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Fe                   0  {fe_moles}          dissolve_only
    Ni                   0  {ni_moles}          dissolve_only
    Lawrencite           0  {lawrencite_moles}  dissolve_only
@@ -1754,12 +2073,8 @@ EQUILIBRIUM_PHASES 1
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
 #   Celadonite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -1770,8 +2085,6 @@ EQUILIBRIUM_PHASES 1
 #   Clinoptilolite-K 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -1789,9 +2102,7 @@ EQUILIBRIUM_PHASES 1
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
 #   H2O(g) 0 0
-   H2S(g) 0 0
 #   Halite 0 0
 #   Hausmannite 0 0
    Hematite 0 0
@@ -1825,14 +2136,12 @@ EQUILIBRIUM_PHASES 1
 #   Montmor-K 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
 #   Natron 0 0
 #   Nesquehonite 0 0
-   NH3(g) 0 0
 #   NH4Cl 0 0
 #   NH4HCO3 0 0
 #   Niter 0 0
@@ -1862,7 +2171,6 @@ EQUILIBRIUM_PHASES 1
    SiO2(am) 0 0
 #   Smectite-high-Fe-Mg 0 0
 #   Smectite-low-Fe-Mg 0 0
-   SO2(g) 0 0
 #   Stilbite 0 0
 #   Strengite 0 0
 #   Sylvite 0 0
@@ -1891,12 +2199,8 @@ EQUILIBRIUM_PHASES 2
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
 #   Celadonite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -1907,8 +2211,6 @@ EQUILIBRIUM_PHASES 2
 #   Clinoptilolite-K 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -1926,9 +2228,7 @@ EQUILIBRIUM_PHASES 2
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
 #   H2O(g) 0 0
-   H2S(g) 0 0
 #   Halite 0 0
 #   Hausmannite 0 0
    Hematite 0 0
@@ -1962,14 +2262,12 @@ EQUILIBRIUM_PHASES 2
 #   Montmor-K 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
 #   Natron 0 0
 #   Nesquehonite 0 0
-   NH3(g) 0 0
 #   NH4Cl 0 0
 #   NH4HCO3 0 0
 #   Niter 0 0
@@ -1999,7 +2297,6 @@ EQUILIBRIUM_PHASES 2
    SiO2(am) 0 0
 #   Smectite-high-Fe-Mg 0 0
 #   Smectite-low-Fe-Mg 0 0
-   SO2(g) 0 0
 #   Stilbite 0 0
 #   Strengite 0 0
 #   Sylvite 0 0
@@ -2011,6 +2308,7 @@ EQUILIBRIUM_PHASES 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state True
     -solution True
@@ -2020,9 +2318,7 @@ SELECTED_OUTPUT
     -alkalinity           true
     -ionic_strength       true
     -water                true
-    -totals              Al C Ca Fe H #K 
-                         Mg #Mn 
-                         N Na O P S Si{mtg_totals} #Cl
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2 
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2 #K+ 
                          Mg+2 #Mn+2 Mn+3 
@@ -2040,23 +2336,29 @@ SELECTED_OUTPUT
     -equilibrium_phases  Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
-                         C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
+                         Calcite Chalcedony Chamosite Chrysotile
                          Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
-                         Clinozoisite CO(g) CO2(g) Cronstedtite-7A
+                         Clinozoisite Cronstedtite-7A
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
-                         H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
+                         Hematite Huntite Hydromagnesite Kaolinite
                          Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Natrolite Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
-                         Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         Sepiolite SiO2(am) Thenardite Tobermorite-11A
                          {extra_eq_so_line}
-   -gases                CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g) 
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)  
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
     
 # USER_PUNCH is defined per-cycle below (with exact cumulative time embedded)
@@ -2104,16 +2406,21 @@ SELECTED_OUTPUT
                                        paste0(
                                          sprintf("\n# --- Cycle %d of %d (cumulative time: %.4e years) ---\n", i, kinetic_cycles, cumulative_time),
                                          # Simulation 1: react porewater
+                                         # to_ocean: the porewater gas phase is redefined empty at the start of each orbit
+                                         if (pore_gas_fate == "to_ocean" && i > 1) paste0(pore_gas_block, "\n") else "",
                                          "USE solution 1\n",
                                          "USE kinetics 1\n",
                                          "USE equilibrium_phases 1\n",
+                                         "USE gas_phase 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
+                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings, FE_METAL_PUNCH_HEADINGS, "\n",
+                                         iom_punch_headings, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          "   20 PUNCH KIN(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH KIN(\"Forsterite\") * 140.6715\n",
@@ -2127,19 +2434,22 @@ SELECTED_OUTPUT
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
                                          iom_punch_lines,
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
-                                         "USE kinetics none\n",
+                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
+                                         "USE gas_phase 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                          sprintf("  1  %.6e\n", x_step),
+                                          sprintf("  1  %.15e\n", x_step),
                                           "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
+                                         "SAVE gas_phase 2\n",
                                          "END\n\n",
                                          # Simulation 3: resample porewater — replace flowing fluid with combined ocean water
                                          # (f_pore-f_x)/f_pore of reacted porewater + f_x/(f_ocean+f_x) of combined ocean
@@ -2148,9 +2458,10 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                          sprintf("  1  %.6e\n", 1 - x_step),
-                                          sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
+                                          sprintf("  1  %.15e\n", 1 - x_step),
+                                          sprintf("  4  %.15e\n", f_x / (f_ocean + f_x)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          # Simulation 4: update ocean from combined ocean, fractional mass = f_ocean
@@ -2158,7 +2469,7 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                          sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_x)),
+                                          sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
                                          # Early-exit: delay STOP by one full tidal cycle after Fayalite depletion.
@@ -2181,7 +2492,7 @@ SELECTED_OUTPUT
                                      }), collapse = "\n")
 
                                      return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                  ch4_mode$database))
+                                                                  ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm)))
                                    },
 
                                    # ---------------------------------------------------------------
@@ -2191,6 +2502,25 @@ SELECTED_OUTPUT
                                    # An inorganic limiting case: no IOM and no Schreibersite (see
                                    # EQUIL_INORGANIC_NOTE, written into the .pqi header).
                                    # ---------------------------------------------------------------
+                                   # As tidal_kinetic, with every primary mineral as a dissolve_only equilibrium phase: an inorganic limiting
+                                   # case (no IOM, no schreibersite).
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param initial_ocean "pure_water" (default, for attribution), a named list of element totals (mol/kgw), or cometary_ice_ocean() (Miller et al. 2026 Table 5).
+                                   # @param charge_balance NULL (default), "pH", or an initial_ocean element to charge-balance the ocean SOLUTION 2 on. Not used with cometary_ice_ocean().
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
+                                   # @param trace_C_molal Numerical C seed in both initial SOLUTIONs, mol/kgw. Default NULL; give 1e-14 with a cometary ocean.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_tidal_equil(n_orbital_cycles = 2, porewater_temp = 100)
                                    generate_phreeqc_input_tidal_equil = function(output_dir = "phreeqc_inputs",
                                                                            n_orbital_cycles = NULL,
                                                                            mode = NULL,
@@ -2200,7 +2530,10 @@ SELECTED_OUTPUT
                                                                            porewater_temp = "ocean",
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
-                                                                           initial_ocean = "pure_water", charge_balance = NULL) {
+                                                                           initial_ocean = "pure_water", charge_balance = NULL,
+                                                                           pore_gas_fate = c("to_ocean", "retain"), trace_C_molal = NULL,
+                                                                           logfile = FALSE) {
+                                     pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -2213,16 +2546,19 @@ SELECTED_OUTPUT
                                      ))
                                      content <- self$create_phreeqc_template_tidal_equil(filename, n_orbital_cycles, porewater_temp = porewater_temp,
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
-                                                                                         initial_ocean = initial_ocean, charge_balance = charge_balance)
-                                     writeLines(content, filename)
+                                                                                         initial_ocean = initial_ocean, charge_balance = charge_balance,
+                                                                                         pore_gas_fate = pore_gas_fate, trace_C_molal = trace_C_molal)
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
                                    create_phreeqc_template_tidal_equil = function(filename, n_orbital_cycles, porewater_temp = "ocean",
                                                                                   CH4_redox_override = NULL,
                                                                                   carbon_mode = NULL, ch4_cutoff_C = 150,
-                                                                                  initial_ocean = "pure_water", charge_balance = NULL) {
-                                     ocean_lines <- initial_ocean_solution_lines(initial_ocean, charge_balance = charge_balance)
+                                                                                  initial_ocean = "pure_water", charge_balance = NULL,
+                                                                                  pore_gas_fate = "to_ocean", trace_C_molal = NULL) {
+                                     trace_C_line <- trace_C_solution_line(trace_C_molal)
+                                     ocean_lines  <- paste0(trace_C_line, initial_ocean_solution_lines(initial_ocean, trace_C_molal, charge_balance))
                                      metrics         <- self$simulator$get_summary_metrics()
                                      orbital_period  <- self$simulator$config$orbital_period
                                      time_step_years <- orbital_period / (365.25 * 24 * 3600)
@@ -2244,26 +2580,12 @@ SELECTED_OUTPUT
                                      base_name <- tools::file_path_sans_ext(basename(filename))
 
                                      # Temperatures and pressures
-                                     ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       )
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(
-                                         self$profile_file,
-                                         self$simulator$params$layer_thickness
-                                       ) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(
-                                         self$profile_file
-                                       ) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp as in create_phreeqc_template_tidal_kinetic()
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) {
@@ -2279,6 +2601,25 @@ SELECTED_OUTPUT
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      ch4_override_note <- ch4_mode$note
+                                     # Gas phases (see gas_components()): the porewater one, the ocean one, the
+                                     # punch columns, and the empty porewater phase to_ocean starts each orbit with.
+                                     cometary <- inherits(initial_ocean, "cometary_ice")
+                                     # A cometary ocean with a carbon-free porewater failed ("Cl has not converged",
+                                     # 2026-10-28, every temperature); with trace_C_molal = 1e-14 it runs.
+                                     if (cometary && is.null(trace_C_molal))
+                                       warning("cometary_ice_ocean() in tidal_equil: give trace_C_molal = 1e-14 (without it the run failed to converge in tests)")
+                                     gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
+                                                                       "Porewater gas (fixed pressure, starts empty)")
+                                     ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
+                                                                        "Ocean gas (fixed pressure, starts empty, never removed)")
+                                     # A cometary-ice ocean: the ices react into the pure-water ocean in a simulation of their
+                                     # own, before any reactant is defined (cometary_ocean_simulation()), which also defines
+                                     # and saves GAS_PHASE 2; otherwise GAS_PHASE 2 is defined empty with the others.
+                                     cometary_block <- if (cometary) paste0(cometary_ocean_simulation(initial_ocean, ch4_mode, ocean_mass_norm,
+                                                                            ocean_gas_block, base_name, ch4_mode$database), "\n") else ""
+                                     ocean_main_block <- if (cometary) "# GAS_PHASE 2 (ocean): defined, and saved with the cometary ices, above" else ocean_gas_block
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -2335,12 +2676,15 @@ SELECTED_OUTPUT
                                      template <- glue::glue('
 TITLE Enceladus hydrothermal simulation — equilibrium porewater
 {ch4_db_note_line}
+# pore_gas_fate: {pore_gas_fate}
+# Gas phases (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 {initial_ocean_header_line(initial_ocean, charge_balance)}
+{trace_C_header_line(trace_C_molal)}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: equilibrium (primary minerals in EQUILIBRIUM_PHASES, no kinetics)
@@ -2359,18 +2703,21 @@ KNOBS
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 Enceladus porewater
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
     units     mol/kgw
     density   1
     water     {porewater_mass_norm}
-    pressure  {round(ocean_pressure_atm, 1)}#{round(pore_pressure_atm, 1)}
+    pressure  {round(pore_pressure_atm, 1)}{trace_C_line}
 
 SOLUTION 2 Enceladus ocean
-    temp      {round(ocean_temp_C, 2)}
+    temp      25
     pH        7{ocean_pH_charge(charge_balance)}
     pe        4
     redox     pe
@@ -2385,8 +2732,22 @@ REACTION_TEMPERATURE 1
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
 
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
+
+{cometary_block}{pore_gas_block}
+
+{ocean_main_block}
+{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium each cycle) ---
+# --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -2416,12 +2777,8 @@ EQUILIBRIUM_PHASES 1
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
 #   Celadonite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -2432,8 +2789,6 @@ EQUILIBRIUM_PHASES 1
 #   Clinoptilolite-K 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -2451,9 +2806,7 @@ EQUILIBRIUM_PHASES 1
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
 #   H2O(g) 0 0
-   H2S(g) 0 0
 #   Halite 0 0
 #   Hausmannite 0 0
    Hematite 0 0
@@ -2487,14 +2840,12 @@ EQUILIBRIUM_PHASES 1
 #   Montmor-K 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
 #   Natron 0 0
 #   Nesquehonite 0 0
-   NH3(g) 0 0
 #   NH4Cl 0 0
 #   NH4HCO3 0 0
 #   Niter 0 0
@@ -2524,7 +2875,6 @@ EQUILIBRIUM_PHASES 1
    SiO2(am) 0 0
 #   Smectite-high-Fe-Mg 0 0
 #   Smectite-low-Fe-Mg 0 0
-   SO2(g) 0 0
 #   Stilbite 0 0
 #   Strengite 0 0
 #   Sylvite 0 0
@@ -2551,12 +2901,8 @@ EQUILIBRIUM_PHASES 2
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
 #   Celadonite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -2567,8 +2913,6 @@ EQUILIBRIUM_PHASES 2
 #   Clinoptilolite-K 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -2586,9 +2930,7 @@ EQUILIBRIUM_PHASES 2
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
 #   H2O(g) 0 0
-   H2S(g) 0 0
 #   Halite 0 0
 #   Hausmannite 0 0
    Hematite 0 0
@@ -2622,14 +2964,12 @@ EQUILIBRIUM_PHASES 2
 #   Montmor-K 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
 #   Na2CO3 0 0
 #   Na2CO3:7H2O 0 0
 #   Nahcolite 0 0
 #   Natron 0 0
 #   Nesquehonite 0 0
-   NH3(g) 0 0
 #   NH4Cl 0 0
 #   NH4HCO3 0 0
 #   Niter 0 0
@@ -2659,7 +2999,6 @@ EQUILIBRIUM_PHASES 2
    SiO2(am) 0 0
 #   Smectite-high-Fe-Mg 0 0
 #   Smectite-low-Fe-Mg 0 0
-   SO2(g) 0 0
 #   Stilbite 0 0
 #   Strengite 0 0
 #   Sylvite 0 0
@@ -2671,6 +3010,7 @@ EQUILIBRIUM_PHASES 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state True
     -solution True
@@ -2680,7 +3020,7 @@ SELECTED_OUTPUT
     -alkalinity           true
     -ionic_strength       true
     -water                true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -2695,24 +3035,30 @@ SELECTED_OUTPUT
                          Ni Lawrencite Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
-                         C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
+                         Calcite Chalcedony Chamosite Chrysotile
                          Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
-                         Clinozoisite CO(g) CO2(g) Cronstedtite-7A
+                         Clinozoisite Cronstedtite-7A
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
-                         H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
+                         Hematite Huntite Hydromagnesite Kaolinite
                          Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Natrolite Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
-                         Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         Sepiolite SiO2(am) Thenardite Tobermorite-11A
                          {extra_eq_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Fe Ni Lawrencite
-    -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
 # USER_PUNCH is defined per-cycle below (with exact cumulative time embedded)
     ')
@@ -2722,15 +3068,20 @@ SELECTED_OUTPUT
                                        paste0(
                                          sprintf("\n# --- Cycle %d of %d (cumulative time: %.4e years) ---\n", i, kinetic_cycles, cumulative_time),
                                          # Simulation 1: equilibrate porewater with EQ phases (primary + secondary)
+                                         # to_ocean: the porewater gas phase is redefined empty at the start of each orbit
+                                         if (pore_gas_fate == "to_ocean" && i > 1) paste0(pore_gas_block, "\n") else "",
                                          "USE solution 1\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases 1\n",
+                                         "USE gas_phase 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
+                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
-                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", FE_METAL_PUNCH_HEADINGS, "\n",
+                                         "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", SHARED_PUNCH_HEADINGS, gp$headings, "\n",
                                          sprintf("   10 PUNCH %.6f\n", cumulative_time),
                                          "   20 PUNCH EQUI(\"Enstatite\") * 100.3725\n",
                                          "   30 PUNCH EQUI(\"Forsterite\") * 140.6715\n",
@@ -2742,28 +3093,32 @@ SELECTED_OUTPUT
                                          "   85 PUNCH EQUI(\"Tephroite\") * 201.96\n",
                                          sprintf("   100 total_initial = %s\n", total_initial_expr),
                                          "   110 PUNCH total_initial\n",
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
-                                         "USE kinetics none\n",
+                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
+                                         "USE gas_phase 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                         sprintf("  1  %.6e\n", f_fluid / f_pore),
+                                         sprintf("  1  %.15e\n", f_fluid / f_pore),
                                          "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
+                                         "SAVE gas_phase 2\n",
                                          "END\n\n",
                                          # Simulation 3: resample porewater
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                         sprintf("  1  %.6e\n", (f_pore - f_fluid) / f_pore),
-                                         sprintf("  4  %.6e\n", f_fluid / (f_ocean + f_fluid)),
+                                         sprintf("  1  %.15e\n", (f_pore - f_fluid) / f_pore),
+                                         sprintf("  4  %.15e\n", f_fluid / (f_ocean + f_fluid)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          # Simulation 4: update ocean
@@ -2771,14 +3126,14 @@ SELECTED_OUTPUT
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                         sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_fluid)),
+                                         sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_fluid)),
                                          "SAVE solution 2\n",
                                          "END\n"
                                        )
                                      }), collapse = "\n")
 
                                      return(self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                  ch4_mode$database))
+                                                                  ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm)))
                                    },
 
                                    # Single-step bulk equilibrium: entire hydrosphere (ocean + porewater)
@@ -2786,12 +3141,29 @@ SELECTED_OUTPUT
                                    # No permeability or fluid-flow parameters are used.
                                    # An inorganic limiting case: no IOM and no Schreibersite (see
                                    # EQUIL_INORGANIC_NOTE, written into the .pqi header).
+                                   # Single-step equilibrium of one solution with the whole rock (inorganic limiting case: no IOM, no
+                                   # schreibersite), with one fixed-pressure gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param water_rock_ratio kg water per kg rock (mode "porewater"; required there).
+                                   # @param water_temp As porewater_temp, for the single solution.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_bulk_equil(mode = "porewater", water_rock_ratio = 1, water_temp = 100)
                                    generate_phreeqc_input_bulk_equil = function(output_dir = "phreeqc_inputs",
                                                                                  mode             = c("hydrosphere", "porewater"),
                                                                                  water_rock_ratio = NULL,
                                                                                  water_temp       = "ocean",
                                                                                  suffix = "",
-                                                                                 CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150) {
+                                                                                 CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150,
+                                                                                 logfile = FALSE) {
                                      mode <- match.arg(mode)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -2823,18 +3195,12 @@ SELECTED_OUTPUT
 
                                      # Temperature and pressure (ocean floor, or profile-averaged over the
                                      # layer if water_temp = "profile")
-                                     ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve water_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -2852,6 +3218,8 @@ SELECTED_OUTPUT
                                      # resolve_ch4_mode(); water_temp_C plays the role of porewater T.
                                      ch4_mode <- self$resolve_ch4_mode(water_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      ch4_override_note <- ch4_mode$note
+                                     # The gas phase (see gas_components()).
+                                     gas_comps <- gas_components(ch4_mode)
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; water T = %.1f C%s)",
                                        ch4_mode$database,
@@ -2931,16 +3299,20 @@ SELECTED_OUTPUT
                                      content <- glue::glue('
 TITLE {.pqi_title}
 {ch4_db_note_line}
+# Gas phase (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
 {clathrate_note_lines}
 {EQUIL_INORGANIC_NOTE}{self$mineral_basis_header_line()}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.header_lines}
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 {.soln_label}
-    temp      {round(water_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
@@ -2949,8 +3321,13 @@ SOLUTION 1 {.soln_label}
     water     {.water_mass}
     pressure  {round(.solution_pressure_atm, 1)}
 
+REACTION_TEMPERATURE 1
+    {round(water_temp_C, 2)}
+
+{gas_phase_block(1, gas_comps, .solution_pressure_atm, water_temp_C, "Gas (fixed pressure, starts empty)")}
+
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium) ---
+# --- Primary minerals (dissolve to equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -2973,11 +3350,7 @@ EQUILIBRIUM_PHASES 1
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -2987,8 +3360,6 @@ EQUILIBRIUM_PHASES 1
    Clinoptilolite-Ca 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -3006,8 +3377,6 @@ EQUILIBRIUM_PHASES 1
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
-   H2S(g) 0 0
    Hematite 0 0
    Huntite 0 0
    Hydromagnesite 0 0
@@ -3022,9 +3391,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Ca 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
-   NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
    Nontronite-Na 0 0
@@ -3040,7 +3407,6 @@ EQUILIBRIUM_PHASES 1
    Saponite-Mg-Na 0 0
    Sepiolite 0 0
    SiO2(am) 0 0
-   SO2(g) 0 0
    Thenardite 0 0
    Tobermorite-11A 0 0
 {extra_gated_lines}
@@ -3048,6 +3414,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -3056,7 +3423,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -3070,25 +3437,31 @@ SELECTED_OUTPUT
     -equilibrium_phases  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite
                          Ni Lawrencite
                          Analcime Anhydrite Aragonite Bassanite Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
-                         Boehmite Brucite C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
+                         Boehmite Brucite Calcite Chalcedony Chamosite Chrysotile
                          Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
-                         Clinozoisite CO(g) CO2(g) Cronstedtite-7A
+                         Clinozoisite Cronstedtite-7A
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4 Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
-                         H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite Lizardite Magnetite
+                         Hematite Huntite Hydromagnesite Kaolinite Lizardite Magnetite
                          Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
-                         Montmor-Ca Montmor-Mg Montmor-Na N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Montmor-Ca Montmor-Mg Montmor-Na Natrolite Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
-                         Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         Sepiolite SiO2(am) Thenardite Tobermorite-11A
                          {extra_gated_so_line}
     -saturation_indices  Enstatite Forsterite Troilite Albite Diopside Anorthite K-Feldspar Tephroite Fe Ni Lawrencite
-    -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g{SHARED_PUNCH_HEADINGS}{gas_punch(gas_comps, .water_mass)$headings}
    10 PUNCH 0.0
    20 PUNCH EQUI("Enstatite") * 100.3725
    30 PUNCH EQUI("Forsterite") * 140.6715
@@ -3100,15 +3473,36 @@ USER_PUNCH
    85 PUNCH EQUI("Tephroite") * 201.96
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}{gas_punch(gas_comps, .water_mass)$lines}
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
-                                     writeLines(content, filename)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
+                                   # One solution reacting kinetically with the rock (as tidal_kinetic, no ocean) for n_orbital_cycles orbits,
+                                   # with one fixed-pressure gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param water_rock_ratio kg water per kg rock (mode "porewater"; required there).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param rec_eqb_minerals Promote primaries whose half-life (x rec_eqb_margin) is under one orbit to equilibrium. Default FALSE (a modelling choice; not needed for convergence).
+                                   # @param rec_eqb_margin Safety margin for rec_eqb_minerals. Default 2.
+                                   # @param trace_C_molal Numerical C seed in every initial SOLUTION, mol/kgw. Default NULL; production 1e-14 (the smallest tested to converge at 25 C).
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
+                                   #   ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters(organic_wt_percent = 15)
+                                   #   f <- ph$generate_phreeqc_input_bulk_kinetic(n_orbital_cycles = 2, mode = "porewater", water_rock_ratio = 1, porewater_temp = 100)
                                    generate_phreeqc_input_bulk_kinetic = function(
                                      output_dir          = "phreeqc_inputs",
                                      n_orbital_cycles    = NULL,
@@ -3121,7 +3515,8 @@ END
                                      ch4_cutoff_C        = 150,
                                      rec_eqb_minerals    = FALSE,
                                      rec_eqb_margin      = 2,
-                                     trace_C_molal       = NULL
+                                     trace_C_molal       = NULL,
+                                     logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
@@ -3147,19 +3542,13 @@ END
                                        ))
                                      }
 
-                                     # Temperature and pressure (ocean floor)
-                                     ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' — falling back to defaults.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Temperature and pressure
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -3168,10 +3557,9 @@ END
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
                                      ch4_override_note <- ch4_mode$note
+                                     # The gas phase (see gas_components()).
+                                     gas_comps <- gas_components(ch4_mode)
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -3179,18 +3567,19 @@ END
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Clathrate stability at porewater conditions — see resolve_clathrate_stability().
-                                     # Single combined solution here uses ocean_pressure_atm as its reaction
-                                     # pressure (pore_pressure_atm is computed above but not otherwise used
-                                     # in this function), so the stability check matches that.
-                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, ocean_pressure_atm)
+                                     # Reaction pressure of the single solution, as in bulk_equil: porewater mode
+                                     # reacts porewater only, so it uses the layer-mean porewater pressure;
+                                     # hydrosphere mode (ocean + porewater combined) keeps the ocean-floor value.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     # Clathrate stability at that temperature and pressure — see resolve_clathrate_stability().
+                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, .solution_pressure_atm)
 
                                      # Temperature-gated secondary minerals (single solution, so a single
                                      # temperature — porewater_temp_C — gates the whole block). Stable
-                                     # clathrate phases (checked against ocean_pressure_atm, matching this
-                                     # function's own reaction pressure) are appended the same way.
+                                     # clathrate phases (checked against .solution_pressure_atm) are
+                                     # appended the same way.
                                      extra_ocean_minerals <- c(self$temp_gated_minerals(porewater_temp_C),
-                                                               self$stable_clathrate_phases(porewater_temp_C, ocean_pressure_atm, ch4_mode))
+                                                               self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
                                        paste0("   ", extra_ocean_minerals, " 0 0", collapse = "\n") else ""
                                      extra_eq_so_line <- paste(extra_ocean_minerals, collapse = " ")
@@ -3284,7 +3673,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -3295,7 +3684,7 @@ END
                                          '\t-start',
                                          '\t1   REM Acid mechanism only (PK04, hexagonal pyrrhotite formulation)',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -3308,7 +3697,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -3321,7 +3710,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -3339,7 +3728,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -3351,7 +3740,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -3363,7 +3752,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -3376,7 +3765,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -3398,7 +3787,8 @@ END
 
                                      # ---- EQUILIBRIUM_PHASES primary lines: Fe/Ni/Lawrencite (always) + equil_primary (promoted) ----
                                      equil_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete) ---",
+                                       c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
+#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          sprintf("   Fe                   0  %.6e          dissolve_only", fe_moles),
                                          sprintf("   Ni                   0  %.6e          dissolve_only", ni_moles),
                                          sprintf("   Lawrencite           0  %.6e          dissolve_only", lawrencite_moles),
@@ -3522,23 +3912,32 @@ END
 TITLE {.pqi_title}
 {trace_C_header_line(trace_C_molal)}{self$mineral_basis_header_line()}
 {ch4_db_note_line}
+# Gas phase (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.header_lines}
 {rec_eqb_note}
 
+# Initial fluids are defined at 25 C, where pe 4 adds no oxidant or reductant (O(0) and H(0)
+# negligible), and are brought to the run temperature by REACTION_TEMPERATURE. Defined at the
+# run temperature, pe 4 adds O2: 4.9 molal O(0) at 250 C, and does not converge at 300 C.
 SOLUTION 1 {.soln_label}
-    temp      {round(porewater_temp_C, 2)}
+    temp      25
     pH        7
     pe        4
     redox     pe
     units     mol/kgw
     density   1
     water     {.water_mass}
-    pressure  {round(ocean_pressure_atm, 1)}{trace_C_line}
+    pressure  {round(.solution_pressure_atm, 1)}{trace_C_line}
+
+REACTION_TEMPERATURE 1
+    {round(porewater_temp_C, 2)}
+
+{gas_phase_block(1, gas_comps, .solution_pressure_atm, porewater_temp_C, "Gas (fixed pressure, starts empty)")}
 
 INCREMENTAL_REACTIONS true
 
@@ -3570,11 +3969,7 @@ EQUILIBRIUM_PHASES 1
    Beidellite-Na 0 0
    Boehmite 0 0
    Brucite 0 0
-   C2H4(g) 0 0
-   C2H6(g) 0 0
-   C3H8(g) 0 0
    Calcite 0 0
-   CH4(g) 0 0
    Chalcedony 0 0
    Chamosite 0 0
    Chrysotile 0 0
@@ -3584,8 +3979,6 @@ EQUILIBRIUM_PHASES 1
    Clinoptilolite-Ca 0 0
    Clinoptilolite-Na 0 0
    Clinozoisite 0 0
-   CO(g) 0 0
-   CO2(g) 0 0
    Cronstedtite-7A 0 0
    Daphnite-14A 0 0
    Daphnite-7A 0 0
@@ -3603,8 +3996,6 @@ EQUILIBRIUM_PHASES 1
    Greenalite 0 0
    Gypsum 0 0
    Gyrolite 0 0
-   H2(g) 0 0
-   H2S(g) 0 0
    Hematite 0 0
    Huntite 0 0
    Hydromagnesite 0 0
@@ -3619,9 +4010,7 @@ EQUILIBRIUM_PHASES 1
    Montmor-Ca 0 0
    Montmor-Mg 0 0
    Montmor-Na 0 0
-   N2(g) 0 0
    Natrolite 0 0
-   NH3(g) 0 0
    Nontronite-Ca 0 0
    Nontronite-Mg 0 0
    Nontronite-Na 0 0
@@ -3637,7 +4026,6 @@ EQUILIBRIUM_PHASES 1
    Saponite-Mg-Na 0 0
    Sepiolite 0 0
    SiO2(am) 0 0
-   SO2(g) 0 0
    Thenardite 0 0
    Tobermorite-11A 0 0
 {extra_ocean_lines}
@@ -3645,6 +4033,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -3653,7 +4042,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -3669,41 +4058,66 @@ SELECTED_OUTPUT
     -equilibrium_phases  {equil_so_line} Analcime Anhydrite Aragonite Bassanite
                          Beidellite-Ca Beidellite-Fe Beidellite-Mg Beidellite-Na
                          Boehmite Brucite
-                         C2H4(g) C2H6(g) C3H8(g) Calcite CH4(g) Chalcedony Chamosite Chrysotile
+                         Calcite Chalcedony Chamosite Chrysotile
                          Citric_Acid Clinochlore-14A Clinochlore-7A Clinoptilolite-Ca Clinoptilolite-Na
-                         Clinozoisite CO(g) CO2(g) Cronstedtite-7A
+                         Clinozoisite Cronstedtite-7A
                          Daphnite-14A Daphnite-7A Dawsonite Diaspore Dolomite
                          Ettringite Fe(OH)2 Fe(OH)3 Fe2(SO4)3 FeSO4
                          Gibbsite Glycine Goethite Greenalite Gypsum Gyrolite
-                         H2(g) H2S(g) Hematite Huntite Hydromagnesite Kaolinite
+                         Hematite Huntite Hydromagnesite Kaolinite
                          Lizardite Magnetite Melanterite Mesolite MgSO4 Minnesotaite Mirabilite
                          Montmor-Ca Montmor-Mg Montmor-Na
-                         N2(g) Natrolite NH3(g) Nontronite-Ca Nontronite-Mg Nontronite-Na
+                         Natrolite Nontronite-Ca Nontronite-Mg Nontronite-Na
                          Portlandite Pyrite
                          Saponite-Fe-Ca Saponite-Fe-Fe Saponite-Fe-Mg Saponite-Fe-Na
                          Saponite-Mg-Ca Saponite-Mg-Fe Saponite-Mg-Mg Saponite-Mg-Na
-                         Sepiolite SiO2(am) SO2(g) Thenardite Tobermorite-11A
+                         Sepiolite SiO2(am) Thenardite Tobermorite-11A
                          {extra_eq_so_line}
-    -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings}{SHARED_PUNCH_HEADINGS}{gas_punch(gas_comps, .water_mass)$headings}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    95 PUNCH KIN("Schreibersite") * 198.509
    100 total_initial = {total_initial_expr}
    110 PUNCH total_initial
 {iom_punch_lines}
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}{gas_punch(gas_comps, .water_mass)$lines}
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
-                                     writeLines(content, filename)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
+                                   # Continues a bulk_kinetic run from the last row of its CSV: every element the parent punched (15 digits),
+                                   # its equilibrium phases, kinetic reactants, IOM channels and gas phase.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param prev_csv The parent run's CSV; its .pqi must be beside it (for the carbon-mode, pressure and fluid checks).
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param orbits_per_step Orbits per KINETICS step; must divide n_orbital_cycles. Default 1.
+                                   # @param equil_minerals Primaries to move from KINETICS to EQUILIBRIUM_PHASES (dissolve_only). Default none; Schreibersite cannot be one.
+                                   # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param allow_pressure_change TRUE lets a restart run at pressures other than its parent's (with a warning). Default FALSE (an error).
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   f <- ph$generate_phreeqc_input_bulk_kinetic_restart(prev_csv = "phreeqc_inputs/<parent>.csv", n_orbital_cycles = 2, porewater_temp = 100)
                                    generate_phreeqc_input_bulk_kinetic_restart = function(
                                      output_dir          = "phreeqc_inputs",
                                      prev_csv            = NULL,
@@ -3715,7 +4129,9 @@ END
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
-                                     ch4_cutoff_C        = 150
+                                     ch4_cutoff_C        = 150,
+                                     allow_pressure_change = FALSE,
+                                     logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -3755,9 +4171,11 @@ END
                                        ))
                                      }
 
-                                     elements  <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
-                                     # Mtg (decoupled methane) when the parent punched it.
-                                     if ("Mtg" %in% names(last_row)) elements <- c(elements, "Mtg")
+                                     # Every element the parent punched (restart_elements(); the three
+                                     # databases define the same elements, so the coupled one is used here,
+                                     # before this restart's carbon mode is resolved).
+                                     elements  <- restart_elements(file.path("databases", CARBON_MODE_DATABASES[["coupled"]]),
+                                                                   names(last_row), prev_csv)
                                      elem_vals <- sapply(elements, function(el) {
                                        val <- suppressWarnings(as.numeric(last_row[[el]]))
                                        if (!is.na(val) && val > 0) val else NA_real_
@@ -3765,24 +4183,18 @@ END
                                      elem_lines <- paste(
                                        Filter(Negate(is.null), lapply(seq_along(elements), function(i) {
                                          if (is.na(elem_vals[i])) return(NULL)
-                                         sprintf("    %-4s  %.6e", elements[i], elem_vals[i])
+                                         sprintf("    %-4s  %.15e", elements[i], elem_vals[i])
                                        })),
                                        collapse = "\n"
                                      )
 
-                                     # Temperature and pressure (ocean floor)
-                                     ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       if (!is.null(self$profile_file))
-                                         warning("Profile file not found: '", self$profile_file, "' - using default 70 atm.")
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     # Temperature and pressure
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
 
                                      # Resolve porewater_temp to a concrete value — this is the reaction
                                      # temperature for the single combined solution used here.
@@ -3792,10 +4204,11 @@ END
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled || "Mtg" %in% elements) " Mtg" else ""
+                                     parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
+                                                                                     allow_pressure_change)
                                      ch4_override_note <- ch4_mode$note
+                                     # The gas phase (see gas_components()).
+                                     gas_comps <- gas_components(ch4_mode)
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -3803,11 +4216,11 @@ END
                                        porewater_temp_C, ch4_override_note
                                      )
 
-                                     # Clathrate stability at porewater conditions — see resolve_clathrate_stability().
-                                     # Single combined solution here uses ocean_pressure_atm as its reaction
-                                     # pressure (pore_pressure_atm is computed above but not otherwise used
-                                     # in this function), so the stability check matches that.
-                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, ocean_pressure_atm)
+                                     # Reaction pressure of the single solution, as in bulk_kinetic: the layer-mean
+                                     # porewater pressure in porewater mode, the ocean-floor value in hydrosphere mode.
+                                     .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
+                                     # Clathrate stability at that temperature and pressure — see resolve_clathrate_stability().
+                                     clathrate_note_lines <- self$clathrate_stability_note(porewater_temp_C, .solution_pressure_atm)
 
                                      # Primary mineral classification. Fe/Ni/Lawrencite are handled
                                      # separately below (always_equil_primary) — always equilibrium,
@@ -3908,7 +4321,7 @@ END
 
                                        iom_kinetics_restart <- paste0(apply(self$iom_pools, 1, function(p) {
                                          m0 <- get_iom_moles(p[["name"]])
-                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1",
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.15e\n      -step_divide 1",
                                                  p[["name"]], trimws(p[["formula"]]), m0)
                                        }), collapse = "\n")
 
@@ -3932,27 +4345,27 @@ END
                                        "Analcime", "Anhydrite", "Aragonite", "Bassanite",
                                        "Beidellite-Ca", "Beidellite-Fe", "Beidellite-Mg", "Beidellite-Na",
                                        "Boehmite", "Brucite",
-                                       "C2H4(g)", "C2H6(g)", "C3H8(g)", "Calcite", "CH4(g)",
+                                       "Calcite", 
                                        "Chalcedony", "Chamosite", "Chrysotile", "Citric_Acid",
                                        "Clinochlore-14A", "Clinochlore-7A", "Clinoptilolite-Ca", "Clinoptilolite-Na",
-                                       "Clinozoisite", "CO(g)", "CO2(g)", "Cronstedtite-7A",
+                                       "Clinozoisite", "Cronstedtite-7A",
                                        "Daphnite-14A", "Daphnite-7A", "Dawsonite", "Diaspore", "Dolomite",
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
-                                       "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
+                                       "Hematite", "Huntite", "Hydromagnesite",
                                        "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "Natrolite", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
-                                       "Sepiolite", "SiO2(am)", "SO2(g)", "Thenardite", "Tobermorite-11A"
+                                       "Sepiolite", "SiO2(am)", "Thenardite", "Tobermorite-11A"
                                      )
                                      # Single solution (porewater_temp_C) gates the whole assemblage here.
-                                     # Clathrate phases stable against ocean_pressure_atm (this function's own
-                                     # reaction pressure) are appended the same way.
+                                     # Clathrate phases stable against .solution_pressure_atm (this function's
+                                     # own reaction pressure) are appended the same way.
                                      secondary_minerals <- c(secondary_minerals, self$temp_gated_minerals(porewater_temp_C),
-                                                             self$stable_clathrate_phases(porewater_temp_C, ocean_pressure_atm, ch4_mode))
+                                                             self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
 
                                      get_equil_moles <- function(mineral) {
                                        col <- ep_column(mineral, names(last_row))
@@ -3968,7 +4381,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -3979,7 +4392,7 @@ END
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -3992,7 +4405,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -4005,7 +4418,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -4023,7 +4436,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -4035,7 +4448,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -4047,7 +4460,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -4060,7 +4473,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -4082,7 +4495,7 @@ END
                                      # ---- KINETICS block ----
                                      .primary_kin_entries <- if (length(kinetic_minerals) > 0)
                                        paste(sapply(kinetic_minerals, function(m)
-                                         if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                         if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.15e\n      -step_divide 1", m, get_k_moles(m))),
                                          collapse = "\n")
                                      else ""
                                      .all_kin_entries <- paste(
@@ -4102,22 +4515,22 @@ END
                                      # PHREEQC writes natively (same mechanism as secondary_minerals).
                                      always_equil_prim_lines <- paste(
                                        sapply(always_equil_primary, function(m)
-                                         sprintf("   %-20s 0 %.6e  dissolve_only", m, get_equil_moles(m))),
+                                         sprintf("   %-20s 0 %.15e  dissolve_only", m, get_equil_moles(m))),
                                        collapse = "\n"
                                      )
                                      equil_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium) ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          always_equil_prim_lines,
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
-                                             sprintf("   %-20s 0 %.6e  dissolve_only", m, get_k_moles(m)))
+                                             sprintf("   %-20s 0 %.15e  dissolve_only", m, get_k_moles(m)))
                                          else character(0)),
                                        collapse = "\n")
 
                                      secondary_eq_lines <- paste(
                                        c("# --- Secondary minerals ---",
                                          sapply(secondary_minerals, function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_equil_moles(m)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_equil_moles(m)))),
                                        collapse = "\n"
                                      )
 
@@ -4177,16 +4590,18 @@ END
                                      content <- glue::glue('
 TITLE {.pqi_title}
 {ch4_db_note_line}
+# Gas phase (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 {.thick_line}
 # Mode: {.mode_comment}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}
+{parent_pressure_line}
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
 # orbits_per_step: {orbits_per_step}  (step duration = {sprintf("%.4e", orbits_per_step * orbital_period)} s)
@@ -4195,14 +4610,17 @@ KNOBS
 
 SOLUTION 1 {.soln_label}
     temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.4f", ph_val)}
-    pe        {sprintf("%.4f", pe_val)}
+    pH        {sprintf("%.15g", ph_val)}
+    pe        {sprintf("%.15g", pe_val)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", water_kg)}
-    pressure  {round(ocean_pressure_atm, 1)}
+    water     {sprintf("%.15g", water_kg)}
+    pressure  {round(.solution_pressure_atm, 1)}
 {elem_lines}
+
+{gas_phase_block(1, gas_comps, .solution_pressure_atm, porewater_temp_C, "Gas (fixed pressure)")}
+{gas_restore_block(1, gas_comps, last_row)}
 
 INCREMENTAL_REACTIONS true
 
@@ -4216,6 +4634,7 @@ EQUILIBRIUM_PHASES 1
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -state true
     -solution true
     -step true
@@ -4224,7 +4643,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -4238,22 +4657,29 @@ SELECTED_OUTPUT
 {kin_so_line}
 {equil_so_line}
     -saturation_indices  {paste(setdiff(all_primary, "Schreibersite"), collapse = " ")}
-    -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
 USER_PUNCH
-   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}{FE_METAL_PUNCH_HEADINGS}
+   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g{iom_punch_headings_restart}{SHARED_PUNCH_HEADINGS}{gas_punch(gas_comps, water_kg)$headings}
    10 PUNCH TOTAL_TIME / (365.25 * 24 * 3600)
 {punch_lines}
    {10 + (length(all_primary) + 1) * 10} total_initial = {total_initial_expr}
    {10 + (length(all_primary) + 2) * 10} PUNCH total_initial
 {iom_punch_lines_restart}
-{FE_METAL_PUNCH_LINES}
+{SHARED_PUNCH_LINES}{gas_punch(gas_comps, water_kg)$lines}
 END
 ')
 
-                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database)
-                                     writeLines(content, filename)
+                                     content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
+                                                                      list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    },
 
@@ -4264,6 +4690,30 @@ END
                                    # Primary minerals listed in equil_minerals are moved from KINETICS
                                    # to EQUILIBRIUM_PHASES 1 (same as hydrosphere restart).
                                    # ---------------------------------------------------------------
+                                   # Continues a tidal_kinetic run from its last complete orbit (REACT, MIX 4, MIX 1, MIX 2 rows): both
+                                   # solutions (every element, 15 digits), both equilibrium-phase sets, kinetic reactants, IOM channels and both
+                                   # gas phases. Checks the parent's carbon mode and pressures.
+                                   #
+                                   # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
+                                   # @param prev_csv The parent run's CSV; its .pqi must be beside it (for the carbon-mode, pressure and fluid checks).
+                                   # @param n_orbital_cycles Number of orbits (1.375 d each).
+                                   # @param substeps KINETICS substeps per step. Default 1.
+                                   # @param equil_minerals Primaries to move from KINETICS to EQUILIBRIUM_PHASES (dissolve_only). Default none; Schreibersite cannot be one.
+                                   # @param mode "ocean_circulations" (default: auto grouping, n_circulations), "ungrouped" (1 orbit per step, n_orbital_cycles) or "grouped" (grouping_factor orbits per step; exchange compounds as 1 - (1 - x_tide)^G).
+                                   # @param grouping_factor Orbits per step (mode "grouped").
+                                   # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
+                                   # @param suffix Appended to the file name. Default "".
+                                   # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
+                                   # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
+                                   # @param ch4_cutoff_C Cutoff (deg C) for carbon_mode = "temperature" only. Default 150.
+                                   # @param allow_pressure_change TRUE lets a restart run at pressures other than its parent's (with a warning). Default FALSE (an error).
+                                   # @param pore_gas_fate "to_ocean" (default, PI 2026-10-29: the pore bubble moves to the ocean step each orbit; without plume loss an upper bound on ocean H2) or "retain" (it stays with the porewater; an upper bound on retention, ~2.2 pore volumes of gas). Carbon attribution is the same in both.
+                                   # @return The path of the .pqi written.
+                                   # @examples
+                                   #   f <- ph$generate_phreeqc_input_tidal_kinetic_restart(prev_csv = "phreeqc_inputs/<parent>.csv", n_orbital_cycles = 2,
+                                   #                                                         porewater_temp = 160, depletion_mineral = "Troilite")
                                    generate_phreeqc_input_tidal_kinetic_restart = function(
                                      output_dir          = "phreeqc_inputs",
                                      prev_csv            = NULL,
@@ -4278,12 +4728,23 @@ END
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
-                                     ch4_cutoff_C        = 150
+                                     ch4_cutoff_C        = 150,
+                                     allow_pressure_change = FALSE,
+                                     pore_gas_fate       = c("to_ocean", "retain"),
+                                     logfile             = FALSE
                                    ) {
+                                     pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
                                        stop("n_orbital_cycles must be a positive integer")
+                                     # The parent's pore_gas_fate, from its header; a different one here is a warning.
+                                     .ph <- sub("\\.csv$", ".pqi", prev_csv)
+                                     .pf <- if (file.exists(.ph)) grep("^# (parent )?pore_gas_fate: ", readLines(.ph, n = 200, warn = FALSE), value = TRUE) else character(0)
+                                     .pf <- if (length(.pf)) sub("^# (parent )?pore_gas_fate: ", "", .pf[1]) else "unknown (generated before 2026-10-28: gases were equilibrium phases)"
+                                     if (.pf %in% c("retain", "to_ocean") && .pf != pore_gas_fate)
+                                       warning(sprintf("restart: the parent ran pore_gas_fate = \"%s\", this restart runs \"%s\"", .pf, pore_gas_fate))
+                                     parent_fate_line <- sprintf("# parent pore_gas_fate: %s", .pf)
 
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -4382,26 +4843,30 @@ END
                                      ocean_mass_norm     <- self$phreeqc_params$water_mass
 
                                      # ---- Temperature / pressure ----
-                                     ocean_temp_C <- 274.6 - 273.15
-                                     if (!is.null(self$profile_file) && file.exists(self$profile_file)) {
-                                       pore_temp_C        <- mean_layer_temp_C(self$profile_file, self$simulator$params$layer_thickness)
-                                       pore_pressure_atm  <- mean_layer_pressure_MPa(self$profile_file, self$simulator$params$layer_thickness) / 0.101325
-                                       ocean_pressure_atm <- ocean_floor_pressure_MPa(self$profile_file) / 0.101325
-                                     } else {
-                                       pore_temp_C        <- 25
-                                       pore_pressure_atm  <- 70
-                                       ocean_pressure_atm <- 70
-                                     }
+                                     ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
+                                     # Porewater and ocean conditions from the profile; stops if profile_file is missing.
+                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pore_temp_C        <- pc$pore_temp_C
+                                     pore_pressure_atm  <- pc$pore_pressure_atm
+                                     ocean_pressure_atm <- pc$ocean_pressure_atm
                                      porewater_temp_C <- if (is.numeric(porewater_temp)) porewater_temp else
                                        if (porewater_temp == "profile") pore_temp_C else ocean_temp_C
 
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
-                                     # Decoupled methane (Mtg) is a separate element: punch its total, and carry it
-                                     # across restarts (only with the uncoupled database, so coupled inputs are unchanged).
-                                     mtg_totals <- if (ch4_mode$decoupled) " Mtg" else ""
+                                     parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
+                                                                                     allow_pressure_change)
                                      ch4_override_note <- ch4_mode$note
+                                     # Gas phases (see gas_components()): the porewater one, the ocean one, the
+                                     # punch columns, and the empty porewater phase to_ocean starts each orbit with.
+                                     # Ntg(g) when the parent carried it (a cometary-ice ocean)
+                                     gas_comps <- gas_components(ch4_mode, if ("g_Ntg(g)" %in% names(row_mix4)) "Ntg(g)" else character(0))
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
+                                                                       "Porewater gas (fixed pressure, starts empty)")
+                                     ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
+                                                                        "Ocean gas (fixed pressure, starts empty, never removed)")
                                      ch4_db_note_line <- sprintf(
                                        "# Recommended database: %s (CH4 %s; porewater T = %.1f C%s)",
                                        ch4_mode$database,
@@ -4480,16 +4945,14 @@ END
                                      }
 
                                      # ---- Solution chemistry ----
-                                     elements <- c("Al", "C", "Ca", "Fe", "Mg", "N", "Na", "P", "S", "Si")
-                                     # Mtg (decoupled methane) when the parent punched it.
-                                     if ("Mtg" %in% names(row_mix1)) elements <- c(elements, "Mtg")
-                                     if ("Mtg" %in% elements) mtg_totals <- " Mtg"   # punch what is carried, whatever the database
+                                     # Every element the parent punched (restart_elements()).
+                                     elements <- restart_elements(ch4_mode$database, names(row_mix1), prev_csv)
 
                                      make_soln_lines <- function(row) {
                                        vals <- get_chem(row, elements)
                                        paste(Filter(Negate(is.null), lapply(seq_along(elements), function(i) {
                                          if (is.na(vals[i])) return(NULL)
-                                         sprintf("    %-4s  %.6e", elements[i], vals[i])
+                                         sprintf("    %-4s  %.15e", elements[i], vals[i])
                                        })), collapse = "\n")
                                      }
 
@@ -4507,21 +4970,21 @@ END
                                        "Analcime", "Anhydrite", "Aragonite", "Bassanite",
                                        "Beidellite-Ca", "Beidellite-Fe", "Beidellite-Mg", "Beidellite-Na",
                                        "Boehmite", "Brucite",
-                                       "C2H4(g)", "C2H6(g)", "C3H8(g)", "Calcite", "CH4(g)",
+                                       "Calcite", 
                                        "Chalcedony", "Chamosite", "Chrysotile", "Citric_Acid",
                                        "Clinochlore-14A", "Clinochlore-7A", "Clinoptilolite-Ca", "Clinoptilolite-Na",
-                                       "Clinozoisite", "CO(g)", "CO2(g)", "Cronstedtite-7A",
+                                       "Clinozoisite", "Cronstedtite-7A",
                                        "Daphnite-14A", "Daphnite-7A", "Dawsonite", "Diaspore", "Dolomite",
                                        "Ettringite", "Fe(OH)2", "Fe(OH)3", "Fe2(SO4)3", "FeSO4",
                                        "Gibbsite", "Glycine", "Goethite", "Greenalite", "Gypsum", "Gyrolite",
-                                       "H2(g)", "H2S(g)", "Hematite", "Huntite", "Hydromagnesite",
+                                       "Hematite", "Huntite", "Hydromagnesite",
                                        "Kaolinite", "Lizardite", "Magnetite", "Melanterite", "Mesolite", "MgSO4", "Minnesotaite", "Mirabilite",
                                        "Montmor-Ca", "Montmor-Mg", "Montmor-Na",
-                                       "N2(g)", "Natrolite", "NH3(g)", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
+                                       "Natrolite", "Nontronite-Ca", "Nontronite-Mg", "Nontronite-Na",
                                        "Portlandite", "Pyrite",
                                        "Saponite-Fe-Ca", "Saponite-Fe-Fe", "Saponite-Fe-Mg", "Saponite-Fe-Na",
                                        "Saponite-Mg-Ca", "Saponite-Mg-Fe", "Saponite-Mg-Mg", "Saponite-Mg-Na",
-                                       "Sepiolite", "SiO2(am)", "SO2(g)", "Thenardite", "Tobermorite-11A"
+                                       "Sepiolite", "SiO2(am)", "Thenardite", "Tobermorite-11A"
                                      )
                                      # Two solutions here, gated by their own temperatures: porewater_temp_C
                                      # for EQUILIBRIUM_PHASES 1, ocean_temp_C for EQUILIBRIUM_PHASES 2.
@@ -4540,7 +5003,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -4551,7 +5014,7 @@ END
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -4564,7 +5027,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -4577,7 +5040,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -4595,7 +5058,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -4607,7 +5070,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -4619,7 +5082,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -4632,7 +5095,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -4684,7 +5147,7 @@ END
 
                                        iom_kinetics_block <- paste0(apply(self$iom_pools, 1, function(p) {
                                          m_remaining <- get_iom_moles(p[["name"]])
-                                         sprintf("   %s\n      -formula %s\n      -m0 %.6e\n      -step_divide 1\n",
+                                         sprintf("   %s\n      -formula %s\n      -m0 %.15e\n      -step_divide 1\n",
                                                  p[["name"]], trimws(p[["formula"]]), m_remaining)
                                        }), collapse = "")
 
@@ -4719,7 +5182,7 @@ END
                                      kinetics_block <- if (length(kinetic_minerals) > 0 || nzchar(iom_kinetics_block)) {
                                        min_entries <- if (length(kinetic_minerals) > 0)
                                          paste(sapply(kinetic_minerals, function(m)
-                                           if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.6e\n      -step_divide 1", m, get_k_moles(m))),
+                                           if (m == "Schreibersite") schreibersite_kinetics_entry(get_k_moles(m)) else sprintf("   %s\n      -m0 %.15e\n      -step_divide 1", m, get_k_moles(m))),
                                            collapse = "\n")
                                        else ""
                                        all_entries <- paste(Filter(nzchar, c(min_entries, iom_kinetics_block)),
@@ -4734,19 +5197,19 @@ END
                                      # Fe/Ni/Lawrencite always appear here (porewater), recovered via
                                      # get_ep_moles() from their own native EQUILIBRIUM_PHASES output column.
                                      ep1_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium) ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
                                          sapply(always_equil_primary, function(m)
-                                           sprintf("   %-20s 0 %.6e  dissolve_only", m, get_ep_moles(m, row_react))),
+                                           sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_react))),
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
-                                             sprintf("   %-20s 0 %.6e  dissolve_only", m, get_k_moles(m)))
+                                             sprintf("   %-20s 0 %.15e  dissolve_only", m, get_k_moles(m)))
                                          else character(0)),
                                        collapse = "\n")
 
                                      ep1_sec_lines <- paste(
                                        c("# --- Secondary minerals (porewater, from previous run) ---",
                                          sapply(c(secondary_minerals, extra_pw_minerals), function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_ep_moles(m, row_react)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_react)))),
                                        collapse = "\n"
                                      )
 
@@ -4757,14 +5220,14 @@ END
                                      ep2_prim_lines <- if (length(equil_primary) > 0)
                                        paste(c("# --- Primary minerals (equilibrium, ocean) ---",
                                                sapply(equil_primary, function(m)
-                                                 sprintf("   %-20s 0 %.6e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
+                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
                                              collapse = "\n")
                                      else ""
                                      ep2_minerals <- c(secondary_minerals, extra_ocean_minerals)
                                      ep2_sec_lines <- paste(
                                        c("# --- Secondary minerals (ocean, from previous run) ---",
                                          sapply(ep2_minerals, function(m)
-                                           sprintf("   %-20s 0 %.6e", m, get_ep_moles(m, row_mix4)))),
+                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_mix4)))),
                                        collapse = "\n"
                                      )
                                      ep2_block <- paste0("EQUILIBRIUM_PHASES 2\n",
@@ -4849,16 +5312,20 @@ END
                                      template <- glue::glue('
 TITLE Enceladus tidal kinetic (restart)
 {ch4_db_note_line}
+# pore_gas_fate: {pore_gas_fate}
+# Gas phases (fixed pressure, Peng-Robinson): {paste(gas_comps, collapse = " ")}
+{parent_fate_line}
 {clathrate_note_lines}
 
 KNOBS
-   -logfile true
+   -logfile false
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}
+{parent_pressure_line}
 # restart_time_offset: {sprintf("%.6e", restart_time_years)} years
 # equil_minerals: {paste(equil_primary, collapse = ", ")}
 # n_orbital_cycles: {n_orbital_cycles}
@@ -4868,23 +5335,23 @@ KNOBS
 
 SOLUTION 1 Enceladus porewater (restarted)
     temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.4f", soln1_pH)}
-    pe        {sprintf("%.4f", soln1_pe)}
+    pH        {sprintf("%.15g", soln1_pH)}
+    pe        {sprintf("%.15g", soln1_pe)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", soln1_h2o)}
-    pressure  {round(ocean_pressure_atm, 1)}
+    water     {sprintf("%.15g", soln1_h2o)}
+    pressure  {round(pore_pressure_atm, 1)}
 {soln1_elem_lines}
 
 SOLUTION 2 Enceladus ocean (restarted)
     temp      {round(ocean_temp_C, 2)}
-    pH        {sprintf("%.4f", soln2_pH)}
-    pe        {sprintf("%.4f", soln2_pe)}
+    pH        {sprintf("%.15g", soln2_pH)}
+    pe        {sprintf("%.15g", soln2_pe)}
     redox     pe
     units     mol/kgw
     density   1
-    water     {sprintf("%.6f", soln2_h2o)}
+    water     {sprintf("%.15g", soln2_h2o)}
     pressure  {round(ocean_pressure_atm, 1)}
 {soln2_elem_lines}
 
@@ -4893,6 +5360,22 @@ REACTION_TEMPERATURE 1
 
 REACTION_TEMPERATURE 2
     {round(ocean_temp_C, 2)}
+
+# Reaction pressures, used by every step like the reaction temperatures. MIX averages the
+# solution pressures by mass, so without these the porewater would drift towards the ocean
+# pressure after each exchange.
+REACTION_PRESSURE 1
+    {round(pore_pressure_atm, 1)}
+
+REACTION_PRESSURE 2
+    {round(ocean_pressure_atm, 1)}
+
+{pore_gas_block}
+{if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
+
+{ocean_gas_block}
+{gas_restore_block(2, gas_comps, row_mix4)}
+{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
 
 {rates_block}
 
@@ -4905,6 +5388,7 @@ REACTION_TEMPERATURE 2
 SELECTED_OUTPUT
     -file {base_name}.csv
     -reset false
+    -high_precision true
     -reaction true
     -state true
     -solution true
@@ -4914,7 +5398,7 @@ SELECTED_OUTPUT
     -alkalinity true
     -ionic_strength true
     -water true
-    -totals              Al C Ca Fe H Mg N Na O P S Si{mtg_totals}
+{totals_block(ch4_mode$database)}
     -molalities          OH- H+ C2H4 C2H6 CH4 CO HCO3- CO3-2 CO2
                          CH3COO- HCOO- HCN Ca+2 Cl- Fe+2 FeOH+ Fe+3 H2
                          Mg+2 NH4+ NH3 NH4CO3- N2 NO2-
@@ -4928,8 +5412,14 @@ SELECTED_OUTPUT
 {kin_so_line}
 {equil_so_line}
     -saturation_indices  {paste(setdiff(all_primary, "Schreibersite"), collapse = " ")}
-    -gases               CO2(g) H2(g) CH4(g) CO(g) H2O(g) H2S(g) N2(g)
-                         NH3(g) NO(g) NO2(g) O2(g) SO2(g)
+{gas_so_line(gas_comps)}
+
+# -high_precision (above) also sets the mole-balance convergence criterion to 1e-12; with a gas phase
+# that made the first porewater step (the metal pulse) run for more than 15 minutes. This KNOBS, read
+# after it, puts back the default 1e-8 (the last setting read wins, PHREEQC read.cpp), and keeps the
+# 12-digit output.
+KNOBS
+    -convergence_tolerance 1e-8
 
 # USER_PUNCH is defined per-cycle below (with exact cumulative time embedded)
     ')
@@ -4940,16 +5430,21 @@ SELECTED_OUTPUT
                                        paste0(
                                          sprintf("\n# --- Cycle %d of %d (cumulative time: %.4e years) ---\n",
                                                  i, kinetic_cycles, cumulative_time),
+                                         # to_ocean: the porewater gas phase is redefined empty at the start of each orbit
+                                         if (pore_gas_fate == "to_ocean" && i > 1) paste0(pore_gas_block, "\n") else "",
                                          "USE solution 1\n",
                                          "USE kinetics 1\n",
                                          "USE equilibrium_phases 1\n",
+                                         "USE gas_phase 1\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
+                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
-                                         iom_punch_headings_tidal, FE_METAL_PUNCH_HEADINGS, "\n",
+                                         iom_punch_headings_tidal, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
                                          sprintf("   10 PUNCH %.6f  # Cumulative time (years)\n", cumulative_time),
                                          paste(sapply(seq_along(all_primary), function(j) {
                                            make_punch_line(10 + j * 10, all_primary[j])
@@ -4957,32 +5452,36 @@ SELECTED_OUTPUT
                                          sprintf("   %d total_initial = %s\n", 10 + (length(all_primary) + 1) * 10, total_initial_expr),
                                          sprintf("   %d PUNCH total_initial\n", 10 + (length(all_primary) + 2) * 10),
                                          iom_punch_lines_tidal,
-                                         FE_METAL_PUNCH_LINES,
+                                         SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
-                                         "USE kinetics none\n",
+                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
+                                         "USE gas_phase 2\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 2\n",
+                                         "USE reaction_pressure 2\n",
                                          "MIX 4\n",
-                                         sprintf("  1  %.6e\n", x_step),
+                                         sprintf("  1  %.15e\n", x_step),
                                          "  2  1.0\n",
                                          "SAVE solution 4\n",
                                          "SAVE equilibrium_phases 2\n",
+                                         "SAVE gas_phase 2\n",
                                          "END\n\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "USE reaction_temperature 1\n",
+                                         "USE reaction_pressure 1\n",
                                          "MIX 1\n",
-                                         sprintf("  1  %.6e\n", 1 - x_step),
-                                         sprintf("  4  %.6e\n", f_x / (f_ocean + f_x)),
+                                         sprintf("  1  %.15e\n", 1 - x_step),
+                                         sprintf("  4  %.15e\n", f_x / (f_ocean + f_x)),
                                          "SAVE solution 1\n",
                                          "END\n\n",
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
                                          "MIX 2\n",
-                                         sprintf("  4  %.6e\n", f_ocean / (f_ocean + f_x)),
+                                         sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
                                          if (i < kinetic_cycles &&
@@ -4999,8 +5498,8 @@ SELECTED_OUTPUT
                                      }), collapse = "\n")
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
-                                                                      ch4_mode$database)
-                                     writeLines(content, filename)
+                                                                      ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
+                                     writeLines(knobs_logfile(content, logfile), filename)
                                      return(filename)
                                    }
                                  )

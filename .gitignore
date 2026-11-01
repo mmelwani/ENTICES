@@ -15,3 +15,6 @@ phreeqc.log
 # run outputs at the repo root out of git
 /enceladus_*.csv
 /selected_output_*.sel
+
+# Python bytecode (scripts/make_c4only.py imports strip_mineral_vm.py)
+__pycache__/

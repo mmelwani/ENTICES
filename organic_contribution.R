@@ -13,6 +13,11 @@
 # Quantities are molalities (mol/kgw) summed over the listed SELECTED_OUTPUT species. DIC counts
 # only the C(4) species written by -molalities, so carbonate complexes of Ca, Mg, Fe, Na are not
 # included; CH4 is m_CH4, or m_Mtg in decoupled runs.
+#
+# The ocean's gas phase (GAS_PHASE 2, since 2026-10-28) is reported too, in moles: its components
+# at the end of the last ocean step (the last SOLUTION 4 row of a tidal run; the last row of a bulk
+# run, whose single gas phase is in contact with its single solution). Under pore_gas_fate =
+# "to_ocean" organic carbon and H2 can sit there rather than in the ocean solution.
 
 ORGANIC_CONTRIBUTION_SPECIES <- list(
   DIC   = c("m_CO2", "m_HCO3-", "m_CO3-2", "m_NH4CO3-"),
@@ -21,6 +26,17 @@ ORGANIC_CONTRIBUTION_SPECIES <- list(
   H2    = "m_H2",
   C_total = "C"
 )
+
+ORGANIC_CONTRIBUTION_GASES <- c(`H2(g)` = "g_H2(g)", `CO2(g)` = "g_CO2(g)", `CH4(g)` = "g_CH4(g)",
+                                `Mtg(g)` = "g_Mtg(g)", `H2S(g)` = "g_H2S(g)", `N2(g)` = "g_N2(g)")
+
+# Moles of each gas in the ocean's gas phase at the end of a run (0 where there is none).
+ocean_gas <- function(csv) {
+  d <- suppressWarnings(read.delim(csv, sep = "\t", check.names = FALSE, strip.white = TRUE))
+  names(d) <- trimws(names(d))
+  rows <- d[d$soln == (if (any(d$soln == 4)) 4 else 1) & trimws(d$state) != "i_soln", , drop = FALSE]
+  vapply(ORGANIC_CONTRIBUTION_GASES, function(cl) if (cl %in% names(d) && nrow(rows)) as.numeric(rows[[cl]][nrow(rows)]) else 0, numeric(1))
+}
 
 # The ocean row of one ENTICES SELECTED_OUTPUT CSV, as a named numeric vector of the columns used.
 ocean_row <- function(csv) {
@@ -42,8 +58,14 @@ organic_contribution <- function(run_csv, blank_csv) {
     with_organics = vapply(ORGANIC_CONTRIBUTION_SPECIES, function(sp) total(run, sp), numeric(1)),
     blank         = vapply(ORGANIC_CONTRIBUTION_SPECIES, function(sp) total(blank, sp), numeric(1)),
     row.names = NULL)
+  out$unit <- "mol/kgw"
+  g_run <- ocean_gas(run_csv); g_blank <- ocean_gas(blank_csv)
+  gas <- data.frame(quantity = paste("ocean gas", names(ORGANIC_CONTRIBUTION_GASES)), with_organics = unname(g_run),
+                    blank = unname(g_blank), unit = "mol", row.names = NULL)
+  out <- rbind(out, gas[gas$with_organics != 0 | gas$blank != 0, , drop = FALSE])
   out$organic_contribution <- out$with_organics - out$blank
-  out
+  rownames(out) <- NULL
+  out[, c("quantity", "unit", "with_organics", "blank", "organic_contribution")]
 }
 
 # Generates and runs the pair, writing each into its own subdirectory of output_dir ("run" and

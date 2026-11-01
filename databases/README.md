@@ -15,3 +15,24 @@ clathrate phases, and the tests now use it.
 
 Consolidating the two coreclath files into one canonical source plus generated
 variants is pending, and is Lucas's call.
+
+## Mineral molar volumes are stripped (2026-10-28; database change for Lucas to confirm)
+
+`scripts/strip_mineral_vm.py` comments out the `-Vm` (or unhyphenated `Vm`) line of every non-gas
+PHASES entry in the coupled and uncoupled files, prefixing it `#vm# ` (384 lines in each, one of
+them unhyphenated: `CH4_hydrate` / `Mtg_hydrate`); `scripts/make_c4only.py` gives
+`coreclath_C4only.dat` the same pass. `python scripts/strip_mineral_vm.py --restore` (and
+`make_c4only.py --no-strip-mineral-vm`) reverses it. Aqueous species and gases keep their entries.
+
+Why: these databases use the LLNL aqueous model, under which PHREEQC sets every aqueous species'
+molar volume to zero (prep.cpp `calc_vm()` returns early). A mineral's reaction volume was then
+minus its whole molar volume, so its log K moved with pressure by Vm·ΔP/(ln10·RT): between 66.7 and
+261.2 atm at 160 °C, forsterite −0.10, albite −0.23, chamosite −0.51, antigorite −4.16 log units.
+Without the term, **aqueous speciation and mineral equilibria are evaluated at the database's
+reference pressure** (1 bar up to 100 °C, the water saturation curve above). With real dissolution
+volumes of tens of cm³/mol, leaving out 260 bar costs about 0.1–0.2 log units. Pressure can then
+act only through gases; while gases are equilibrium phases (ideal, fixed partial pressure) it has no
+effect at all.
+
+The volumes are kept in `data/mineral_molar_volumes.csv` (for `bulk_density()`) and in
+`legacy/Core11_idealgas_mod_v4.dat`.

@@ -792,3 +792,194 @@ One commit per item; each commit message has its pass check.
   tests kept as history. `attr(cfg, "carbon_decoupling_note")` describes
   `c4_only` and `ch4_uncoupled` (NA when all coupled). `iom_selftest.R`
   checks the `c4_only` formulas and notes.
+
+### gas-ice-docs branch: profile pressure (2026-10-27)
+
+- **Pressures come from the profile in all six generators.** The porewater
+  SOLUTION (and a bulk `porewater`-mode solution) is at the profile's mean
+  pressure over the permeable layer, 261.2 atm for the Enceladus profile; the
+  ocean SOLUTION (and a bulk `hydrosphere`-mode solution) is at the ocean-floor
+  pressure, 66.7 atm. Before, five generators wrote 66.7 atm into the
+  porewater (`pressure 66.7#261.2` in the tidal ones); only `bulk_equil` used
+  the layer pressure.
+- **No fallback pressure.** `profile_conditions()` stops if `profile_file`
+  does not exist (the generators used to fall back to 70 atm). The Enceladus
+  profile is now in `profiles/`, and is the default `profile_file`.
+- **`REACTION_PRESSURE 1/2`** in the tidal generators, used by each step
+  beside `REACTION_TEMPERATURE` (MIX averages pressure by mass, so the
+  porewater would otherwise drift towards the ocean pressure).
+- **Header stamps** `# Porewater pressure:` and `# Ocean pressure:`, beside the
+  version and database stamps. **Restarts** compare them with the parent's
+  (`check_restart_pressures()`): a mismatch is an error, or a warning with
+  `allow_pressure_change = TRUE`; an unstamped parent is a warning. Header line
+  `# parent pressures:`.
+- `tests/pressure_check.R` checks all of the above (inputs only).
+- **Initial fluids at 25 C.** The initial porewater and ocean SOLUTIONs are
+  defined at 25 C with pe 4 (no oxidant or reductant) and brought to the run
+  temperature by REACTION_TEMPERATURE (added to `bulk_kinetic` and
+  `bulk_equil`, which had none). Defined at the run temperature, pe 4 put
+  O(0) into the porewater: 1.1e-22 molal at 100 C, 9.0e-12 at 160 C, 4.9 at
+  250 C (0.77 mol O in the 0.157 kg porewater), and did not converge at
+  300 C at any pressure. Restarts are unchanged (they start from the parent's
+  reacted state). `tests/initial_fluid_check.R` runs each generator's initial
+  porewater at 25, 160 and 300 C.
+- `profiles/README.md`: provenance of the Enceladus profile (PlanetProfile).
+- **Mineral molar volumes and rock density.** `scripts/export_mineral_volumes.py` writes
+  `data/mineral_molar_volumes.csv`: a volume for every non-gas phase of the coreclath databases plus
+  Schreibersite, by the PI's source priority (Core11, then Green et al. 2025 ds636, then Perple_X
+  hp636, then PI-supplied values). Every production phase is covered; Fluorite and Fluorapatite are
+  unfilled. `bulk_density()` (`phreeqc_tools.R`) gives rho_solid, rho_bulk and a per-phase breakdown
+  through a run; the IOM density (1.4 g/cm3) is UNSOURCED. Every generator now punches `Rho_soln`
+  (PHREEQC's RHO); `FE_METAL_PUNCH_*` are renamed `SHARED_PUNCH_*`. `tests/bulk_density_check.R`.
+- **Mineral molar volumes stripped from the databases** (database change for Lucas to confirm).
+  `scripts/strip_mineral_vm.py` comments out (`#vm# `) the `-Vm`/`Vm` line of every non-gas PHASES
+  entry in the coupled and uncoupled databases (384 each, 1 unhyphenated); `make_c4only.py` applies
+  the same pass (flag `strip_mineral_vm`, `--no-strip-mineral-vm`). With aqueous volumes inactive
+  under the LLNL model, the term shifted each mineral's log K by its whole Vm·ΔP/(ln10·RT)
+  (antigorite −4.16 at 261 atm). Mineral equilibria are now at the database reference pressure
+  (~0.1–0.2 log unit omission at 260 bar). Check: the 160 °C production case at 66.7 vs 261.2 atm
+  gives byte-identical CSVs, 265 warnings each (was 350 / 641), 116 s (was 481 / 672 s).
+- **Restarts carry every element, at full precision** (mass-balance fix). Both restart paths
+  (`tidal_kinetic_restart`, `bulk_kinetic_restart`) built their SOLUTIONs from a fixed list,
+  Al C Ca Fe Mg N Na P S Si (+ Mtg), from a CSV with 4-5 significant figures: K (K-feldspar), Mn
+  (tephroite), Cl (lawrencite) and Ni were lost at every restart, since no generator punched them
+  (`#K #Mn #Cl` were commented out of `-totals`; the equilibrium generators did not punch Mtg either).
+  Now every generator punches all 36 database elements (`totals_block()`, pseudo-elements included)
+  with `-high_precision true`; restarts take every element the parent punched
+  (`restart_elements()`, warning about any ENTICES element a pre-2026-10-28 parent lacks) and write
+  pH, pe, water, element totals, kinetic and equilibrium-phase amounts with 15 digits. MIX fractions
+  are written with 15 digits too (at 7 they did not sum to 1, losing up to ~5e-8 of the porewater per
+  cycle). `ep_column()` takes the last of a duplicated name (Ni is now both a total and a phase).
+  Note: `-high_precision` also tightens PHREEQC's mole-balance convergence from 1e-8 to 1e-12 of each
+  element's total (KNOBS, Parkhurst & Appelo 2013, p. 112).
+  `system_totals()` and `formula_elements()` (phreeqc_tools.R) sum each element over solution,
+  solids, IOM and gas. `tests/restart_closure_check.R`: 2 orbits vs 1 + restart 1, tidal and bulk,
+  160 C, 15 wt% IOM: every element total agrees within 1e-9 relative or the solver tolerance (max
+  4.8e-13 for the rock-dominated totals).
+
+### gas-ice-docs branch, Stage 2: fixed-pressure gas phases (2026-10-28)
+
+- **Gases leave EQUILIBRIUM_PHASES.** Every `X(g) 0 0` equilibrium phase (an infinite reservoir at
+  1 atm, which capped dissolved gases at their 1-atm solubility and kept what exsolved) is gone from
+  all six generators and both restarts. Each reservoir has a fixed-pressure GAS_PHASE instead,
+  starting empty: porewater GAS_PHASE 1 at the porewater pressure, ocean GAS_PHASE 2 at the ocean
+  pressure (tidal generators; never emptied), and one GAS_PHASE 1 at the solution's pressure in the
+  bulk generators. Components (`gas_components()`): the gases the EP lists carried, filtered by
+  carbon mode (`c4_only`: Mtg(g) CO2(g) H2(g) H2S(g) N2(g) NH3(g) SO2(g)). Clathrates stay
+  equilibrium phases.
+- **`pore_gas_fate`** (`tidal_kinetic`, `tidal_equil`, `tidal_kinetic_restart`): `"retain"`
+  (default) keeps the pore bubble with the porewater; `"to_ocean"` moves its moles into the ocean
+  step each orbit (USER_PUNCH `PUT` + `KINETICS 3` at a constant rate over 1 s; `gas_transfer_block()`)
+  and starts the porewater's next orbit with an empty gas phase. Stamped in the header; a restart
+  warns if it differs from its parent's.
+- **Peng-Robinson for every gas** (`scripts/gas_eos.py`; `--ideal` reverses it): ordinary gases get
+  their own commented constants back, the decoupled gases their analogues' (Mtg←CH4, Hdg←H2,
+  H2Sg←H2S, Ntg←N2, Oxg←O2, as in phreeqc.dat 3.8.6); H2's Omega is −0.225 (phreeqc.dat), not the
+  entry's +0.225. H2 at 160 °C, 261.2 atm: PR dissolves 8.3% more at saturation and its bubble's
+  molar volume is 8.7% larger than ideal (`tests/gas_eos_check.R`).
+- **Diagnostics punched every row:** `Vgas_L`, `P_gas_atm` (0 when there is no bubble),
+  `Vgas_Vpore` (gas volume over the pore volume, from the porewater mass at 1 kg/L), and each
+  component's moles (`g_` columns, `-gases`). `H_total_mol`, `O_total_mol` (total H and O with water;
+  the `-totals` H and O leave water out) for mass balance.
+- **Convergence:** `-high_precision` (item 4) also sets PHREEQC's mole-balance criterion to 1e-12;
+  with a gas phase the metal-pulse step then ran for > 15 min. A KNOBS after SELECTED_OUTPUT puts
+  back the default 1e-8 (the last setting read wins: PHREEQC read.cpp; the manual says "the smaller
+  of"). Gas-phase runs are still ~10x slower than before (2 orbits at 160 °C: ~140-280 s).
+- **Restarts** rebuild both gas phases from the parent's last cycle (`GAS_PHASE_MODIFY`, moles to
+  15 digits; `gas_restore_block()`).
+- `organic_contribution()` also reports the ocean gas phase's components (mol).
+- `bulk_density()` includes the pore gas bubble: rho_pore = (1 - s_g) rho_fluid + s_g rho_gas, gas
+  saturation s_g = min(Vgas/Vpore, 1).
+- `ocean_gas_loss_fraction_per_orbit` was not added: removing a fraction of a gas phase's moles at
+  run time has no simple PHREEQC route (see PROGRESS).
+- `tests/gas_mass_balance_check.R`: whole-system element totals per orbit, both fates (≤ 1e-11);
+  the no-bubble identity (25 °C, no metal).
+
+### gas-ice-docs branch, Stage 3: cometary-ice initial ocean (option) (2026-10-28)
+
+- **`initial_ocean = cometary_ice_ocean(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE)`**
+  (tidal_kinetic, tidal_equil). Miller et al. (2026) Table 5: comet 67P ice (Rubin et al. 2019) with
+  ices more volatile than NH3 depleted by v = 0.02 (from Titan's N budget, not an Enceladus
+  constraint). The default ocean stays pure water. The ices react into the pure-water ocean at
+  ocean T and P in a simulation of their own before the first orbit (REACTION, not SOLUTION totals:
+  the mixture is out of redox equilibrium), with the ocean's gas phase, which is saved;
+  `<base>_initial_ocean.csv` records the result. Methane and ethane enter as Mtg (`Mtg 2 H -2` for
+  ethane) unless carbon is coupled; N2 as Ntg (and Ntg(g) joins the gas components); CO as CO2
+  minus O (REACTION reads "CO" as the cobalt phase Co).
+- Result (c4_only, v = 0.02): coupled C 0.0866 molal, all C(+4); Mtg 0.0102; pH 1.85; H2 ~5e-14;
+  S(+6) 0.0094, S(-2) 0.0028 molal; no bubble at 66.7 atm. The hand estimate (0.0086 / 0.0036)
+  left out the ethane term (2 e- per C2H6 drawn from the coupled system). Without O2: no sulfate,
+  H2 0.031 molal, pH 3.80. With NH3: 7.44e-3 molal N(-3), pH 2.08. `tests/cometary_ocean_check.R`.
+- `include_NH3` defaults to FALSE (Table 5 as printed); pending the PI.
+- A cometary ocean with a carbon-free porewater (no `trace_C_molal`, no IOM) left the first porewater
+  step running for > 20 min without converging (100 C, 1 orbit); with `trace_C_molal = 1e-14` it
+  completes. `tidal_kinetic` warns in that case. The cause is not understood.
+
+### gas-ice-docs branch, Stage 5: documentation (2026-10-28)
+
+- `README.md` rewritten for regenerating production: what ENTICES is, requirements, step-by-step
+  running (self-tests first, outputs and their columns, pairs, sweeps, restarts, runtimes, common
+  failures), worked examples, a parameter table (default, units, source, status), model choices
+  with sources, interpreting outputs (rock density, gas, carbon), open decisions, repository map,
+  references (checked against the PDFs; unverifiable ones marked `[citation needed]`).
+- `ENTICES_runs.Rmd` is now the worked examples (25 C smoke test, Lucas's production case, a 100 C
+  pair, the cometary ocean, the pore-gas bracket). Lucas's notebook moved to
+  `examples/ENTICES_runs_lucas_2026-10.Rmd`.
+- Roxygen-style headers on the six generators (purpose, every argument with units, default and
+  justification, return value, example). Surface areas, Fe/Ni instantaneous corrosion and the tidal
+  stress amplitude are tagged UNSOURCED in the code; the ocean temperature carries its source.
+- `profiles/README.md`: the profile's provenance and the verified Styczinski et al. (2023) citation.
+- `tidal_equil` gains `trace_C_molal` (default NULL): with a cometary ocean and no seed every case
+  failed ("Cl has not converged"); with 1e-14 they run, except `to_ocean` + `c4_only`, which crashes
+  PHREEQC (segmentation fault in the ocean step).
+
+### gas-ice-docs branch, Stage 6: tests and the generator matrix (2026-10-28)
+
+- All 14 self-tests pass (`tests/README.md`), including the long `restart_closure_check.R` and
+  `gas_mass_balance_check.R`, on the final code.
+- `docs/MATRIX_2026-10-28.md`: 102 runs (every generator x carbon mode x pore_gas_fate x initial
+  ocean x 25/100/160 C, 1 orbit, plus restarts): 87 converge; the failures are the unseeded cometary
+  `tidal_equil` cases (rerun with the seed: converge) and `tidal_equil` + `to_ocean` + cometary +
+  `c4_only`, which crashes PHREEQC 3.8.6.
+
+### gas-ice-docs branch: decisions and sources, 2026-10-29
+
+- **`pore_gas_fate` defaults to `"to_ocean"`** (PI): `"retain"` puts ~2.2 pore volumes of gas in the
+  pores (an upper bound on retention); carbon attribution is the same in both (to 3 significant
+  figures); `"to_ocean"` without plume loss is an upper bound on ocean H2. `"retain_to_pore_volume"`
+  is planned after D6.
+- **IOM density from Delarue et al. (2026) Eq. 10** (PI): `bulk_density(iom_density = "delarue2026")`,
+  the default, evaluates rho = 1472 - 345 (H/C) + 94 / ((H/C) + 0.122) kg/m3 at the residual IOM's
+  H/C on each row (bulk IOM less the channels' releases; 1.320 g/cm3 at t = 0); a number fixes it.
+  Replaces the UNSOURCED 1.4 g/cm3. Lucas's 160 C case: rho_solid 2.977 -> 2.920 g/cm3 at t = 0
+  (-1.9%), 2.806 -> 2.759 at orbit 12; rho_bulk 2.344 -> 2.305 at t = 0. Compression left out
+  (K0 = 10.2 GPa: 0.25% at 26 MPa). Summary gains `iom_HC` and `iom_density`.
+- **`bulk_density()` flags Vgas > Vpore** (PI): new `Vgas_Vpore` and `gas_exceeds_pores` summary
+  columns and a warning; gas beyond the pore volume is not counted (s_g capped at 1, as before).
+- **Core density sources** (PI): README section 7 compares rho_bulk with Bagheri et al. (2025) Table 5
+  (core 2160-2400 kg/m3, 183-213 km): 2.305 g/cm3 at t = 0 and 2.255 at orbit 12 (`"to_ocean"`) are
+  inside, 1.880 (`"retain"`) below. Iess et al. (2014)'s ~2.4 g/cm3 is an example structure for
+  C/MR2 = 0.335, not a measurement. The config's radius, mass, core radius and core density are the
+  PlanetProfile profile's; its [citation needed] now says so (neither paper gives those values).
+- **Citations checked against the PDFs** (PI): Casey, Hochella & Westrich (1993) GCA 57 (tephroite;
+  not the Nature 366 chain-silicate paper); Pincus, Peters, Yi & Kermani (2026); Glein & Waite (2020);
+  White & Brantley (2003). The tephroite Ea fit (-60.11 ln(pH) + 106.17) is from Casey Fig. 4's
+  labels (54, 26, 22, 4 kJ/mol; 0 at pH 6.2), not the appendix rate table; the REM now says it
+  reaches 0 at pH 5.85. README section 7 compares the oceans' carbon with Glein & Waite (2020).
+- **KNOBS `-logfile` off by default** (PI): every generator takes `logfile = FALSE`; `TRUE` writes
+  `phreeqc.log` (258-346 MB per 12-orbit production run; 11.9 GB from one stalled run).
+  tests/pressure_check.R checks all six generators.
+- **Flow driving documented as a decision (D12) and a sweep design** (PI; not run, N6): README section 6
+  cites Liao et al. (2020), Choblet et al. (2017), Zandanel et al. (2021) and Fisher et al. (2024)
+  as range constraints with their limitations (checked against the PDFs), tabulates the flow
+  equivalents (mean Darcy flux, exchange per orbit, displacement, circulation time) over k and
+  dP, and flags production k = 1e-7 m2 (top of Liao's range; 243 yr ocean circulation against
+  Choblet's 25-250 Myr). Open for the PI: oscillatory flow as net exchange, and the porosity
+  factor in the Simulator's flow rate.
+- **Matrix follow-up** (PI): 87 of the 90 distinct cases converge counting the seeded `tidal_equil`
+  reruns (the 102 rows include 12 reruns); the 3 failures are the PHREEQC 3.8.6 segfault, now
+  reduced to a 20-line reproducer in `tests/known_failures/` (crashes with the stock llnl.dat). The
+  unseeded cases' 0.019125 mol Cl is the porewater's lawrencite (2 x 0.0095625). Correction: the
+  full cometary ocean with a carbon-free porewater is slow, not stuck (1,459 s unseeded vs 394 s
+  seeded; the earlier "> 20 min" was a timeout); a CO2-only ocean does stall unseeded (no progress
+  in 3,000 s) and completes in 267 s seeded. `docs/MATRIX_2026-10-28.md`.

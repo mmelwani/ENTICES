@@ -1,0 +1,30 @@
+# PHREEQC 3.8.6 (x64, Windows) crashes on this input with an access violation (exit 139 under Git
+# Bash, 0xC0000005), with the stock llnl.dat:
+#   phreeqc phreeqc386_mix_kinetics_segfault.pqi out.txt <PHREEQC>/database/llnl.dat
+# Reduced automatically (309 runs) from a generated tidal_equil input (c4_only, pore_gas_fate =
+# "to_ocean", cometary_ice_ocean(), trace_C_molal = 1e-14, 25 C); see README.md here.
+# Step 1 equilibrates a water with Fe metal, albite and Chamosite-7A (H2 forms in the gas phase,
+# PUT into slot 9103). Step 2 mixes a tiny fraction of that solution with a KINETICS reactant that
+# adds the gas's H2 (GET(9103)) in one step. The solver fails, retries with reduced tolerances,
+# and crashes instead of stopping with an error. Removing Chamosite-7A or KINETICS 3 removes the
+# crash.
+SOLUTION 1 Enceladus porewater
+GAS_PHASE 1 Porewater gas (fixed pressure, starts empty)
+    H2(g)      0
+RATES
+PoreGasIn_3
+ 10 SAVE GET(9103) * TIME   # moles of H2(g) in the pore bubble
+KINETICS 3   # used only in the ocean step, when pore_gas_fate = to_ocean
+   PoreGasIn_3
+      -formula H2 1
+EQUILIBRIUM_PHASES 1
+   Albite               0  0.318204      dissolve_only
+   Fe                   0  2.35038          dissolve_only
+   Chamosite-7A 0 0
+SELECTED_OUTPUT
+USER_PUNCH
+   972 PUT(GAS("H2(g)"), 9103)
+END
+USE kinetics 3
+MIX 4
+  1  3.342308274898681e-05
