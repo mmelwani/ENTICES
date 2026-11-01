@@ -69,5 +69,12 @@ check(abs(ours / theirs - 1) < 1e-3,
       sprintf("Scenario R rock: %.4f g/cm3 (this table) vs %.4f g/cm3 (reconstruction phase_lib), %+.3f%%",
               ours, theirs, 100 * (ours / theirs - 1)))
 
+# 4. Porosity from the core density (exchange-physics D): rho_core = (1 - phi) rho_solid + phi rho_fluid.
+ph <- phi_from_core_density(2.920, BAGHERI_CORE_DENSITY_G_CM3)
+check(isTRUE(all.equal(ph, c((2.92 - 2.16) / 1.92, (2.92 - 2.40) / 1.92))) &&
+        abs((1 - ph[1]) * 2.92 + ph[1] - 2.16) < 1e-12,
+      sprintf("phi_from_core_density: rho_solid 2.920 and Bagheri's %.2f-%.2f g/cm3 give phi %.3f-%.3f",
+              BAGHERI_CORE_DENSITY_G_CM3[1], BAGHERI_CORE_DENSITY_G_CM3[2], ph[2], ph[1]))
+
 cat(sprintf("\nSUMMARY: %d failure(s).\n", failures))
 if (failures > 0) quit(status = 1)

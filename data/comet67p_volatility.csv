@@ -1,0 +1,43 @@
+species,formula,C,H,O,N,S,abundance_per_100_H2O,error_plus,error_minus,volatility_vs_NH3_273K,basis,boiling_point_K,in_Miller2026_Table5,added_by_include_less_volatile,source,note
+CO2,CO2,1,0,2,0,0,4.7,1.4,1.4,more,Fray & Schmitt 2009 Table 5 (CO2-2) at 273 K: 120 bar vs NH3 14 bar,,yes,no,Rubin et al. 2019 Table 2,
+CO,CO,1,0,1,0,0,3.1,0.9,0.9,more,Fray & Schmitt 2009 Table 5 (CO-2) at 273 K: 1.7e3 bar,,yes,no,Rubin et al. 2019 Table 2,
+O2,O2,0,0,2,0,0,3.1,1.1,1.1,more,Fray & Schmitt 2009 Table 5 (O2-3) at 273 K: 1.3e3 bar,,yes,no,Rubin et al. 2019 Table 2,
+CH4,CH4,1,4,0,0,0,0.34,0.07,0.07,more,Fray & Schmitt 2009 Table 5 (CH4-1) at 273 K: 596 bar,,yes,no,Rubin et al. 2019 Table 2,
+C2H6,C2H6,2,6,0,0,0,0.29,0.06,0.06,more,Fray & Schmitt 2009 Table 5 (C2H6-1) at 273 K: 844 bar,,yes,no,Rubin et al. 2019 Table 2,
+C3H8,C3H8,3,8,0,0,0,0.018,0.004,0.004,more,boiling-point proxy (231 K < NH3 239.8 K),231,no,no,Rubin et al. 2019 Table 2,not in Table 5 although more volatile (omission or below its cut)
+C6H6,C6H6,6,6,0,0,0,0.00069,0.00014,0.00014,less,Fray & Schmitt 2009 Table 5 (C6H6-1) at 273 K: 0.034 bar,,no,yes,Rubin et al. 2019 Table 2,
+C7H8,C7H8,7,8,0,0,0,0.0062,0.0012,0.0012,less,boiling-point proxy (384 K),384,no,yes,Rubin et al. 2019 Table 2,toluene
+CH3OH,CH4O,1,4,1,0,0,0.21,0.06,0.06,less,Fray & Schmitt 2009 Table 5 (CH3OH-2) at 273 K: 0.090 bar,,no,yes,Rubin et al. 2019 Table 2,methanol
+C2H5OH,C2H6O,2,6,1,0,0,0.039,0.023,0.023,less,boiling-point proxy (351 K),351,no,yes,Rubin et al. 2019 Table 2,ethanol (or dimethyl ether)
+CH3CH2CHO,C3H6O,3,6,1,0,0,0.0047,0.0024,0.0024,less,boiling-point proxy (321 K),321,no,yes,Rubin et al. 2019 Table 2,propanal (or acetone or propylene oxide)
+H2CO,CH2O,1,2,1,0,0,0.32,0.10,0.10,less,boiling-point proxy (254 K; close to NH3),254,no,yes,Rubin et al. 2019 Table 2,formaldehyde
+CH3CHO,C2H4O,2,4,1,0,0,0.047,0.017,0.017,less,boiling-point proxy (293 K),293,no,yes,Rubin et al. 2019 Table 2,acetaldehyde (or ethylene oxide or vinyl alcohol)
+HCOOH,CH2O2,1,2,2,0,0,0.013,0.008,0.008,less,Fray & Schmitt 2009 Table 5 (HCOOH-2) at 273 K: 0.011 bar,,no,yes,Rubin et al. 2019 Table 2,formic acid
+CH3COOH,C2H4O2,2,4,2,0,0,0.0034,0.0020,0.0020,less,boiling-point proxy (391 K),391,no,yes,Rubin et al. 2019 Table 2,acetic acid (or methyl formate or glycolaldehyde)
+(CH2OH)2,C2H6O2,2,6,2,0,0,0.011,0.007,0.007,less,boiling-point proxy (470 K),470,no,yes,Rubin et al. 2019 Table 2,ethylene glycol (or methoxymethanol)
+CH3(CH2)2CHO,C4H8O,4,8,1,0,0,0.010,0.003,0.003,less,boiling-point proxy (348 K),348,no,yes,Rubin et al. 2019 Table 2,butanal (or ethoxyethene)
+CH3COOCH3,C3H6O2,3,6,2,0,0,0.0021,0.0007,0.0007,less,boiling-point proxy (330 K),330,no,yes,Rubin et al. 2019 Table 2,methyl acetate (or propanoic acid or acetol)
+NH3,NH3,0,3,0,1,0,0.67,0.20,0.20,reference,Fray & Schmitt 2009 Table 5 (NH3-1): 14 bar at 273 K,239.8,no,no,Rubin et al. 2019 Table 2,depleted by v like the more volatile ices (include_NH3; Miller 2026 text)
+N2,N2,0,0,0,2,0,0.089,0.024,0.024,more,Fray & Schmitt 2009 Table 5 (N2-2) at 273 K: 729 bar,,yes,no,Rubin et al. 2019 Table 2,
+HCN,CHN,1,1,0,1,0,0.14,0.04,0.04,less,Fray & Schmitt 2009 Table 5 (HCN-1) at 273 K: 0.44 bar,,no,yes,Rubin et al. 2019 Table 2,hydrogen cyanide (or HNC)
+HNCO,CHNO,1,1,1,1,0,0.027,0.016,0.016,less,boiling-point proxy (297 K),297,no,yes,Rubin et al. 2019 Table 2,isocyanic acid (or cyanic acid)
+CH3NO,CH3NO,1,3,1,1,0,0.0040,0.0023,0.0023,less,boiling-point proxy (483 K),483,no,yes,Rubin et al. 2019 Table 2,formamide (or formaldoxime or oxaziridine)
+CH3CN,C2H3N,2,3,0,1,0,0.0059,0.0034,0.0034,less,boiling-point proxy (355 K),355,no,yes,Rubin et al. 2019 Table 2,acetonitrile (or isocyanomethane)
+HC3N,C3HN,3,1,0,1,0,0.00040,0.00023,0.00023,less,Fray & Schmitt 2009 Table 5 (HC3N-1) at 273 K: 0.041 bar,,no,yes,Rubin et al. 2019 Table 2,cyanoacetylene
+H2S,H2S,0,2,0,0,1,1.10,0.46,0.46,more,Fray & Schmitt 2009 Table 5 (H2S-1) at 273 K: 21 bar,,yes,no,Rubin et al. 2019 Table 2,
+OCS,COS,1,0,1,0,1,0.041,0.082,0.020,more,boiling-point proxy (223 K < 239.8 K),223,no,no,Rubin et al. 2019 Table 2,more volatile than NH3; not in Table 5
+SO,SO,0,0,1,0,1,0.071,0.142,0.037,unclassified,radical (no boiling point); partly from grains (Rubin et al. 2019),,no,no,Rubin et al. 2019 Table 2,not added
+SO2,SO2,0,0,2,0,1,0.127,0.254,0.064,less,Fray & Schmitt 2009 Table 5 (SO2-1) at 273 K: 5.4 bar,,no,yes,Rubin et al. 2019 Table 2,
+CS2,CS2,1,0,0,0,2,0.0057,0.0114,0.0028,less,boiling-point proxy (319 K),319,no,yes,Rubin et al. 2019 Table 2,
+S2,S2,0,0,0,0,2,0.0020,0.0040,0.0010,unclassified,diatomic sulfur (no boiling point); partly from grains,,no,no,Rubin et al. 2019 Table 2,not added
+H2CS,CH2S,1,2,0,0,1,0.0027,0.0058,0.0024,unclassified,thioformaldehyde (unstable; no boiling point),,no,no,Rubin et al. 2019 Table 2,not added
+S,S,0,0,0,0,1,0.46,0.36,0.36,unclassified,atomic sulfur (no boiling point); partly from grains,,no,no,Rubin et al. 2019 Table 2,not added
+CH3SH,CH4S,1,4,0,0,1,0.038,0.079,0.028,less,boiling-point proxy (279 K),279,no,yes,Rubin et al. 2019 Table 2,methanethiol
+C2H5SH,C2H6S,2,6,0,0,1,0.00058,0.00123,0.00049,less,boiling-point proxy (308 K),308,no,yes,Rubin et al. 2019 Table 2,ethanethiol (or dimethyl sulphide)
+Ar,Ar,0,0,0,0,0,0.00058,0.00022,0.00022,more,Fray & Schmitt 2009 Table 5 (Ar-1),,no,no,Rubin et al. 2019 Table 2,noble gas; not tracked
+Kr,Kr,0,0,0,0,0,0.000049,0.000022,0.000022,more,Fray & Schmitt 2009 Table 5 (Kr-1),,no,no,Rubin et al. 2019 Table 2,noble gas; not tracked
+Xe,Xe,0,0,0,0,0,0.000024,0.000011,0.000011,more,Fray & Schmitt 2009 Table 5 (Xe-1),,no,no,Rubin et al. 2019 Table 2,noble gas; not tracked
+HF,HF,0,1,0,0,0,0.011,0.037,0.008,less,boiling-point proxy (293 K),293,no,no,Rubin et al. 2019 Table 2,not CHONS: not added (range given in Rubin)
+HCl,HCl,0,1,0,0,0,0.014,0.045,0.012,more,boiling-point proxy (188 K),188,no,no,Rubin et al. 2019 Table 2,not CHONS: not added (range given in Rubin)
+HBr,HBr,0,1,0,0,0,0.00030,0.00053,0.00018,more,boiling-point proxy (206 K),206,no,no,Rubin et al. 2019 Table 2,not CHONS: not added (range given in Rubin)
+PO,PO,0,0,1,0,0,0.011,0.022,0.006,unclassified,radical (no boiling point),,no,no,Rubin et al. 2019 Table 2,not CHONS: not added

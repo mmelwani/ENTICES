@@ -362,12 +362,21 @@ pqi_initial_solids <- function(pqi) {
 # uses the run's Rho_soln column (PHREEQC's RHO; under the LLNL aqueous model this is ~1 g/cm3 for
 # water at any T and P, see README), else a number in g/cm3. iom_density: "delarue2026" (default)
 # evaluates Delarue et al. (2026) Eq. 10 at the remaining IOM's H/C on each row (the bulk IOM less
-# what the channels have released); a number fixes it (g/cm3). Returns list(summary, breakdown).
+# what the channels have released); a number fixes it (g/cm3). origin_pqi: for a restart, the first
+# run's .pqi, which holds the IOM's t = 0 inventory (a restart's own .pqi starts its IOM channels at
+# what was left); the t = 0 row is then the restart's start. Returns list(summary, breakdown).
 bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_density = "delarue2026",
-                         fluid_density = NULL, volumes = read_mineral_volumes()) {
+                         fluid_density = NULL, volumes = read_mineral_volumes(), origin_pqi = pqi) {
   if (missing(porosity) || !is.numeric(porosity) || porosity < 0 || porosity >= 1)
     stop("porosity: give the model's porosity (Simulator$params$porosity)")
   init <- pqi_initial_solids(pqi)
+  n_iom_start <- NULL                                       # IOM channel amounts at this run's start
+  if (!identical(normalizePath(origin_pqi, mustWork = FALSE), normalizePath(pqi, mustWork = FALSE))) {
+    org <- pqi_initial_solids(origin_pqi)
+    n_iom_start <- init$iom$m0[match(org$iom$name, init$iom$name)]
+    if (anyNA(n_iom_start)) stop("bulk_density: the restart's .pqi lacks IOM channels of origin_pqi")
+    init$iom <- org$iom; init$iom_mass0_g <- org$iom_mass0_g
+  }
   gfw <- element_gfw(init$database)
   iom_M <- vapply(init$iom$formula, kinetics_formula_mass, 0, gfw = gfw)
   if (identical(iom_density, "delarue2026")) {
@@ -402,7 +411,12 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
     bd[[length(bd) + 1]] <<- cbind(row = label, s$breakdown)
   }
   rho_col <- if ("Rho_soln" %in% names(x)) "Rho_soln" else NULL
-  add("t0", 0, init$minerals, init$iom_mass0_g, iom_hc(init$iom$m0), if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  if (is.null(n_iom_start)) {
+    add("t0", 0, init$minerals, init$iom_mass0_g, iom_hc(init$iom$m0), if (!is.null(fluid_density)) fluid_density else 1.0)  # pure water
+  } else {                                                  # a restart: its start, IOM measured from the origin
+    add("t0", NA_real_, init$minerals, max(0, init$iom_mass0_g - sum((init$iom$m0 - n_iom_start) * iom_M)), iom_hc(n_iom_start),
+        if (!is.null(fluid_density)) fluid_density else 1.0)
+  }
   for (r in which(x$state == "react" & trimws(x$soln) == "1")) {
     mol <- c(stats::setNames(as.numeric(x[r, paste0("k_", kin_min)]), kin_min),
              stats::setNames(as.numeric(unlist(x[r, ep_idx])), ep_names),
@@ -425,8 +439,23 @@ bulk_density <- function(csv, porosity, pqi = sub("\\.csv$", ".pqi", csv), iom_d
   if (any(s$gas_exceeds_pores))
     warning(sprintf("bulk_density: the pore gas exceeds the pore volume on %d of %d rows (Vgas/Vpore up to %.2f); gas saturation is capped at 1 and the excess is not counted (see gas_exceeds_pores)",
                     sum(s$gas_exceeds_pores), nrow(s), max(s$Vgas_Vpore)))
+  # End-state check against the present-day core density (Bagheri et al. 2025 Table 5): a check on the
+  # final state, not an input.
+  s$core_density_ok <- s$rho_bulk >= BAGHERI_CORE_DENSITY_G_CM3[1] & s$rho_bulk <= BAGHERI_CORE_DENSITY_G_CM3[2]
+  if (!s$core_density_ok[nrow(s)])
+    warning(sprintf("bulk_density: the final rho_bulk %.3f g/cm3 is outside Bagheri et al. (2025)'s core density %.2f-%.2f g/cm3",
+                    s$rho_bulk[nrow(s)], BAGHERI_CORE_DENSITY_G_CM3[1], BAGHERI_CORE_DENSITY_G_CM3[2]))
   list(summary = s, breakdown = do.call(rbind, bd))
 }
+
+# Present-day core bulk density, Bagheri et al. (2025) Table 5 (both dissipation scenarios), g/cm3.
+BAGHERI_CORE_DENSITY_G_CM3 <- c(2.160, 2.400)
+
+# Porosity that gives a core bulk density rho_core from a solid of density rho_solid and a pore fluid of
+# rho_fluid (all g/cm3): rho_core = (1 - phi) rho_solid + phi rho_fluid, so phi = (rho_solid - rho_core) /
+# (rho_solid - rho_fluid). Vectorised. At t = 0 with 15 wt% IOM (rho_solid 2.920) Bagheri's 2.16-2.40 gives
+# phi 0.271-0.396; less IOM means a denser solid and a higher phi for the same core density.
+phi_from_core_density <- function(rho_solid, rho_core, rho_fluid = 1.0) (rho_solid - rho_core) / (rho_solid - rho_fluid)
 
 # ---- Element totals of the whole system ---------------------------------------
 #
@@ -497,4 +526,170 @@ system_totals <- function(x, i, elements, iom = NULL, volumes = utils::read.csv(
   }
   for (g in grep("^g_", nm, value = TRUE)) addf(as.numeric(x[i, g]), sub("\\(g\\)$", "", sub("^g_", "", g)))
   tot
+}
+
+# The formal oxidation state of Fe in a mineral formula, by charge balance with fixed valences for the other
+# elements (O -2, H +1, Cl -1, F -1, Si +4, Al +3, Mg/Ca/Mn/Ni +2, Na/K +1, Cr +3; S -2 without O, -1 in
+# pyrite/marcasite, +6 with O; P +5 and C +4 with O). Schreibersite is entered zero-valent (Fe3P, as the
+# generators treat it). Fe-free formulas return NA.
+fe_valence <- function(formula, phase = "") {
+  if (phase == "Schreibersite") return(0)
+  f <- unlist(formula_elements(formula)); has <- function(e) e %in% names(f) && f[[e]] > 0
+  if (!has("Fe")) return(NA_real_)
+  v <- c(O = -2, H = 1, Cl = -1, F = -1, Si = 4, Al = 3, Mg = 2, Ca = 2, Mn = 2, Ni = 2, Na = 1, K = 1, Cr = 3, Ba = 2, Sr = 2)
+  hasO <- has("O")
+  if (has("S")) v["S"] <- if (hasO) 6 else if (phase %in% c("Pyrite", "Marcasite")) -1 else -2
+  if (has("P")) v["P"] <- if (hasO) 5 else -3
+  if (has("C")) v["C"] <- if (hasO) 4 else NA
+  other <- setdiff(names(f), "Fe")
+  if (any(is.na(v[other]))) stop("fe_valence: no valence for ", paste(other[is.na(v[other])], collapse = ", "), " in ", formula)
+  -sum(f[other] * v[other]) / f[["Fe"]]
+}
+
+# The run's H2 budget per orbit (item 6, PI 2026-10-29), on the run's normalised basis (mol per kg of the
+# reacting box's rock). Two counts of the H2 generated since t = 0:
+#  - lower bounds, as before: H2_from_metal (Fe and Ni metal to Fe(II) and Ni(II), 1 H2 each) and
+#    H2_from_schreibersite (zero-valent Fe3P to 3 Fe(II) and phosphate, 5.5 H2 each);
+#  - by electron balance (item 4 of 10-31, PI 2026-11-01), exact for Fe: H2_from_Fe = (1/2) the change of
+#    sum(n z_Fe) over every Fe-bearing phase, with z_Fe from each formula (fe_valence(): magnetite 8/3,
+#    Fe(III) phases 3, troilite and other Fe(II) phases 2, metal and schreibersite 0) in the porewater's
+#    phases (REACT row: equilibrium phases and kinetic reactants) and the ocean's (MIX 4 row), and the dissolved
+#    Fe of the porewater and ocean counted as Fe(II) (the CSV has no Fe(3) column; dissolved_Fe_mol bounds the
+#    error, at most 1/2 H2 per mol); H2_from_Ni = Ni metal to Ni(II); H2_from_P = (5/2) per schreibersite P to
+#    phosphate; H2_generated their sum;
+# and where the H2 is at the end of each orbit: dissolved in the ocean (MIX 2 row) and in its gas (MIX 4 row),
+# dissolved in the porewater (MIX 1 row) and in the pore gas (the REACT row under "retain"; none under
+# "to_ocean", moved to the ocean; <base>_poregas.csv under "retain_to_pore_volume"); H2_present their sum, and
+# H2_other_redox = H2_generated - H2_present, the H2 the other redox couples (carbon, sulfur, nitrogen) took up
+# (positive) or gave (negative).
+# csv: a tidal_kinetic run's CSV (its .pqi beside it). Returns one row per orbit.
+h2_budget <- function(csv, pqi = sub("\\.csv$", ".pqi", csv)) {
+  init <- pqi_initial_solids(pqi)
+  fate <- sub("^# pore_gas_fate: ", "", grep("^# pore_gas_fate: ", readLines(pqi, n = 80), value = TRUE)[1])
+  x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  r <- x[trimws(x$state) == "react", , drop = FALSE]; n <- nrow(r) %/% 4
+  pg <- if (identical(fate, "retain_to_pore_volume")) { y <- utils::read.delim(sub("\\.csv$", "_poregas.csv", csv), check.names = FALSE,
+                                                                              strip.white = TRUE); names(y) <- trimws(names(y)); y } else NULL
+  last <- function(d, i, nm) { k <- which(names(d) == nm); if (!length(k)) 0 else as.numeric(d[i, max(k)]) }
+  g <- function(m, k) if (is.na(m) || m == 0) 0 else m
+  fe0 <- g(init$minerals["Fe"]); ni0 <- g(init$minerals["Ni"]); sch0 <- g(init$minerals["Schreibersite"])
+  # Fe-bearing phases and their Fe valence; the t = 0 sum of n z_Fe over the initial solids
+  v <- read_mineral_volumes(); v <- v[grepl("Fe", v$formula), ]
+  zFe <- stats::setNames(mapply(function(f, ph) tryCatch(fe_valence(f, ph), error = function(e) NA_real_), v$formula, v$phase), v$phase)
+  unknown <- names(zFe)[is.na(zFe)]; zFe <- zFe[!is.na(zFe)]   # Fe phases fe_valence() cannot assign: must be absent
+  nFe <- stats::setNames(vapply(v$formula, function(f) { e <- unlist(formula_elements(f)); if ("Fe" %in% names(e)) e[["Fe"]] else 0 }, 0), v$phase)
+  nz0 <- sum(vapply(names(init$minerals), function(ph) if (ph %in% names(zFe)) init$minerals[[ph]] * nFe[[ph]] * zFe[[ph]] else 0, 0))
+  nz <- function(row, kinetic) {   # sum n z_Fe over a row's Fe phases (equilibrium-phase columns; k_ columns too)
+    s <- 0
+    for (ph in intersect(unknown, names(row))) { m <- as.numeric(row[1, max(which(names(row) == ph))])
+      if (!is.na(m) && m != 0) stop("h2_budget: no Fe valence for ", ph, ", present at ", m, " mol") }
+    for (ph in intersect(names(zFe), names(row))) if (ph != "Fe") { m <- as.numeric(row[1, max(which(names(row) == ph))]); if (!is.na(m)) s <- s + m * nFe[[ph]] * zFe[[ph]] }
+    if (kinetic) for (k in grep("^k_", names(row), value = TRUE)) { ph <- sub("^k_", "", k)
+      if (ph %in% names(zFe)) s <- s + as.numeric(row[[k]]) * nFe[[ph]] * zFe[[ph]] }
+    s
+  }
+  do.call(rbind, lapply(seq_len(n), function(o) {
+    i <- 4 * (o - 1)
+    fe <- if ("Fe_metal" %in% names(r)) as.numeric(r$Fe_metal[i + 1]) else 0
+    ni <- last(r, i + 1, "Ni"); ni <- if (ni0 > 0) ni else 0
+    sch <- if ("k_Schreibersite" %in% names(r)) as.numeric(r$k_Schreibersite[i + 1]) else 0
+    pore_gas <- switch(fate, retain = last(r, i + 1, "g_H2(g)"), retain_to_pore_volume = last(pg, o, "g_H2(g)"), 0)
+    fe_d <- as.numeric(r$Fe[i + 3]) * as.numeric(r$mass_H2O[i + 3]) + as.numeric(r$Fe[i + 4]) * as.numeric(r$mass_H2O[i + 4])
+    nz_end <- nz(r[i + 1, , drop = FALSE], TRUE) + nz(r[i + 2, , drop = FALSE], FALSE) + 2 * fe_d
+    b <- data.frame(orbit = o, Time_Years = as.numeric(r$Time_Years[i + 1]),
+               H2_from_metal = (fe0 - fe) + (ni0 - ni), H2_from_schreibersite = 5.5 * (sch0 - sch),
+               H2_from_Fe = (nz_end - nz0) / 2, H2_from_Ni = ni0 - ni, H2_from_P = 2.5 * (sch0 - sch),
+               ocean_dissolved = as.numeric(r$m_H2[i + 4]) * as.numeric(r$mass_H2O[i + 4]), ocean_gas = last(r, i + 2, "g_H2(g)"),
+               porewater_dissolved = as.numeric(r$m_H2[i + 3]) * as.numeric(r$mass_H2O[i + 3]), pore_gas = pore_gas,
+               dissolved_Fe_mol = fe_d)
+    b$H2_generated <- b$H2_from_Fe + b$H2_from_Ni + b$H2_from_P
+    b$H2_present <- b$ocean_dissolved + b$ocean_gas + b$porewater_dissolved + b$pore_gas
+    b$H2_other_redox <- b$H2_generated - b$H2_present
+    b
+  }))
+}
+
+# Scale a normalised budget (mol per kg of the box's rock) to mol in the reacting box, the whole permeable
+# layer and the whole core: x rock mass, V (rho_core - phi rho_water) with the Simulator's geometry. sim: the
+# run's Simulator.
+scale_to_core <- function(budget, sim, cols = setdiff(names(budget), c("orbit", "Time_Years"))) {
+  cfg <- sim$config; R <- cfg$core_radius; phi <- sim$params$porosity
+  rock <- function(L) 4 / 3 * pi * (R^3 - max(0, R - L)^3) * (cfg$core_density - phi * CONSTANTS$FLUID$density)
+  m <- c(box = rock(sim$reactive_thickness()), layer = rock(sim$params$layer_thickness), core = rock(R))
+  out <- budget[c("orbit", "Time_Years")]
+  for (s in names(m)) for (cc in cols) out[[paste0(cc, "_", s, "_mol")]] <- budget[[cc]] * m[[s]]
+  attr(out, "rock_kg") <- m
+  out
+}
+
+# Column-by-column comparison of two runs' rows (the comparison tests; PI 2026-11-01). A value passes if
+# within `rel` relative or `abs_floor` absolute (molal). Log-scale columns (pe, pH, la_*, si_*) are compared only
+# where the quantity they are the log of is poised: the relevant species above `gate` (1e-10 molal) in both
+# runs; there they pass within `log_abs` (1e-4) log units, and below the gate the molalities' absolute floor
+# covers them (the log of a trace or unpoised quantity carries solver noise: la_SO4-2 differed by 1.2e-4 log
+# units at <= 4e-9 molal). The relevant species (log_column_gate()):
+#   la_X   m_X;
+#   pH     the larger of m_H+ and m_OH- (water poises pH; always compared in practice);
+#   si_X   the smallest dissolved total (molal) of the elements of X's formula other than H and O;
+#   pe     a poising redox pair with both members above the gate: H2 (against water), Fe+2 + FeOH+ / Fe+3,
+#          SO4-2 / HS- + H2S, HCO3- + CO3-2 + CO2 / Mtg, N2 / NH4+ + NH3 (any one suffices).
+# Returns, per column, the largest relative difference among the values that fail (0 if none); a log-scale
+# column that fails is reported by its difference in log units.
+is_log_column <- function(name) name %in% c("pe", "pH") | startsWith(name, "la_") | startsWith(name, "si_")
+log_column_gate <- function(x, col, gate = 1e-10, formulas = NULL) {
+  m <- function(s) { k <- paste0("m_", s); v <- rep(0, nrow(x)); for (kk in k[k %in% names(x)]) v <- v + as.numeric(x[[kk]]); v }
+  if (startsWith(col, "la_")) { s <- sub("^la_", "", col); if (!paste0("m_", s) %in% names(x)) stop("log_column_gate: no m_", s); return(m(s) > gate) }
+  if (col == "pH") return(pmax(m("H+"), m("OH-")) > gate)
+  if (col == "pe") {
+    pairs <- list(cbind(m("H2"), Inf), cbind(m(c("Fe+2", "FeOH+")), m("Fe+3")), cbind(m("SO4-2"), m(c("HS-", "H2S"))),
+                  cbind(m(c("HCO3-", "CO3-2", "CO2")), m("Mtg")), cbind(m("N2"), m(c("NH4+", "NH3"))))
+    return(Reduce(`|`, lapply(pairs, function(pp) pmin(pp[, 1], pp[, 2]) > gate)))
+  }
+  if (startsWith(col, "si_")) {
+    ph <- sub("^si_", "", col); if (is.null(formulas)) formulas <- { v <- read_mineral_volumes(); stats::setNames(v$formula, v$phase) }
+    if (!ph %in% names(formulas)) stop("log_column_gate: no formula for ", ph)
+    el <- setdiff(names(unlist(formula_elements(formulas[[ph]]))), c("H", "O"))
+    if (!all(el %in% names(x))) stop("log_column_gate: no total column for ", paste(setdiff(el, names(x)), collapse = ", "), " (", ph, ")")
+    return(Reduce(pmin, lapply(el, function(e) as.numeric(x[[e]]))) > gate)
+  }
+  stop("log_column_gate: not a log-scale column: ", col)
+}
+column_differences <- function(A, B, cols, abs_floor = 1e-12, log_abs = 1e-4, gate = 1e-10) {
+  v <- read_mineral_volumes(); fm <- stats::setNames(v$formula, v$phase)
+  vapply(cols, function(c) { a <- as.numeric(A[[c]]); b <- as.numeric(B[[c]])
+    if (is_log_column(c)) { k <- abs(a - b) > log_abs & log_column_gate(A, c, gate, fm) & log_column_gate(B, c, gate, fm)
+      return(if (any(k, na.rm = TRUE)) max(abs(a - b)[k], na.rm = TRUE) else 0) }
+    k <- abs(a - b) > abs_floor
+    if (!any(k, na.rm = TRUE)) 0 else max(abs(a - b)[k] / pmax(abs(a), abs(b))[k], na.rm = TRUE) }, 0)
+}
+
+# Approach to steady state (item 7, PI 2026-10-29), per orbit, on the run's normalised basis: the net
+# elemental flux into the ocean (the change of the ocean side, its water, minerals and gas, over the orbit:
+# the ocean exchanges only with the porewater), and the net change of the secondary minerals in the
+# porewater (REACT row) and in the ocean (MIX 4 row), in moles of formula units. A steady state shows as
+# fluxes that stop changing, not necessarily zero (README section 7).
+steady_state_diagnostics <- function(csv, pqi = sub("\\.csv$", ".pqi", csv), elements = c("C", "Mtg", "Na", "Mg", "Si", "Fe", "Ca", "S", "Cl", "N")) {
+  init <- pqi_initial_solids(pqi)
+  fate <- sub("^# pore_gas_fate: ", "", grep("^# pore_gas_fate: ", readLines(pqi, n = 80), value = TRUE)[1])
+  x <- utils::read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  v <- read_mineral_volumes()
+  r <- x[trimws(x$state) == "react", , drop = FALSE]; n <- nrow(r) %/% 4
+  ini <- x[trimws(x$state) == "i_soln", , drop = FALSE]
+  el <- intersect(c(elements, "H", "O"), names(x))
+  ocean <- function(o) whole_system_parts(r[seq_len(4 * o), , drop = FALSE], init, fate)$ocean[el]
+  oc0 <- if (nrow(ini) >= 2) stats::setNames(vapply(el, function(e) as.numeric(ini[2, e]) * as.numeric(ini$mass_H2O[2]), 0), el) else NULL
+  if (!is.null(oc0)) oc0[c("H", "O")] <- c(as.numeric(ini$H_total_mol[2]), as.numeric(ini$O_total_mol[2]))
+  primaries <- c(names(init$minerals), "Fe", "Ni")
+  sec <- function(i) { p <- setdiff(intersect(names(r), v$phase), c(primaries, init$totals))
+    sum(vapply(p, function(q) as.numeric(r[i, max(which(names(r) == q))]), 0), na.rm = TRUE) }
+  prev <- oc0; p1 <- 0; p2 <- 0
+  do.call(rbind, lapply(seq_len(n), function(o) {
+    i <- 4 * (o - 1); oc <- ocean(o)
+    flux <- if (is.null(prev)) rep(NA_real_, length(el)) else oc - prev
+    s1 <- sec(i + 1); s2 <- sec(i + 2)
+    row <- data.frame(orbit = o, Time_Years = as.numeric(r$Time_Years[i + 1]), sec_minerals_pore_change = s1 - p1, sec_minerals_ocean_change = s2 - p2)
+    for (k in seq_along(el)) row[[paste0("flux_to_ocean_", el[k])]] <- flux[k]
+    prev <<- oc; p1 <<- s1; p2 <<- s2
+    row
+  }))
 }

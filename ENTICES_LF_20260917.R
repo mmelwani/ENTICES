@@ -50,6 +50,9 @@ source("phreeqc_tools.R")
 # organic_contribution.R -- pair_organic_run(): a run and its organic_wt_percent = 0 blank, and the
 # organics' contribution to ocean DIC, CH4, NH4+ and H2 by difference.
 source("organic_contribution.R")
+# porosity_evolution.R -- run_tidal_evolution(): tidal_kinetic in chunks, with the porosity (and k, alpha,
+# skin depth, exchange) updated between chunks from the solid volume (PI 2026-10-29).
+source("porosity_evolution.R")
 
 # Primary rock composition, mol per unit total_rock (i.e. per kg anhydrous rock).
 # Single source for all four generators that build primary-mineral inventories.
@@ -123,6 +126,46 @@ SHARED_PUNCH_LINES <- '   900 PUNCH EQUI("Fe")\n   910 PUNCH EQUI_DELTA("Fe")\n 
 # NULL = pure water). A numerical seed, not a composition: the science case is pure water, so that
 # all ocean carbon can be attributed to the organics. Returns the SOLUTION line, with its leading
 # newline, to append to the block's last line ("" for NULL).
+# KNOBS around every ocean step (MIX 4) of the tidal generators. At 25 C the ocean step fails to converge
+# for scattered porewater fractions ("Numerical method failed on all combinations": 3e-8, 2e-6 and 5e-6
+# fail, neighbouring fractions run; 2026-10-29). -diagonal_scale true converges all fractions tested
+# (1e-8 to 1e-3) and leaves converging runs unchanged (a 160 C orbit agrees to 1e-8 relative). It is
+# switched off after the ocean step: set globally it shifted the porewater step's m_H2S by 0.9%.
+# Kozeny-Carman permeability (m2) of a granular medium of grain diameter d (m) and porosity phi (item 3, PI
+# 2026-10-29): k = d^2 phi^3 / (180 (1 - phi)^2). The 180 is Carman's (1937) value for packed spheres (36 x
+# his constant 5, with the specific surface 6/d); Carman, P.C. (1937), Fluid flow through granular beds,
+# Trans. Inst. Chem. Eng. 15, 150-166. A lower bound where fractures carry the flow.
+kozeny_carman_k <- function(d, phi) d^2 * phi^3 / (180 * (1 - phi)^2)
+# The grain diameter that gives permeability k at porosity phi (the inverse).
+kozeny_carman_d <- function(k, phi) sqrt(k * 180 * (1 - phi)^2 / phi^3)
+# Geometric specific surface area (m2/g) of spheres of diameter d (m) and density rho (g/cm3): 6 / (rho d).
+geometric_ssa_m2_g <- function(d, rho) 6 / (rho * 1e6 * d)
+
+# The exact end state for restarts (item 1 of 10-31, PI 2026-11-01): every tidal_kinetic input (and its restart)
+# ends by DUMPing solutions 1 and 2 as SOLUTION_RAW to <base>_dump.txt, next to its CSV. A restart reads them
+# back verbatim (restart_raw_solutions()), so total H, total O and the charge balance carry over exactly and a
+# new temperature enters only through REACTION_TEMPERATURE. Redefining the solutions from pH, pe and element
+# totals at a new temperature changed total H by 4-6e-6 per restart.
+dump_block <- function(filename) {
+  sprintf("\n# End state for restarts (restart_raw_solutions())\nDUMP\n    -file %s_dump.txt\n    -solution 1 2\nEND\n",
+          tools::file_path_sans_ext(basename(filename)))
+}
+# The parent's SOLUTION_RAW 1 and 2 from <prev_csv base>_dump.txt, as text, or NULL if there is no dump (runs made
+# before 2026-11-01): the restart then falls back to redefining the solutions from the CSV row, with a warning.
+restart_raw_solutions <- function(prev_csv) {
+  f <- sub("\\.csv$", "_dump.txt", prev_csv)
+  if (!file.exists(f)) return(NULL)
+  l <- readLines(f, warn = FALSE)
+  starts <- grep("^SOLUTION_RAW", l); if (length(starts) != 2) stop("restart_raw_solutions: ", f, " has ", length(starts), " SOLUTION_RAW blocks, not 2")
+  kw <- grep("^[A-Z_]+", l); blk <- function(s) { e <- min(c(kw[kw > s], length(l) + 1)) - 1; l[s:e] }
+  b <- lapply(starts, blk); n <- as.integer(sub("^SOLUTION_RAW\\s+([0-9]+).*", "\\1", vapply(b, `[`, "", 1)))
+  if (!setequal(n, 1:2)) stop("restart_raw_solutions: ", f, " holds solutions ", paste(n, collapse = ", "))
+  list(file = f, solution1 = paste(b[[which(n == 1)]], collapse = "\n"), solution2 = paste(b[[which(n == 2)]], collapse = "\n"))
+}
+
+OCEAN_STEP_KNOBS_ON  <- "KNOBS\n    -diagonal_scale true\n"
+OCEAN_STEP_KNOBS_OFF <- "KNOBS\n    -diagonal_scale false\n"
+
 trace_C_solution_line <- function(trace_C_molal) {
   if (is.null(trace_C_molal)) return("")
   if (!is.numeric(trace_C_molal) || length(trace_C_molal) != 1 || !isTRUE(trace_C_molal > 0))
@@ -326,11 +369,18 @@ gas_phase_block <- function(n, comps, pressure_atm, temp_C, label) {
           sprintf("    %-10s 0", comps)), collapse = "\n")
 }
 # GAS_PHASE_MODIFY setting a restart's gas phase n to the moles in a parent row (its g_ columns).
-gas_restore_block <- function(n, comps, row) {
+# retain_to_pore_volume: the parent's pore gas after its last removal (<base>_poregas.csv, last row).
+poregas_last_row <- function(prev_csv) {
+  f <- sub("\\.csv$", "_poregas.csv", prev_csv)
+  if (!file.exists(f)) stop("retain_to_pore_volume restart: no ", basename(f), " beside the parent")
+  x <- utils::read.delim(f, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
+  x[nrow(x), , drop = FALSE]
+}
+gas_restore_block <- function(n, comps, row, scale = 1) {
   # by make.names(), so a row read with or without check.names matches ("g_CO2(g)" / "g_CO2.g.")
   v <- vapply(comps, function(c) { k <- match(make.names(paste0("g_", c)), make.names(names(row)))
     if (!is.na(k)) suppressWarnings(as.numeric(row[[k]])) else NA_real_ }, 0)
-  v <- v[!is.na(v) & v > 0]
+  v <- v[!is.na(v) & v > 0] * scale
   if (!length(v)) return(sprintf("# gas phase %d: empty in the parent", n))
   paste(c(sprintf("GAS_PHASE_MODIFY %d   # the parent's gas phase %d", n, n),
           unlist(lapply(names(v), function(c) c(sprintf("    -component %s", c), sprintf("        -moles %.15e", v[[c]]))))),
@@ -347,24 +397,47 @@ gas_so_line <- function(comps) sprintf("    -gases               %s", paste(comp
 # GAS_PHASE 1 is then redefined empty at the start of the next porewater step. Mass is conserved to
 # the integrator's precision (tested: < 1e-11 relative); there is never more than one gas reservoir
 # per reacting solution. Each component enters by its own formula (CO2, H2, Mtg, ...).
-gas_transfer_block <- function(comps) {
-  nm <- sprintf("PoreGasIn_%d", seq_along(comps))
+# out = TRUE (pore_gas_fate = "retain_to_pore_volume", PI 2026-10-31) adds KINETICS 4, which removes the
+# same moles from the porewater and its gas phase right after the porewater step (pore_gas_out_block()).
+gas_transfer_block <- function(comps, out = FALSE, poregas_file = NULL) {
+  nm <- sprintf("PoreGasIn_%d", seq_along(comps)); no <- sprintf("PoreGasOut_%d", seq_along(comps))
+  f <- sub("\\(g\\)$", "", comps)
   paste(c("RATES",
           unlist(lapply(seq_along(comps), function(j) c(nm[j], " -start",
                         sprintf(" 10 SAVE GET(%d) * TIME   # moles of %s in the pore bubble", 9100 + j, comps[j]), " -end"))),
+          if (out) unlist(lapply(seq_along(comps), function(j) c(no[j], " -start",
+                        sprintf(" 10 SAVE -GET(%d) * TIME   # the same moles out of the pore system", 9100 + j), " -end"))),
           "",
-          "KINETICS 3   # used only in the ocean step, when pore_gas_fate = to_ocean",
-          unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", nm[j]), sprintf("      -formula %s 1", sub("\\(g\\)$", "", comps[j])),
+          "KINETICS 3   # used only in the ocean step, when pore_gas_fate is to_ocean or retain_to_pore_volume",
+          unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", nm[j]), sprintf("      -formula %s 1", f[j]),
                                                          "      -m0 1e6"))),
-          "   -steps 1"), collapse = "\n")
+          "   -steps 1",
+          if (out) c("", "KINETICS 4   # retain_to_pore_volume: the excess leaves the porewater and its gas phase",
+                     unlist(lapply(seq_along(comps), function(j) c(sprintf("   %s", no[j]), sprintf("      -formula %s 1", f[j]), "      -m0 1e6"))),
+                     "   -steps 1",
+                     "# the pore gas left after the removal, one row per orbit (pore_gas_out_block())",
+                     "SELECTED_OUTPUT 3", sprintf("    -file %s", poregas_file), "    -reset false", "    -high_precision true", "    -state true", "    -solution true",
+                     "    -water true", gas_so_line(comps), "    -active false")), collapse = "\n")
+}
+# retain_to_pore_volume: right after the porewater step, remove the excess the step PUT (the gas beyond
+# the pore volume) from the porewater and its gas phase, which re-equilibrate; the ocean step then adds
+# it to the ocean (KINETICS 3). Its rows go to SELECTED_OUTPUT 3 (<base>_poregas.csv: the pore gas after
+# the removal, which whole-system bookkeeping and restarts read), not to the run's CSV.
+pore_gas_out_block <- function() {
+  paste0("SELECTED_OUTPUT 1\n    -active false\nSELECTED_OUTPUT 3\n    -active true\n",
+         "USE solution 1\nUSE gas_phase 1\nUSE kinetics 4\nUSE equilibrium_phases none\nUSE reaction none\n",
+         "USE reaction_temperature 1\nUSE reaction_pressure 1\nSAVE solution 1\nSAVE gas_phase 1\nEND\n",
+         "SELECTED_OUTPUT 3\n    -active false\nSELECTED_OUTPUT 1\n    -active true\n\n")
 }
 # USER_PUNCH columns for the gas phase of the simulation in use: its volume (L), pressure (atm; 0 when
 # there is no bubble) and volume over the pore volume (vpore_L, from the same normalisation as the
 # porewater mass, at 1 kg/L). On ocean rows Vgas_Vpore uses the same pore volume. put = TRUE adds the
 # PUT lines that store the pore bubble for the to_ocean transfer.
-gas_punch <- function(comps, vpore_L, put = FALSE) {
+gas_punch <- function(comps, vpore_L, put = FALSE, excess_only = FALSE) {
   sum_lines <- sprintf("   %d ng = ng + GAS(\"%s\")\n", 931 + seq_along(comps) - 1, comps)
-  put_lines <- if (put) sprintf("   %d PUT(GAS(\"%s\"), %d)\n", 970 + seq_along(comps) - 1, comps, 9100 + seq_along(comps)) else character(0)
+  # excess_only (retain_to_pore_volume): PUT only the fraction beyond the pore volume, 1 - Vpore/Vgas
+  fx_lines <- if (excess_only) sprintf("   952 fx = 0\n   953 IF vg > %.15g THEN fx = 1 - %.15g / vg\n", vpore_L, vpore_L) else "   952 fx = 1\n"
+  put_lines <- if (put) c(fx_lines, sprintf("   %d PUT(GAS(\"%s\") * fx, %d)\n", 970 + seq_along(comps) - 1, comps, 9100 + seq_along(comps))) else character(0)
   list(headings = " Vgas_L P_gas_atm Vgas_Vpore",
        lines = paste0(c("   930 ng = 0\n", sum_lines, "   950 vg = 0\n", "   951 IF ng > 0 THEN vg = GAS_VM * ng\n",
                         sprintf("   960 PUNCH vg, GAS_P, vg / %.15g\n", vpore_L), put_lines), collapse = ""))
@@ -375,18 +448,40 @@ gas_punch <- function(comps, vpore_L, put = FALSE) {
 # (Rubin et al. 2019, MNRAS 489, 594-607, the "67P" column below, mol per 100 mol H2O), with every
 # ice more volatile than NH3 at 273 K (Fray & Schmitt 2009) depleted by v_NH3 = 0.02. v_NH3 comes
 # from Titan's atmospheric N budget (Miller et al. 2026, eqs. 21-24): it is not an Enceladus
-# constraint. NH3 (0.67 per 100 H2O, Rubin et al. 2019 Table 4) is not in Miller's Table 5, whose
-# "Total N" (2 x N2) excludes it, while their text says v_NH3 applies to NH3 too: include_NH3
-# (default FALSE, Table 5 as printed) is pending the PI. include_O2 exists because O2 decides the
-# redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound (2.6 molal CO2 + 1.7 molal
-# CO, far above CO2-clathrate dissociation at 1.45 C).
+# constraint. NH3 (0.67 +- 0.20 per 100 H2O, Rubin et al. 2019 Table 2) is not in Miller's Table 5,
+# whose "Total N" (2 x N2) excludes it, while their text applies v_NH3 to "NH3 and other compounds
+# that are more volatile": treated as an omission, include_NH3 = TRUE by default (PI 2026-10-29),
+# 0.0134 per 100 H2O = 7.44e-3 molal. (Rubin et al. note a factor of 10 between the 2015 bulk NH3 and
+# the earlier 3.1 au measurements, 0.06/0.15, which they leave unexplained.) include_O2 exists
+# because O2 decides the redox outcome. v = 1 is undepleted 67P ice: an unrealistic upper bound
+# (2.6 molal CO2 + 1.7 molal CO, far above CO2-clathrate dissociation at 1.45 C).
+# f (PI 2026-10-29) scales the whole cometary volatile load after the depletion: the fraction of the
+# accreted cometary volatiles retained in the ocean (f = 1: all of it; 0.1: a tenth).
+# include_less_volatile (default FALSE): Miller's rule keeps ices LESS volatile than NH3 at 273 K in
+# full, but Table 5 lists none. TRUE adds them, undepleted (x f), from data/comet67p_volatility.csv
+# (Rubin et al. 2019 Table 2; classified by Fray & Schmitt 2009 at 273 K or a boiling-point proxy;
+# CHONS species only): 21 species, C 1.08, N 0.177, S 0.177 per 100 H2O (6.2x, 50x and 8x Table 5's).
+# They enter by their elements (cometary_reaction_lines): under c4_only their carbon can only become
+# C(+4), and the electrons go to H2 or reduce sulfate; HCN's N becomes N(-3). In a cold ocean these
+# organics are kinetically metastable, so that is an equilibrium assumption; under "coupled" the
+# equilibrium decides as well (no species is held as itself).
 COMET_67P_PER_100_H2O <- c(CO2 = 4.7, CO = 3.1, O2 = 3.1, H2S = 1.1, CH4 = 0.34, C2H6 = 0.29, N2 = 8.9e-2, NH3 = 0.67)
-cometary_ice_ocean <- function(v = 0.02, include_NH3 = FALSE, include_O2 = TRUE) {
+COMET_VOLATILITY_CSV <- "data/comet67p_volatility.csv"
+cometary_ice_ocean <- function(v = 0.02, f = 1, include_NH3 = TRUE, include_less_volatile = FALSE, include_O2 = TRUE) {
   if (!is.numeric(v) || length(v) != 1 || !isTRUE(v > 0 && v <= 1)) stop("v must be one number in (0, 1]")
+  if (!is.numeric(f) || length(f) != 1 || !isTRUE(f > 0 && f <= 1)) stop("f must be one number in (0, 1]")
   sp <- setdiff(names(COMET_67P_PER_100_H2O), c(if (!include_NH3) "NH3", if (!include_O2) "O2"))
-  # mol per 100 mol H2O x v -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
-  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v / 100 / 0.0180153, v = v,
-                 include_NH3 = include_NH3, include_O2 = include_O2), class = "cometary_ice")
+  # mol per 100 mol H2O x v x f -> mol/kgw: / 100 / 0.0180153 kg per mol H2O
+  lv <- c(C = 0, H = 0, O = 0, N = 0, S = 0); lv_species <- character(0)
+  if (include_less_volatile) {
+    x <- utils::read.csv(COMET_VOLATILITY_CSV, stringsAsFactors = FALSE)
+    x <- x[x$added_by_include_less_volatile == "yes", ]
+    lv <- vapply(names(lv), function(e) sum(x[[e]] * x$abundance_per_100_H2O), 0) * f / 100 / 0.0180153
+    lv_species <- x$species
+  }
+  structure(list(mol_per_kgw = COMET_67P_PER_100_H2O[sp] * v * f / 100 / 0.0180153, v = v, f = f,
+                 include_NH3 = include_NH3, include_O2 = include_O2, include_less_volatile = include_less_volatile,
+                 less_volatile_mol_per_kgw = lv, less_volatile_species = lv_species), class = "cometary_ice")
 }
 # REACTION lines for the ices, by carbon mode: CO2, CO, O2, H2S and NH3 are coupled (equilibrium
 # decides CO's fate; under c4_only C can only be +4, so CO + H2O -> CO2 + H2);
@@ -400,8 +495,13 @@ cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
   dec <- ch4_mode$decoupled
   # CO enters as CO2 minus O: REACTION matches phase names first, case-insensitively, and "CO" is
   # the cobalt phase Co (tested 2026-10-28: it added 0.034 molal Co).
-  r <- c(CO2 = g("CO2") + g("CO"), O = -g("CO"), O2 = g("O2"), H2S = g("H2S"), Ntg = g("N2"), NH3 = g("NH3"),
-         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0, H = if (dec) -2 * g("C2H6") else 0,
+  # the less volatile ices enter by their elements, as CO2 (C), NH3 (N), H2S (S) and H and O corrections
+  # (element names alone could match a phase, as CO did): their C becomes C(+4) under c4_only (item 4)
+  lv <- if (is.null(ice$less_volatile_mol_per_kgw)) c(C = 0, H = 0, O = 0, N = 0, S = 0) else ice$less_volatile_mol_per_kgw * water_kg
+  r <- c(CO2 = g("CO2") + g("CO") + lv[["C"]], O = -g("CO") + lv[["O"]] - 2 * lv[["C"]], O2 = g("O2"), H2S = g("H2S") + lv[["S"]],
+         Ntg = g("N2"), NH3 = g("NH3") + lv[["N"]],
+         Mtg = if (dec) g("CH4") + 2 * g("C2H6") else 0,
+         H = (if (dec) -2 * g("C2H6") else 0) + lv[["H"]] - 3 * lv[["N"]] - 2 * lv[["S"]],
          CH4 = if (dec) 0 else g("CH4"), C2H6 = if (dec) 0 else g("C2H6"))
   r <- r[r != 0]
   c(sprintf("    %-5s %.15e", names(r), r), "    1 mol")
@@ -412,9 +512,11 @@ cometary_reaction_lines <- function(ice, ch4_mode, water_kg) {
 cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, base_name, database) {
   comps <- gas_components(ch4_mode, "Ntg(g)")
   paste(c("END",
-          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, include_NH3 = %s, include_O2 = %s), in mol/kgw: %s.",
-                  ice$v, ice$include_NH3, ice$include_O2,
-                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", ")),
+          sprintf("# Cometary-ice ocean: cometary_ice_ocean(v = %g, f = %g, include_NH3 = %s, include_less_volatile = %s, include_O2 = %s), in mol/kgw: %s%s.",
+                  ice$v, if (is.null(ice$f)) 1 else ice$f, ice$include_NH3, isTRUE(ice$include_less_volatile), ice$include_O2,
+                  paste(sprintf("%s %.4e", names(ice$mol_per_kgw), ice$mol_per_kgw), collapse = ", "),
+                  if (isTRUE(ice$include_less_volatile)) paste0("; less volatile ices (", length(ice$less_volatile_species), " species) as elements: ",
+                    paste(sprintf("%s %.4e", names(ice$less_volatile_mol_per_kgw), ice$less_volatile_mol_per_kgw), collapse = ", ")) else ""),
           "# Entered as a REACTION into pure water at ocean T and P, not as SOLUTION totals: the ice mixture",
           "# is out of redox equilibrium (O2 with CO and H2S), and equilibrium decides the outcome. That is",
           "# an assumption at 1.45 C, where the CO shift and O2 oxidation are kinetically slow.",
@@ -428,6 +530,7 @@ cometary_ocean_simulation <- function(ice, ch4_mode, water_kg, ocean_gas_block, 
           "    -high_precision true", "    -state true", "    -solution true", "    -reaction true", "    -ph true", "    -pe true", "    -alkalinity true", "    -water true",
           totals_block(database),
           "    -molalities CO2 HCO3- CO3-2 Mtg H2 O2 HS- H2S SO4-2 HSO4- Ntg NH3 NH4+ HCOO- CO CH3COO- C2H6",
+          sprintf("    -saturation_indices %s CO2_hydrate H2S_hydrate", if (ch4_mode$decoupled) "Mtg_hydrate" else "CH4_hydrate"),
           gas_so_line(comps),
           "USER_PUNCH 2", "    -headings H_total_mol O_total_mol Vgas_L", "    10 PUNCH TOT(\"H\") * TOT(\"water\"), TOT(\"O\") * TOT(\"water\")",
           "    20 ng = 0", sprintf("    %d ng = ng + GAS(\"%s\")", 20 + seq_along(comps), comps), "    90 PUNCH GAS_VM * ng",
@@ -567,7 +670,7 @@ profile_conditions <- function(profile_file, layer_thickness) {
 
 # The two pressure lines stamp_pqi_header() writes, and parent_pressures_atm() reads back.
 pressure_header_lines <- function(pore_pressure_atm, ocean_pressure_atm) {
-  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the permeable layer)", pore_pressure_atm),
+  c(sprintf("# Porewater pressure: %.1f atm (profile mean over the reacting box)", pore_pressure_atm),
     sprintf("# Ocean pressure: %.1f atm (profile, ocean floor)", ocean_pressure_atm))
 }
 # A parent run's pressures (atm), from its .pqi header. NA where there is no parent .pqi or no
@@ -622,7 +725,45 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  
                                  # Orbital properties
                                  orbital_period = 118800, # [s]
-                                 max_tidal_stress = 1e5,  # [Pa] UNSOURCED as a value: tidal pressure amplitude, ~3x Liao et al. (2020) Fig. B3 peak; swept with k (README section 6, Flow driving; PROGRESS D12)
+                                 # Tidal pore-pressure amplitude [Pa]. NULL (default): derived from the strain, dP = alpha eps_v M
+                                 # (Simulator$tidal_pressure(); PI 2026-10-30). A number overrides it (the old default was an
+                                 # UNSOURCED 1e5 Pa); README section 6.
+                                 max_tidal_stress = NULL,
+                                 # Ocean tidal loading at the seafloor (PI 2026-10-31): the whole-body surface Love number h2 of
+                                 # Bagheri et al. (2025) Table 3, "dissipative core" (|h2| 0.0459 +- 0.0294, lag 2.95 +- 2.69 deg);
+                                 # the ocean surface beneath the shell is taken to move with the surface. ocean_load = FALSE drops it.
+                                 # The core's tidal strain (PI item N, 2026-10-31; README section 6, The strain):
+                                 #   "layered" (default): the volumetric strain of the core and the seafloor normal stress from a
+                                 #     layered forward model of Bagheri et al. (2025)'s structure (TidalPy; scripts/layered_core_strain.py,
+                                 #     data/layered_core_strain*.csv), mean over Table 5's parameter ranges for tidal_scenario
+                                 #     ("dissipative_core": core_viscosity 4.4e11-2.3e12 Pa s; "dissipative_shell": 3e13-1e22),
+                                 #     interpolated in log core_viscosity;
+                                 #   "liao": Liao et al. (2020)'s isolated uniform Maxwell core (the form used before N), with the
+                                 #     ocean load from surface_h2 below.
+                                 # strain_scale multiplies the strain (an override for sweeps; default 1).
+                                 # core_bulk_modulus: NULL (default) = the drained frame modulus K_d = K_grain (1 - phi/phi_c)
+                                 # of the Simulator's porosity (PI 2026-11-01; K_grain the Hill average of the reconstruction's
+                                 # minerals, grain_elastic_moduli()); a number [Pa] overrides it. The layered strain scales as
+                                 # 1/K_core from the tables' K_core_Pa.
+                                 core_bulk_modulus = NULL,
+                                 strain_model = "layered",
+                                 tidal_scenario = "dissipative_core",
+                                 strain_scale = 1,
+                                 surface_h2 = 0.0459,
+                                 surface_h2_lag_deg = 2.95,
+                                 ocean_load = TRUE,
+                                 eccentricity = 0.0047,   # Enceladus's orbital eccentricity (the value with which Liao et al. 2020's Fig. 2a is reproduced)
+
+                                 # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
+                                 # (2025) Table 5, "dissipation in the core" (mu 4-70 GPa, eta 4.4e11-2.3e12 Pa s); PLACEHOLDERS at
+                                 # the geometric means until the PI picks values. (The Biot coefficient is the Simulator's,
+                                 # from porosity: Simulator$biot_alpha().)
+                                 core_rigidity = 17e9,    # [Pa]
+                                 core_viscosity = 1e12,   # [Pa s]
+                                 # Bulk moduli of the pore water and the rock grains, for the poroelastic skin depth:
+                                 # Liao et al. (2020) Table A1.
+                                 water_bulk_modulus = 2.2e9,  # [Pa] K_f
+                                 rock_bulk_modulus = 10e9,    # [Pa] K_s
                                  
                                  # Optional/derived parameters
                                  hydrosphere_thickness = NA, 
@@ -814,12 +955,129 @@ GeometricUtils <- list(
   }
 )
 
+# Grain elastic moduli of the core's solid (PI 2026-11-01): the Hill average (mean of the Voigt and Reuss
+# bounds), by volume fraction, of data/mineral_elastic_moduli.csv over the reconstruction's minerals
+# (reconstruction/rock_mol_per_kg.csv, molar volumes from data/mineral_molar_volumes.csv) and the IOM.
+# Sources: Abers & Hacker (2016), G-cubed 17, 616-624 (silicates); Bass (1995), AGU Reference Shelf 2 (Fe metal,
+# tephroite, chromite as the PROXY for magnesiochromite); troilite K0 from Holland & Powell via Perple_X 7.2.1
+# hp634ver.dat (entry tro; the file's title: "Holland & Powell, JMG 2011 (TC-DS633, 23 Jun 2017) + additional data"),
+# its G an estimate (27-35.5 GPa from Bass's monosulfide G/K); IOM K0 from Delarue et al. (2026) EPSL 691, 120227
+# (Eq. 7, an anthracite coal), its G 1-5 GPa from terrestrial kerogen (Othman et al. 2022, ACS Omega 7, 32829-32839;
+# Yan & Han 2013, SEG Expanded Abstracts). Ni and schreibersite
+# (~1.2% of the minerals' volume) have no sourced modulus and are left out (the minerals renormalised).
+# iom_volume_fraction: the IOM's share of the solid volume (Simulator$iom_volume_fraction()). mu_case = "low",
+# "central" or "high" takes the troilite and IOM shear moduli at their bracket's end. Abers & Hacker's and Holland &
+# Powell's bulk moduli are isothermal, Bass's adiabatic (~1% apart).
+GRAIN_MODULI_CSV <- "data/mineral_elastic_moduli.csv"
+grain_elastic_moduli <- function(iom_volume_fraction = 0, mu_case = c("central", "low", "high"),
+                                 rock_csv = "reconstruction/rock_mol_per_kg.csv") {
+  mu_case <- match.arg(mu_case)
+  m <- utils::read.csv(GRAIN_MODULI_CSV, stringsAsFactors = FALSE)
+  if (mu_case != "central") { b <- if (mu_case == "low") m$G_low_GPa else m$G_high_GPa; m$G_GPa <- ifelse(is.na(b), m$G_GPa, b) }
+  r <- utils::read.csv(rock_csv, comment.char = "#", stringsAsFactors = FALSE)
+  v <- utils::read.csv("data/mineral_molar_volumes.csv", stringsAsFactors = FALSE)
+  vm <- stats::setNames(v$Vm_cm3_mol, v$phase); vm["Iron"] <- vm[["Fe"]]; vm["Nickel"] <- vm[["Ni"]]
+  if (any(is.na(vm[r$phase]))) stop("grain_elastic_moduli: no molar volume for ", paste(r$phase[is.na(vm[r$phase])], collapse = ", "))
+  r$f <- r$mol_per_kg * vm[r$phase]; r$f <- r$f / sum(r$f)
+  x <- merge(r, m, by = "phase", all.x = TRUE); y <- x[!is.na(x$K_GPa), ]
+  if (!(iom_volume_fraction >= 0 && iom_volume_fraction < 1)) stop("iom_volume_fraction must be in [0, 1)")
+  f <- c(y$f / sum(y$f) * (1 - iom_volume_fraction), iom_volume_fraction)
+  K <- c(y$K_GPa, m$K_GPa[m$phase == "IOM"]); G <- c(y$G_GPa, m$G_GPa[m$phase == "IOM"])
+  KV <- sum(f * K); KR <- 1 / sum(f / K); GV <- sum(f * G); GR <- 1 / sum(f / G)
+  list(K = (KV + KR) / 2 * 1e9, G = (GV + GR) / 2 * 1e9, K_voigt = KV * 1e9, K_reuss = KR * 1e9,
+       G_voigt = GV * 1e9, G_reuss = GR * 1e9, iom_volume_fraction = iom_volume_fraction,
+       covered = sum(y$f), missing = x$phase[is.na(x$K_GPa)])
+}
+# The IOM's share of the solid volume for iom_g grams of IOM at density iom_density (g/cm3) beside the minerals of
+# 1 kg of rock carrying iom_wt_percent of IOM at t = 0 (the minerals scaled by (100 - iom_wt_percent)/100, as
+# calculate_phreeqc_parameters() does; their volume from the reconstruction's molar volumes, fixed).
+iom_volume_fraction <- function(iom_wt_percent, iom_g = 10 * iom_wt_percent,
+                                iom_density = iom_density_delarue2026(IOM_BULK_C_H[["H"]] / IOM_BULK_C_H[["C"]]),
+                                rock_csv = "reconstruction/rock_mol_per_kg.csv") {
+  r <- utils::read.csv(rock_csv, comment.char = "#", stringsAsFactors = FALSE)
+  v <- utils::read.csv("data/mineral_molar_volumes.csv", stringsAsFactors = FALSE)
+  vm <- stats::setNames(v$Vm_cm3_mol, v$phase); vm["Iron"] <- vm[["Fe"]]; vm["Nickel"] <- vm[["Ni"]]
+  v_min <- (1 - iom_wt_percent / 100) * sum(r$mol_per_kg * vm[r$phase])
+  v_iom <- iom_g / iom_density
+  v_iom / (v_iom + v_min)
+}
+GRAIN_MODULI <- new.env()   # cache
+
+LAYERED_STRAIN_CSV <- "data/layered_core_strain.csv"
+LAYERED_STRAIN_SUMMARY_CSV <- "data/layered_core_strain_summary.csv"
+LAYERED_STRAIN <- new.env()   # cache of the two tables
+
 FlowUtils <- list(
   # Calculate Darcy flow
-  calculate_darcy_flow = function(k, grad_P, area, porosity,  #this function doesnt get used?
+  # Polar tidal strain amplitude of the core, Liao et al. (2020) section 2.2 and Fig. 2 caption:
+  #   eps0 = 9/(4 pi) e w^2/(rho G) (5/3) |k2|,  k2 = (3/2) / (1 + 19 mu* / (2 rho g R)),
+  #   mu* = mu i w tau / (1 + i w tau), tau = eta / mu (Maxwell), g = (4/3) pi G rho R.
+  # Their section 2.2 text and Appendix A write k2 with an extra factor 3/5; the caption's form is the one
+  # that reproduces their Fig. 2a contours (checked 2026-10-29, README section 6), so it is used here.
+  tidal_strain_amplitude = function(mu, eta, rho, R, e, period) {
+    w <- 2 * pi / period; tau <- eta / mu
+    mus <- mu * (1i * w * tau) / (1 + 1i * w * tau)
+    g <- 4 / 3 * pi * CONSTANTS$G * rho * R
+    9 / (4 * pi) * e * w^2 / (rho * CONSTANTS$G) * 5 / 3 * Mod(1.5 / (1 + 19 * mus / (2 * rho * g * R)))
+  },
+
+  # Volume mean of the positive part of a degree-2 dilatation field (r/R)^2 P2(cos theta), amplitude 1 at
+  # the pole surface, over the shell R - L to R: the angular mean of max(P2, 0), 0.19245 (P2 > 0 for
+  # |cos theta| > 1/sqrt(3)), times the radial mean of (r/R)^2, (3/5)(1 - x^5)/(1 - x^3), x = (R - L)/R.
+  # The negative part is equal (a degree-2 field has zero mean): this is the fraction of eps0 * V_layer
+  # compressed (expelling pore fluid) while an equal volume expands (drawing it in), each half-orbit.
+  degree2_dilatation_factor = function(R, L) {
+    x <- max(0, (R - L) / R)
+    (1 / sqrt(3) - 1 / (3 * sqrt(3))) / 2 * 3 / 5 * (1 - x^5) / (1 - x^3)
+  },
+  # The angular part alone: the mean of max(P2, 0) over the sphere.
+  degree2_angular_factor = (1 / sqrt(3) - 1 / (3 * sqrt(3))) / 2,
+
+  # The layered core strain (PI item N; scripts/layered_core_strain.py): for a tidal scenario and core
+  # viscosity, the pole amplitude of the volumetric strain against depth below the core surface (0-180 km,
+  # mean over the Table 5 samples) and the per-viscosity summary (core-surface displacement, seafloor normal
+  # stress, ...), each interpolated linearly in log10(eta) between the tabulated viscosities. Outside the
+  # scenario's tabulated range it is an error.
+  layered_strain = function(scenario, eta) {
+    if (is.null(LAYERED_STRAIN$profile)) {
+      LAYERED_STRAIN$profile <- utils::read.csv(LAYERED_STRAIN_CSV, stringsAsFactors = FALSE)
+      LAYERED_STRAIN$summary <- utils::read.csv(LAYERED_STRAIN_SUMMARY_CSV, stringsAsFactors = FALSE)
+    }
+    s <- LAYERED_STRAIN$summary[LAYERED_STRAIN$summary$scenario == scenario, ]
+    if (nrow(s) == 0) stop(sprintf("tidal_scenario \"%s\" is not tabulated (dissipative_core, dissipative_shell)", scenario))
+    etas <- sort(unique(s$eta_core_Pa_s))
+    if (eta < min(etas) * (1 - 1e-9) || eta > max(etas) * (1 + 1e-9))
+      stop(sprintf("core_viscosity %.3g Pa s is outside the %s range tabulated for the layered strain (%.3g-%.3g)",
+                   eta, scenario, min(etas), max(etas)))
+    i <- max(1, min(length(etas) - 1, findInterval(log10(eta), log10(etas))))
+    w <- if (length(etas) == 1) 0 else min(1, max(0, (log10(eta) - log10(etas[i])) / (log10(etas[i + 1]) - log10(etas[i]))))
+    pick <- function(df, e) df[abs(df$eta_core_Pa_s / e - 1) < 1e-6, ]
+    p <- LAYERED_STRAIN$profile[LAYERED_STRAIN$profile$scenario == scenario, ]
+    a <- pick(p, etas[i]); b <- pick(p, etas[min(i + 1, length(etas))])
+    sa <- pick(s, etas[i]); sb <- pick(s, etas[min(i + 1, length(etas))])
+    num <- names(s)[vapply(s, is.numeric, TRUE)]
+    list(depth_m = a$depth_km * 1e3, K_table = a$K_core_Pa[1], eps = (1 - w) * a$eps_v_pole_mean + w * b$eps_v_pole_mean,
+         eps_sd = (1 - w) * a$eps_v_pole_sd + w * b$eps_v_pole_sd,
+         summary = as.list((1 - w) * unlist(sa[num]) + w * unlist(sb[num])))
+  },
+
+  # r^2-weighted (volume) mean of a profile f(depth) over the top L of a sphere of radius R, the profile held
+  # at its deepest value below the tabulated depths.
+  volume_mean_profile = function(depth_m, f, R, L) {
+    if (L <= 0) return(f[1])
+    d <- sort(unique(c(depth_m[depth_m < L], L)))
+    v <- stats::approx(depth_m, f, xout = pmin(d, max(depth_m)), rule = 2)$y
+    wgt <- (R - d)^2
+    if (length(d) == 1) return(v)
+    sum(diff(d) * (head(v * wgt, -1) + tail(v * wgt, -1)) / 2) / sum(diff(d) * (head(wgt, -1) + tail(wgt, -1)) / 2)
+  },
+
+  # q is the Darcy flux (volume per unit TOTAL area per unit time), so the volumetric flow through
+  # area A is q * A; porosity enters only in the pore velocity q / porosity. (Not called.)
+  calculate_darcy_flow = function(k, grad_P, area,
                                   viscosity = CONSTANTS$FLUID$viscosity) {
     q <- -(k/viscosity) * grad_P  # Specific discharge
-    Q <- q * area * porosity      # Volumetric flow rate
+    Q <- q * area                 # Volumetric flow rate
     return(Q)
   },
   
@@ -850,14 +1108,58 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # Class fields
                            params = NULL,
                            results = NULL,
-                           config = NULL, 
+                           exchange = NULL,
+                           config = NULL,
                            
                            # Initialize simulator with parameters and configuration
-                           initialize = function(k, layer_thickness, porosity = 0.32, config = NULL) {
+                           # reactive_depth: "skin" (default) makes the reacting box the top L_eff = min(layer_thickness,
+                           # delta) of the layer, delta the poroelastic skin depth (skin_depth()); "layer" uses the whole
+                           # layer (the behaviour before 2026-10-29). See reactive_thickness().
+                           # phi0: initial porosity (default 0.32, the PlanetProfile profile's phiRockMax: ONE fit, Styczinski
+                           # et al. 2023; N6 sweep 0.1-0.4). `porosity` is the older name for it and, if given, wins.
+                           # phi_c: critical porosity of the critical-porosity model (Nur et al. 1998), default 0.4 (PI 10-30:
+                           # Dvorkin & Nur 2000's table, 36-40% for sorted grain packs and sandstones; still a placeholder);
+                           # the Biot coefficient is then min(1, phi / phi_c) (biot_alpha()); phi >= phi_c gives alpha = 1, a
+                           # suspension rather than a frame.
+                           # alpha: a number overrides that; it must be >= the porosity.
+                           # k: the permeability (m2), or "kozeny_carman" (item 3, PI 2026-10-29): k = d^2 phi^3 / (180 (1 - phi)^2)
+                           # from grain_diameter d (m) and the porosity (kozeny_carman_k()). ssa: "legacy" (default: the
+                           # per-mineral surface areas in the RATES blocks, 0.1 and 5 m2/g, UNSOURCED) or "geometric":
+                           # 6 / (rho_i d_i) per mineral (rho_i from data/mineral_molar_volumes.csv), times `roughness`
+                           # (default 1; BET over geometric area); d_i from grain_diameter_by_mineral (a named vector, m) or
+                           # grain_diameter (applied by PhreeqcIntegrator$apply_ssa() to every generated input).
+                           initialize = function(k, layer_thickness, porosity = NULL, config = NULL,
+                                                 reactive_depth = c("skin", "layer"), phi0 = 0.32, phi_c = 0.4, alpha = NULL,
+                                                 grain_diameter = NULL, ssa = c("legacy", "geometric"), roughness = 1,
+                                                 grain_diameter_by_mineral = NULL, iom_wt_percent = 15, iom_vol_frac = NULL) {
+                             phi_ <- if (is.null(porosity)) phi0 else porosity
+                             perm <- if (identical(k, "kozeny_carman")) "kozeny_carman" else "given"
+                             if (perm == "kozeny_carman") {
+                               if (!(is.numeric(grain_diameter) && length(grain_diameter) == 1 && grain_diameter > 0))
+                                 stop("k = \"kozeny_carman\" needs grain_diameter (m)")
+                               k <- kozeny_carman_k(grain_diameter, phi_)
+                             }
+                             ssa <- match.arg(ssa)
+                             if (ssa == "geometric" && is.null(grain_diameter) && is.null(grain_diameter_by_mineral))
+                               stop("ssa = \"geometric\" needs grain_diameter or grain_diameter_by_mineral")
                              self$params <- list(
                                k = k,
+                               permeability = perm,
+                               grain_diameter = grain_diameter,
+                               ssa = ssa,
+                               roughness = roughness,
+                               grain_diameter_by_mineral = grain_diameter_by_mineral,
                                layer_thickness = layer_thickness,
-                               porosity = porosity
+                               porosity = phi_,
+                               reactive_depth = match.arg(reactive_depth),
+                               phi_c = phi_c,
+                               alpha = alpha,
+                               # the IOM in the frame moduli (PI 2026-11-01): iom_wt_percent at t = 0 (15, the production
+                               # value; independent of PHREEQC's organic_wt_percent, so a run and its organic-free blank
+                               # share one exchange); iom_vol_frac, if given, the IOM's current share of the solid volume
+                               # (run_tidal_evolution() passes it each chunk)
+                               iom_wt_percent = iom_wt_percent,
+                               iom_vol_frac = iom_vol_frac
                              )
                              self$config <- config  # Store configuration
                              if(is.null(self$config)) {
@@ -873,6 +1175,12 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              if(self$params$porosity <= 0 || self$params$porosity >= 1) {
                                stop("Porosity must be between 0 and 1")
                              }
+                             if (!(is.numeric(self$params$phi_c) && self$params$phi_c > 0 && self$params$phi_c <= 1))
+                               stop("phi_c must be in (0, 1]")
+                             if (!is.null(self$params$alpha) && (!is.numeric(self$params$alpha) || self$params$alpha > 1 ||
+                                                                 self$params$alpha < self$params$porosity))
+                               stop(sprintf("alpha = %s: the Biot coefficient must be >= the porosity (%g) and <= 1",
+                                            format(self$params$alpha), self$params$porosity))
                            },
                            
                            # Calculate tidal stress variation
@@ -880,12 +1188,12 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              # Debug print
                              print(sprintf("Calculating stress for %d time points", length(t)))
                              print(sprintf("Using orbital period: %f", self$config$orbital_period))
-                             print(sprintf("Using max stress: %f", self$config$max_tidal_stress))
+                             print(sprintf("Using tidal pressure amplitude: %f Pa", self$tidal_pressure()))
                              
                              # Calculate phase in orbital cycle
                              phase <- 2 * pi * t / self$config$orbital_period
                              # Calculate stress - ensure vectorized operation
-                             stress <- self$config$max_tidal_stress * sin(phase) #any need to incorporate real/imaginary parts of tidal stress?
+                             stress <- self$tidal_pressure() * sin(phase)
                              
                              # Debug print
                              print(sprintf("Calculated %d stress values", length(stress)))
@@ -908,7 +1216,9 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              stress <- self$calculate_tidal_stress(t)
                              print(sprintf("Got stress vector of length %d", length(stress)))
                              
-                             pressure_gradient <- stress / self$params$layer_thickness
+                             # The tidal pressure perturbation diffuses only a skin depth delta into the rock, so the
+                             # gradient acts over L_eff = min(layer_thickness, delta) (skin_depth(); README section 6).
+                             pressure_gradient <- stress / self$skin_depth()$L_eff
                              print(sprintf("Pressure gradient vector length: %d", length(pressure_gradient)))
                              
                              # Calculate flow parameters
@@ -932,7 +1242,10 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              results <- results %>%
                                mutate(
                                  flow_velocity = flow_velocity,
-                                 flow_rate_m3s = abs(flow_velocity) * flow_area * self$params$porosity,
+                                 # flow_velocity is the Darcy flux q (per unit total area) and flow_area the
+                                 # core's whole surface, so the flow is q * A. Until 2026-10-29 it was also
+                                 # multiplied by porosity, which made it 1/porosity (3.1x) too small.
+                                 flow_rate_m3s = abs(flow_velocity) * flow_area,
                                  flow_rate_Ls = flow_rate_m3s * 1000
                                )
                              print("Added flow rates")
@@ -965,38 +1278,229 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              print("Added rock reactions")
                              
                              self$results <- results
+                             self$exchange <- self$calculate_exchange()
                              print("Stored results")
                              print(sprintf("Final results tibble rows: %d", nrow(self$results)))
                              
                              return(results)
                            },
                            
+                           # Tidal strain of the reacting box (README section 6, The strain). strain_model = "liao": eps0 is
+                           # Liao et al. (2020)'s polar strain amplitude, and eps_v the volume mean of the compressed part of a
+                           # degree-2 dilatation field with pole amplitude eps0 over the box, eps0 * degree2_dilatation_factor(R, L):
+                           # (mean |P2| over the sphere = 0.385) / 2 = 0.192 times the radial mean of (r/R)^2 over the box.
+                           # strain_model = "layered" (default, PI item N): eps0 is the layered model's volumetric strain at
+                           # the pole of the core surface, and eps_v = 0.19245 (angular) times the volume mean over the box
+                           # of its pole amplitude against depth (held at the 180 km value below that).
+                           tidal_strain = function() {
+                             cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
+                             if (identical(cfg$strain_model, "layered")) {
+                               ls <- FlowUtils$layered_strain(cfg$tidal_scenario, cfg$core_viscosity)
+                               kc <- self$core_bulk_modulus(); sk <- cfg$strain_scale * ls$K_table / kc$K   # strain ~ 1/K_core
+                               eps0 <- sk * ls$eps[1]
+                               eps_v <- sk * FlowUtils$degree2_angular_factor * FlowUtils$volume_mean_profile(ls$depth_m, ls$eps, R, L)
+                               return(list(eps0 = eps0, factor = eps_v / eps0, eps_v = eps_v, model = "layered", K_core = kc$K, K_source = kc$source))
+                             }
+                             if (!identical(cfg$strain_model, "liao")) stop("strain_model must be \"layered\" or \"liao\"")
+                             eps0 <- cfg$strain_scale * FlowUtils$tidal_strain_amplitude(cfg$core_rigidity, cfg$core_viscosity, cfg$core_density,
+                                                                                    R, cfg$eccentricity, cfg$orbital_period)
+                             f <- FlowUtils$degree2_dilatation_factor(R, L)
+                             list(eps0 = eps0, factor = f, eps_v = eps0 * f, model = "liao")
+                           },
+
+                           # Drained frame moduli of the porous core (PI 2026-11-01), the critical-porosity model's
+                           # K_d = K_grain (1 - phi/phi_c), mu_d = mu_grain (1 - phi/phi_c), with the grain moduli the Hill
+                           # average of the reconstruction's minerals (grain_elastic_moduli()). At phi >= phi_c there is no
+                           # frame (alpha = 1): an error, not K_d -> 0. mu_d is a consistency check against Bagheri et al.
+                           # (2025) Table 5's core rigidity, 4-70 GPa (mu_d_in_table5); it is not used elsewhere.
+                           frame_moduli = function() {
+                             phi <- self$params$porosity; pc <- self$params$phi_c
+                             if (phi >= pc) stop(sprintf("porosity %.4g has reached the critical porosity phi_c = %.4g: no frame (alpha = 1, K_d = 0); stopping (PI 2026-11-01)", phi, pc))
+                             fv <- self$iom_volume_fraction(); key <- sprintf("%.15g", fv)
+                             if (is.null(GRAIN_MODULI[[key]])) GRAIN_MODULI[[key]] <- grain_elastic_moduli(fv)
+                             g <- GRAIN_MODULI[[key]]; fr <- 1 - phi / pc
+                             list(K_grain = g$K, mu_grain = g$G, frame_factor = fr, K_d = g$K * fr, mu_d = g$G * fr,
+                                  mu_d_in_table5 = g$G * fr >= 4e9 && g$G * fr <= 70e9, covered = g$covered, iom_volume_fraction = fv)
+                           },
+                           # The IOM's share of the solid volume: params$iom_vol_frac if given, else the t = 0 value for
+                           # params$iom_wt_percent at the bulk IOM's Delarue density.
+                           iom_volume_fraction = function() {
+                             if (!is.null(self$params$iom_vol_frac)) return(self$params$iom_vol_frac)
+                             iom_volume_fraction(self$params$iom_wt_percent)
+                           },
+                           # The core's bulk modulus for the layered strain: config$core_bulk_modulus if a number, else K_d.
+                           core_bulk_modulus = function() {
+                             if (!is.null(self$config$core_bulk_modulus)) return(list(K = self$config$core_bulk_modulus, source = "override"))
+                             list(K = self$frame_moduli()$K_d, source = "K_d")
+                           },
+
+                           # Tidal pore-pressure amplitude (Pa) driving the Darcy flow: the undrained pressure of the strain,
+                           # dP = alpha eps_v M with the Biot modulus M = 1/S (Liao et al. 2020 Table A1: (K_u - K_m)/alpha^2;
+                           # their Eq. A5 with zero fluid-content change). config$max_tidal_stress, if a number, overrides it.
+                           tidal_pressure = function() {
+                             if (!is.null(self$config$max_tidal_stress)) return(self$config$max_tidal_stress)
+                             self$tidal_pressure_strain() + self$tidal_load_pressure()$mean
+                           },
+                           tidal_pressure_strain = function() self$biot_alpha() * self$tidal_strain()$eps_v / self$skin_depth()$S,
+
+                           # Ocean tidal loading at the seafloor (PI 2026-10-31): the change of the ocean column's weight,
+                           # rho_w g_c (u_ocean - u_core), with u_r = h2 U2 / g (Bagheri et al. 2025 Eq. 2) and the eccentricity
+                           # tide's amplitude at the pole, U2 = (3/2) r^2 omega^2 e (their Eq. 1 with P20 = 1, P22 = 0; omega the
+                           # mean motion, e the eccentricity). u_ocean: the surface, |h2| and lag from config (Bagheri Table 3,
+                           # dissipative core), at R = config$radius; u_core: the core's own h2 = (5/3) k2* (Liao et al. 2020's
+                           # uniform Maxwell body, the h2 behind eps0) at the core radius; the difference is taken with both
+                           # phases. The pole amplitude is averaged over the box like the strain (degree-2 factor), and that
+                           # mean is ADDED to the strain's dP (amplitudes added: an upper bound, the relative phase of the
+                           # loading and strain pressures in the matrix not being known). Self-gravity of the tide is left out.
+                           # strain_model = "layered" (PI item N): the same formula with both displacements from the layered
+                           # model, |u_ocean - u_core| its mean over the samples (pole, ocean top and core surface, with
+                           # their phases). (The layered model's whole normal stress on the core surface, ~880 Pa at the
+                           # pole, is larger: most of it is the tidal potential's hydrostatic pressure, which acts on the
+                           # pore fluid as a body force too and so drives no flow; README section 6.)
+                           tidal_load_pressure = function() {
+                             cfg <- self$config
+                             if (!isTRUE(cfg$ocean_load)) return(list(pole = 0, mean = 0, u_ocean = 0, u_core = 0, h2_core = 0))
+                             if (identical(cfg$strain_model, "layered")) {
+                               s <- FlowUtils$layered_strain(cfg$tidal_scenario, cfg$core_viscosity)$summary
+                               pole <- CONSTANTS$FLUID$density * cfg$calculate_gravity(cfg$core_radius) * s$u_ocean_minus_core_m_mean
+                               return(list(pole = pole, mean = pole * FlowUtils$degree2_dilatation_factor(cfg$core_radius, self$reactive_thickness()),
+                                           u_ocean = s$u_ocean_top_m_mean, u_core = s$u_core_m_mean,
+                                           h2_core = NA_real_, h2_core_lag_deg = NA_real_, sigma_rr_pole = s$seafloor_sigma_rr_Pa_mean))
+                             }
+                             w <- 2 * pi / cfg$orbital_period; e <- cfg$eccentricity; Rc <- cfg$core_radius; RE <- cfg$radius
+                             U2 <- function(r) 1.5 * r^2 * w^2 * e
+                             gE <- cfg$calculate_gravity(RE); gc <- cfg$calculate_gravity(Rc)
+                             tau <- cfg$core_viscosity / cfg$core_rigidity
+                             mus <- cfg$core_rigidity * (1i * w * tau) / (1 + 1i * w * tau)
+                             h2c <- 5 / 3 * 1.5 / (1 + 19 * mus / (2 * cfg$core_density * (4 / 3 * pi * CONSTANTS$G * cfg$core_density * Rc) * Rc))
+                             h2s <- cfg$surface_h2 * exp(-1i * cfg$surface_h2_lag_deg * pi / 180)
+                             us <- h2s * U2(RE) / gE; uc <- h2c * U2(Rc) / gc
+                             pole <- CONSTANTS$FLUID$density * gc * Mod(us - uc)
+                             list(pole = pole, mean = pole * self$tidal_strain()$factor, u_ocean = Mod(us), u_core = Mod(uc),
+                                  h2_core = Mod(h2c), h2_core_lag_deg = -Arg(h2c) * 180 / pi)
+                           },
+
+                           # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; README section 6):
+                           #   poro:        alpha * eps_v * V_layer, the fluid the tidal volumetric strain expels from the
+                           #                matrix (drained limit). eps_v = eps0 * degree2_dilatation_factor(): the
+                           #                compressed part of a degree-2 dilatation field whose pole amplitude is eps0,
+                           #                Liao et al. (2020)'s polar strain (an assumption, README).
+                           #   darcy:       what drains through the rock in half an orbit, the |q| A integral of
+                           #                run_simulation() over the orbit, halved.
+                           #   pore_volume: phi * V_layer.
+                           # x_half = dV / V_pore per half-orbit; per orbit the two halves compound, x_orbit = 1 - (1 - x_half)^2,
+                           # and exchanging_fluid_mass = x_orbit * the porewater mass, so x <= 1 by construction.
+                           calculate_exchange = function() {
+                             cfg <- self$config; R <- cfg$core_radius; L <- self$reactive_thickness()
+                             V_layer <- (4/3) * pi * (R^3 - max(0, R - L)^3)   # the reacting box (the skin, by default)
+                             V_pore  <- self$params$porosity * V_layer
+                             st      <- self$tidal_strain(); eps0 <- st$eps0; eps_v <- st$eps_v
+                             dP      <- self$tidal_pressure()
+                             ld      <- self$tidal_load_pressure()
+                             dP_load <- if (is.null(cfg$max_tidal_stress)) ld$mean else 0
+                             S_      <- self$skin_depth()$S
+                             # poro: the strain's fluid volume plus the volume the ocean loading stores in the box, S dP_load L A
+                             vols    <- c(poro = self$biot_alpha() * eps_v * V_layer + S_ * dP_load * L * 4 * pi * R^2,
+                                          darcy = sum(self$results$fluid_volume) / 2,
+                                          pore_volume = V_pore)
+                             dV      <- min(vols)
+                             x_half  <- dV / V_pore
+                             x_orbit <- 1 - (1 - x_half)^2
+                             sd      <- self$skin_depth()
+                             list(eps0 = eps0, eps_v = eps_v, strain_factor = st$factor, dP = dP,
+                                  dP_strain = if (is.null(cfg$max_tidal_stress)) dP - dP_load else NA_real_, dP_load = dP_load,
+                                  dP_load_pole = ld$pole, u_ocean = ld$u_ocean, u_core = ld$u_core, h2_core = ld$h2_core,
+                                  dP_source = if (is.null(cfg$max_tidal_stress)) "strain" else "override",
+                                  K_core = if (is.null(st$K_core)) NA_real_ else st$K_core, K_core_source = if (is.null(st$K_source)) NA_character_ else st$K_source,
+                                  mu_d = if (identical(cfg$strain_model, "layered")) self$frame_moduli()$mu_d else NA_real_,
+                                  V_layer = V_layer, V_pore = V_pore,
+                                  delta = sd$delta, L_eff = sd$L_eff, storage = sd$S,
+                                  # cross-check: the volume the pressure change stores in the skin, S * dP * delta * A
+                                  dV_storage = sd$S * dP * sd$L_eff * 4 * pi * R^2,
+                                  dV_poro = vols[["poro"]], dV_darcy = vols[["darcy"]], dV_pore_volume = V_pore,
+                                  dV = dV, binding = names(vols)[which.min(vols)],
+                                  x_half = x_half, x_orbit = x_orbit,
+                                  mass_per_orbit = x_orbit * V_pore * CONSTANTS$FLUID$density)
+                           },
+
+                           # Biot coefficient. Critical-porosity model (Nur et al. 1998): the frame's bulk modulus falls
+                           # linearly to zero at the critical porosity, K_frame = K_grain (1 - phi/phi_c), so
+                           # alpha = 1 - K_frame/K_grain = min(1, phi/phi_c); alpha >= phi whenever phi_c <= 1. A number given
+                           # as `alpha` overrides it.
+                           biot_alpha = function() {
+                             if (!is.null(self$params$alpha)) self$params$alpha else min(1, self$params$porosity / self$params$phi_c)
+                           },
+
+                           # Thickness (m) of the box that reacts and exchanges: the top min(layer_thickness, delta) under
+                           # reactive_depth = "skin" (only the skin's porewater exchanges in a tide), else the whole layer.
+                           # It sets the porewater temperature and pressure (profile means over it), the rock mass and pore
+                           # volume (PhreeqcIntegrator$calculate_phreeqc_parameters()) and the exchange (calculate_exchange()).
+                           reactive_thickness = function() {
+                             if (identical(self$params$reactive_depth, "layer")) self$params$layer_thickness else self$skin_depth()$L_eff
+                           },
+
+                           # Poroelastic skin depth, Liao et al. (2020) Table A1 and Fig. B4: delta = sqrt(c / omega), with
+                           #   c = (k / eta_f) (K_m + 4/3 mu)(K_u - K_m) / (alpha^2 (K_u + 4/3 mu)),
+                           #   K_m = (1 - alpha) K_s, K_u = K_m + alpha^2 K_s K_f / (phi K_s + (alpha - phi) K_f).
+                           # (K_u - K_m) / alpha^2 is the Biot modulus M = 1/S, S = phi/K_f + (alpha - phi)/K_s the storage, so
+                           # c = (k / eta_f) M (K_m + 4/3 mu)/(K_u + 4/3 mu), the diffusivity k/(eta_f S) times a factor <= 1.
+                           # mu is the matrix rigidity (core_rigidity), as in their table. L_eff = min(layer_thickness, delta).
+                           skin_depth = function() {
+                             cfg <- self$config; a <- self$biot_alpha(); phi <- self$params$porosity
+                             Ks <- cfg$rock_bulk_modulus; Kf <- cfg$water_bulk_modulus; mu <- cfg$core_rigidity
+                             S  <- phi / Kf + (a - phi) / Ks
+                             Km <- (1 - a) * Ks; Ku <- Km + a^2 / S
+                             c  <- self$params$k / CONSTANTS$FLUID$viscosity / S * (Km + 4/3 * mu) / (Ku + 4/3 * mu)
+                             delta <- sqrt(c / (2 * pi / cfg$orbital_period))
+                             list(S = S, c = c, delta = delta, L_eff = min(self$params$layer_thickness, delta))
+                           },
+
+                           # One header line on the exchange, for the generated inputs.
+                           exchange_header_line = function() {
+                             x <- self$exchange
+                             sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
+                                            "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
+                                            "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; strain %s; eps0 %.3e, eps_v/eps0 %.4f, ",
+                                            "dP %.4g Pa (%s; ocean load %.3g Pa), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
+                                     self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
+                                     x$x_half, x$binding, x$dV_poro, x$dV_darcy, x$dV_pore_volume, x$delta,
+                                     if (identical(self$config$strain_model, "layered")) paste0("layered, ", self$config$tidal_scenario,
+                                       sprintf(", K_core %.4g GPa (%s)", x$K_core / 1e9, x$K_core_source),
+                                       if (self$config$strain_scale != 1) sprintf(" x %.3g", self$config$strain_scale) else "")
+                                     else sprintf("liao x %.3g", self$config$strain_scale),
+                                     x$eps0, x$strain_factor,
+                                     x$dP, x$dP_source, x$dP_load,
+                                     self$config$core_rigidity / 1e9, self$config$core_viscosity, self$biot_alpha(), self$params$porosity)
+                           },
+
                            # Generate summary metrics
                            get_summary_metrics = function() {
                              if (is.null(self$results)) stop("Must run simulation first")
                              
-                             circ_time <- FlowUtils$calculate_circulation_time(
-                               flow_rate = mean(self$results$flow_rate_m3s),
+                             if (is.null(self$exchange)) self$exchange <- self$calculate_exchange()
+                             # The exchanged mass per orbit is the min-of-three exchange (calculate_exchange()), which
+                             # is <= the pore volume by construction; the circulation time is the ocean's mass over it.
+                             fluid_mass <- self$exchange$mass_per_orbit
+                             circ_time  <- FlowUtils$calculate_circulation_time(
+                               flow_rate = fluid_mass / CONSTANTS$FLUID$density / self$config$orbital_period,
                                ocean_mass = self$config$get_derived_properties()$ocean_mass
                              )
                              orbital_period_years <- self$config$orbital_period / (365.25 * 24 * 3600)
                              n_orb <- circ_time / orbital_period_years  # orbital cycles per ocean circulation
-
-                             r_core       <- self$config$core_radius
-                             layer_thick  <- self$params$layer_thickness
-                             layer_vol    <- (4/3) * pi * (r_core^3 - (r_core - layer_thick)^3)
-                             porewater_mass_est <- 1000 * self$params$porosity * layer_vol
-
-                             fluid_mass        <- sum(self$results$fluid_volume) * CONSTANTS$FLUID$density
-                             eff_fluid_mass    <- min(fluid_mass, porewater_mass_est)
-                             corr_circ_time    <- circ_time * (fluid_mass / eff_fluid_mass)
-                             corr_n_orb        <- corr_circ_time / orbital_period_years
+                             # (The "corrected" times once capped a Darcy volume at the pore volume; the cap is now
+                             # one of the three limits, so they equal the plain ones. Kept for the headers.)
+                             corr_circ_time <- circ_time
+                             corr_n_orb     <- n_orb
 
                              metrics <- list(
                                max_flow_rate_Ls = max(self$results$flow_rate_Ls),
                                mean_flow_rate_Ls = mean(self$results$flow_rate_Ls),
                                total_fluid_volume_m3 = sum(self$results$fluid_volume),
                                exchanging_fluid_mass = fluid_mass,
+                               darcy_fluid_mass_per_orbit = sum(self$results$fluid_volume) * CONSTANTS$FLUID$density,
+                               exchange_fraction_per_half_orbit = self$exchange$x_half,
+                               exchange_fraction_per_orbit = self$exchange$x_orbit,
+                               exchange_limit = self$exchange$binding,
                                total_rock_reacted = sum(self$results$rock_mass_reacted),
                                circulation_time_years = circ_time,
                                complete_circulation_time = (n_orb * log(n_orb) + 0.577 * n_orb) * orbital_period_years,
@@ -1090,7 +1594,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # This ensures mineral moles and porewater_mass_norm share the same
                                      # reference mass (core_mass), giving a physically correct W/R ratio.
                                      r_core_gf     <- self$simulator$config$core_radius
-                                     layer_thick_gf <- self$simulator$params$layer_thickness
+                                     layer_thick_gf <- self$simulator$reactive_thickness()   # the reacting box (skin by default)
                                      layer_vol      <- (4/3) * pi * (r_core_gf^3 - (r_core_gf - layer_thick_gf)^3)
                                      core_vol       <- (4/3) * pi * r_core_gf^3
                                      layer_fraction <- layer_vol / core_vol
@@ -1136,7 +1640,11 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      print(sprintf("Circulation time: %.2f years", metrics$circulation_time_years))
                                      
                                      # Solid rock mass of the permeable layer (same density assumption as core)
-                                     layer_mass <- layer_fraction * props$core_mass
+                                     # Its solid mass at the core's bulk density and the Simulator's porosity (phi0):
+                                     # V (rho_core - phi rho_water). Equals layer_fraction * props$core_mass when phi0 is the
+                                     # config's core_porosity (0.32).
+                                     layer_mass <- layer_vol * (self$simulator$config$core_density -
+                                                                self$simulator$params$porosity * CONSTANTS$FLUID$density)
 
                                      # All PHREEQC quantities normalised to layer_mass so that mineral m0 = 2.8833
                                      # (not 2.8833 * layer_fraction) and water masses are ~0.2 kg for every layer size.
@@ -1151,14 +1659,19 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                        warning("Circulation time not calculated, cannot determine rock_per_year")
                                      }
 
-                                     water_mass <- props$ocean_mass / layer_mass
+                                     # The ocean's mass for the PHREEQC basis: the profile's (Mocean_kg, PI 2026-10-31), so that the
+                                     # ocean per kg of the box's rock is the geometric ratio; the config's geometric ocean (at 1000
+                                     # kg/m3) is 0.9% lighter and is kept for the Simulator's circulation time.
+                                     ocean_mass_phreeqc <- tryCatch(profile_ocean_mass_kg(self$profile_file), error = function(e) NA_real_)
+                                     if (!is.finite(ocean_mass_phreeqc)) ocean_mass_phreeqc <- props$ocean_mass
+                                     water_mass <- ocean_mass_phreeqc / layer_mass
 
                                      # Store parameters
                                      self$organic_wt_percent <- organic_wt_percent
                                      self$mineral_basis_wt_percent <- mineral_basis_wt_percent
                                      # Porewater mass: physical mass of water filling the permeable layer pore space
                                      r_core <- self$simulator$config$core_radius
-                                     layer_thick <- self$simulator$params$layer_thickness
+                                     layer_thick <- self$simulator$reactive_thickness()
                                      layer_volume <- (4/3) * pi * (r_core^3 - (r_core - layer_thick)^3)  # m^3
                                      porewater_mass <- 1000 * self$simulator$params$porosity * layer_volume  # kg (rho_water * V_pore)
 
@@ -1170,7 +1683,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                        rock_per_year = rock_per_year,
                                        water_mass = water_mass,
                                        porewater_mass = porewater_mass,
-                                       ocean_mass = props$ocean_mass,
+                                       ocean_mass = ocean_mass_phreeqc,
                                        core_mass = props$core_mass
                                      )
 
@@ -1180,6 +1693,36 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      print(sprintf("water_mass: %.2f", water_mass))
                                      
                                      return(self$phreeqc_params)
+                                   },
+
+                                   # Surface areas from the grain size (item 3): with the Simulator's ssa = "geometric", each RATES
+                                   # entry's "SSA = <value>" line gets 6 / (rho_i d_i) x roughness (m2/g); "legacy" leaves the input
+                                   # unchanged. rho_i = molar mass / Vm (data/mineral_molar_volumes.csv); a mineral without a
+                                   # density there is an error.
+                                   apply_ssa = function(content) {
+                                     pr <- self$simulator$params
+                                     if (!identical(pr$ssa, "geometric")) return(content)
+                                     v <- read_mineral_volumes()
+                                     l <- strsplit(content, "\n", fixed = TRUE)[[1]]
+                                     in_rates <- FALSE; cur <- NA_character_
+                                     for (i in seq_along(l)) {
+                                       if (grepl("^RATES\\b", l[i])) { in_rates <- TRUE; cur <- NA_character_; next }
+                                       if (in_rates && grepl("^(END|KINETICS|EQUILIBRIUM_PHASES|SOLUTION|SELECTED_OUTPUT|USER_PUNCH|USER_PRINT|USE|MIX|SAVE|KNOBS|GAS_PHASE|REACTION|PHASES|TITLE|INCREMENTAL)\\b", l[i]))
+                                         in_rates <- FALSE
+                                       if (!in_rates) next
+                                       if (grepl("^[A-Za-z]", l[i])) { cur <- sub("[ \t#].*$", "", l[i]); next }
+                                       if (!is.na(cur) && grepl("SSA = [0-9.eE+-]+", l[i])) {
+                                         j <- match(cur, v$phase)
+                                         if (is.na(j)) stop("apply_ssa: no density for ", cur)
+                                         rho <- v$molar_mass_g_mol[j] / v$Vm_cm3_mol[j]
+                                         d <- if (!is.null(pr$grain_diameter_by_mineral) && cur %in% names(pr$grain_diameter_by_mineral))
+                                           pr$grain_diameter_by_mineral[[cur]] else pr$grain_diameter
+                                         s <- pr$roughness * geometric_ssa_m2_g(d, rho)
+                                         l[i] <- sub("SSA = [0-9.eE+-]+.*$", sprintf("SSA = %.6g  # geometric 6/(rho d) x roughness: rho %.4g g/cm3, d %.4g m, roughness %g (item 3)",
+                                                                                   s, rho, d, pr$roughness), l[i])
+                                       }
+                                     }
+                                     paste(l, collapse = "\n")
                                    },
 
                                    # Secondary minerals only stable/relevant above a temperature threshold —
@@ -1467,7 +2010,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                      porewater_temp = "ocean", substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
-                                                                     pore_gas_fate = c("to_ocean", "retain"), logfile = FALSE) {
+                                                                     pore_gas_fate = c("to_ocean", "retain", "retain_to_pore_volume"), logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
@@ -1545,7 +2088,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                                                                 pore_gas_fate = pore_gas_fate)
 
                                      # Write to file
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(paste0(content, dump_block(filename))), logfile), filename)
 
                                      return(filename)
                                    },
@@ -1640,7 +2183,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # Temperatures and pressures for SOLUTION blocks. The ocean temperature is fixed.
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -1668,7 +2211,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      if (cometary && is.null(trace_C_molal) && self$organic_wt_percent == 0)
                                        warning("cometary_ice_ocean() with a carbon-free porewater: give trace_C_molal = 1e-14 (without it the first porewater step did not converge in tests)")
                                      gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -1817,7 +2360,8 @@ KNOBS
 # Complete circulation time: {sprintf("%.2e", metrics$complete_circulation_time)} years
 # Corrected circulation time (f_fluid capped at f_pore): {sprintf("%.2e", metrics$corrected_circulation_time)} years
 # Corrected complete circulation time: {sprintf("%.2e", metrics$corrected_complete_circulation_time)} years
-# Flowing fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+# Exchanged fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+{self$simulator$exchange_header_line()}
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
@@ -1862,7 +2406,7 @@ REACTION_PRESSURE 2
 {cometary_block}{pore_gas_block}
 
 {ocean_main_block}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 # Define rate equations for each mineral
 RATES
@@ -2417,7 +2961,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
@@ -2436,9 +2980,11 @@ KNOBS
                                          iom_punch_lines,
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, fractional mass = f_ocean + f_fluid
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         OCEAN_STEP_KNOBS_ON,
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
@@ -2451,6 +2997,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          # Simulation 3: resample porewater — replace flowing fluid with combined ocean water
                                          # (f_pore-f_x)/f_pore of reacted porewater + f_x/(f_ocean+f_x) of combined ocean
                                          # fractional mass = f_pore
@@ -2548,7 +3095,7 @@ KNOBS
                                                                                          CH4_redox_override = CH4_redox_override, carbon_mode = carbon_mode, ch4_cutoff_C = ch4_cutoff_C,
                                                                                          initial_ocean = initial_ocean, charge_balance = charge_balance,
                                                                                          pore_gas_fate = pore_gas_fate, trace_C_molal = trace_C_molal)
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -2582,7 +3129,7 @@ KNOBS
                                      # Temperatures and pressures
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -2609,7 +3156,7 @@ KNOBS
                                      if (cometary && is.null(trace_C_molal))
                                        warning("cometary_ice_ocean() in tidal_equil: give trace_C_molal = 1e-14 (without it the run failed to converge in tests)")
                                      gas_comps <- gas_components(ch4_mode, if (cometary) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -2699,7 +3246,8 @@ KNOBS
 # Complete circulation time: {sprintf("%.2e", metrics$complete_circulation_time)} years
 # Corrected circulation time (f_fluid capped at f_pore): {sprintf("%.2e", metrics$corrected_circulation_time)} years
 # Corrected complete circulation time: {sprintf("%.2e", metrics$corrected_complete_circulation_time)} years
-# Flowing fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+# Exchanged fluid mass (per orbital cycle): {sprintf("%.2e", metrics$exchanging_fluid_mass)} kg
+{self$simulator$exchange_header_line()}
 # Porewater mass: {sprintf("%.2e", self$phreeqc_params$porewater_mass)} kg
 # Ocean mass: {sprintf("%.2e", self$phreeqc_params$ocean_mass)} kg
 
@@ -2744,7 +3292,7 @@ REACTION_PRESSURE 2
 {cometary_block}{pore_gas_block}
 
 {ocean_main_block}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
@@ -3079,7 +3627,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Total_Initial_g", SHARED_PUNCH_HEADINGS, gp$headings, "\n",
                                          sprintf("   10 PUNCH %.6f\n", cumulative_time),
@@ -3095,9 +3643,11 @@ KNOBS
                                          "   110 PUNCH total_initial\n",
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
                                          # Simulation 2: ocean absorbs flowing fluid directly + seafloor equilibration
                                          # SOLUTION 4: f_fluid/f_pore of porewater + ocean, mass = f_ocean + f_fluid
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         OCEAN_STEP_KNOBS_ON,
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
@@ -3110,6 +3660,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          # Simulation 3: resample porewater
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
@@ -3197,7 +3748,7 @@ KNOBS
                                      # layer if water_temp = "profile")
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -3479,7 +4030,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -3545,7 +4096,7 @@ END
                                      # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -4096,7 +4647,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -4191,7 +4742,7 @@ END
                                      # Temperature and pressure
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -4679,7 +5230,7 @@ END
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(content, ch4_mode), ch4_mode$database,
                                                                       list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(content), logfile), filename)
                                      return(filename)
                                    },
 
@@ -4704,6 +5255,15 @@ END
                                    # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
                                    # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
                                    # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
+                                   # @param refill_kg Water (kg, on the run's normalised basis) moved from the ocean into the porewater
+                                   #   before the first orbit, by MIX (negative: from the porewater to the ocean), so that the porewater fills
+                                   #   the pore volume again (run_tidal_evolution(); PI 2026-10-30). Default 0. The MIX rows are not punched.
+                                   # @param ocean_scale Factor on the parent's ocean (its water, the ocean's equilibrium phases and gas
+                                   #   phase 2) on the run's normalised basis: when the reacting box changes between chunks (the skin depth
+                                   #   moves with porosity), the real ocean is unchanged but the ocean per kg of the box's rock is not; the
+                                   #   driver passes old box rock mass / new box rock mass (PI 2026-10-31). Default 1.
+                                   # @param stop_on_depletion TRUE (default): stop the run (USER_PRINT STOP, which PHREEQC reports as 2 errors, status 3) at the
+                                   #   end of an orbit once depletion_mineral is exhausted. FALSE runs every orbit (run_tidal_evolution() uses it).
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
@@ -4730,8 +5290,11 @@ END
                                      carbon_mode         = NULL,
                                      ch4_cutoff_C        = 150,
                                      allow_pressure_change = FALSE,
-                                     pore_gas_fate       = c("to_ocean", "retain"),
-                                     logfile             = FALSE
+                                     pore_gas_fate       = c("to_ocean", "retain", "retain_to_pore_volume"),
+                                     logfile             = FALSE,
+                                     stop_on_depletion   = TRUE,
+                                     refill_kg           = 0,
+                                     ocean_scale         = 1
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
@@ -4742,7 +5305,7 @@ END
                                      .ph <- sub("\\.csv$", ".pqi", prev_csv)
                                      .pf <- if (file.exists(.ph)) grep("^# (parent )?pore_gas_fate: ", readLines(.ph, n = 200, warn = FALSE), value = TRUE) else character(0)
                                      .pf <- if (length(.pf)) sub("^# (parent )?pore_gas_fate: ", "", .pf[1]) else "unknown (generated before 2026-10-28: gases were equilibrium phases)"
-                                     if (.pf %in% c("retain", "to_ocean") && .pf != pore_gas_fate)
+                                     if (.pf %in% c("retain", "to_ocean", "retain_to_pore_volume") && .pf != pore_gas_fate)
                                        warning(sprintf("restart: the parent ran pore_gas_fate = \"%s\", this restart runs \"%s\"", .pf, pore_gas_fate))
                                      parent_fate_line <- sprintf("# parent pore_gas_fate: %s", .pf)
 
@@ -4845,7 +5408,7 @@ END
                                      # ---- Temperature / pressure ----
                                      ocean_temp_C <- 274.6 - 273.15  # the profile's ocean floor, top of the rock layer (274.566 K), rounded
                                      # Porewater and ocean conditions from the profile; stops if profile_file is missing.
-                                     pc <- profile_conditions(self$profile_file, self$simulator$params$layer_thickness)
+                                     pc <- profile_conditions(self$profile_file, self$simulator$reactive_thickness())
                                      pore_temp_C        <- pc$pore_temp_C
                                      pore_pressure_atm  <- pc$pore_pressure_atm
                                      ocean_pressure_atm <- pc$ocean_pressure_atm
@@ -4862,7 +5425,7 @@ END
                                      # punch columns, and the empty porewater phase to_ocean starts each orbit with.
                                      # Ntg(g) when the parent carried it (a cometary-ice ocean)
                                      gas_comps <- gas_components(ch4_mode, if ("g_Ntg(g)" %in% names(row_mix4)) "Ntg(g)" else character(0))
-                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate == "to_ocean")
+                                     gp <- gas_punch(gas_comps, porewater_mass_norm, put = pore_gas_fate != "retain", excess_only = pore_gas_fate == "retain_to_pore_volume")
                                      pore_gas_block <- gas_phase_block(1, gas_comps, pore_pressure_atm, porewater_temp_C,
                                                                        "Porewater gas (fixed pressure, starts empty)")
                                      ocean_gas_block <- gas_phase_block(2, gas_comps, ocean_pressure_atm, ocean_temp_C,
@@ -4963,7 +5526,60 @@ END
                                      soln1_h2o  <- as.numeric(row_mix1[["mass_H2O"]])
                                      soln2_pH   <- as.numeric(row_mix2[["pH"]])
                                      soln2_pe   <- as.numeric(row_mix2[["pe"]])
-                                     soln2_h2o  <- as.numeric(row_mix2[["mass_H2O"]])
+                                     if (!is.numeric(ocean_scale) || length(ocean_scale) != 1 || !(ocean_scale > 0)) stop("ocean_scale must be one positive number")
+                                     soln2_h2o  <- as.numeric(row_mix2[["mass_H2O"]]) * ocean_scale
+                                     # Refill (PI 2026-10-30): move refill_kg of water ocean -> porewater (negative: porewater ->
+                                     # ocean) by MIX before the first orbit. MIX scales whole solutions, so the moved water carries
+                                     # its solutes and every element is conserved between the two. Its simulations run before the
+                                     # SELECTED_OUTPUT is defined, so they add no rows (and this restart has no i_soln rows).
+                                     if (!is.numeric(refill_kg) || length(refill_kg) != 1 || !is.finite(refill_kg))
+                                       stop("refill_kg must be one finite number (kg)")
+                                     refill_block <- if (refill_kg > 0) {
+                                       if (refill_kg >= soln2_h2o) stop(sprintf("refill_kg %.4g >= the ocean's water %.4g kg", refill_kg, soln2_h2o))
+                                       paste0("END\n# Refill: ", sprintf("%.6e", refill_kg), " kg of ocean water into the porewater\n",
+                                              "MIX 1\n  1  1.0\n", sprintf("  2  %.15e\n", refill_kg / soln2_h2o), "SAVE solution 1\nEND\n",
+                                              "MIX 2\n", sprintf("  2  %.15e\n", 1 - refill_kg / soln2_h2o), "SAVE solution 2\nEND\n")
+                                     } else if (refill_kg < 0) {
+                                       if (-refill_kg >= soln1_h2o) stop(sprintf("-refill_kg %.4g >= the porewater's water %.4g kg", -refill_kg, soln1_h2o))
+                                       paste0("END\n# Refill: ", sprintf("%.6e", -refill_kg), " kg of porewater into the ocean\n",
+                                              "MIX 2\n  2  1.0\n", sprintf("  1  %.15e\n", -refill_kg / soln1_h2o), "SAVE solution 2\nEND\n",
+                                              "MIX 1\n", sprintf("  1  %.15e\n", 1 + refill_kg / soln1_h2o), "SAVE solution 1\nEND\n")
+                                     } else ""
+                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6); ocean_scale: %.15g", refill_kg, ocean_scale)
+
+                                     # The solutions: the parent's exact end state (SOLUTION_RAW from its DUMP; the ocean scaled
+                                     # by ocean_scale with a MIX, which scales water, solutes, H and O together), else, for parents
+                                     # without a dump, redefined from the CSV rows (pH, pe, totals; not exact in H and O).
+                                     raw <- restart_raw_solutions(prev_csv)
+                                     soln_defs <- if (!is.null(raw)) {
+                                       paste0("# Solutions 1 and 2: the parent's end state, SOLUTION_RAW from ", basename(raw$file), "\n",
+                                              raw$solution1, "\n\n", raw$solution2, "\n",
+                                              if (ocean_scale != 1) paste0("END\n# ocean_scale\nMIX 2\n", sprintf("  2  %.15e\n", ocean_scale), "SAVE solution 2\nEND\n") else "")
+                                     } else {
+                                       warning("no ", sub("\\.csv$", "_dump.txt", basename(prev_csv)), " next to prev_csv: the solutions are redefined from the CSV (pH, pe, totals), which is not exact in total H and O")
+                                       glue::glue('
+SOLUTION 1 Enceladus porewater (restarted)
+    temp      {round(porewater_temp_C, 2)}
+    pH        {sprintf("%.15g", soln1_pH)}
+    pe        {sprintf("%.15g", soln1_pe)}
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     {sprintf("%.15g", soln1_h2o)}
+    pressure  {round(pore_pressure_atm, 1)}
+{soln1_elem_lines}
+
+SOLUTION 2 Enceladus ocean (restarted)
+    temp      {round(ocean_temp_C, 2)}
+    pH        {sprintf("%.15g", soln2_pH)}
+    pe        {sprintf("%.15g", soln2_pe)}
+    redox     pe
+    units     mol/kgw
+    density   1
+    water     {sprintf("%.15g", soln2_h2o)}
+    pressure  {round(ocean_pressure_atm, 1)}
+{soln2_elem_lines}')
+                                     }
 
                                      # ---- Secondary minerals list ----
                                      secondary_minerals <- c(
@@ -5220,14 +5836,14 @@ END
                                      ep2_prim_lines <- if (length(equil_primary) > 0)
                                        paste(c("# --- Primary minerals (equilibrium, ocean) ---",
                                                sapply(equil_primary, function(m)
-                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_mix4)))),
+                                                 sprintf("   %-20s 0 %.15e  dissolve_only", m, ocean_scale * get_ep_moles(m, row_mix4)))),
                                              collapse = "\n")
                                      else ""
                                      ep2_minerals <- c(secondary_minerals, extra_ocean_minerals)
                                      ep2_sec_lines <- paste(
                                        c("# --- Secondary minerals (ocean, from previous run) ---",
                                          sapply(ep2_minerals, function(m)
-                                           sprintf("   %-20s 0 %.15e", m, get_ep_moles(m, row_mix4)))),
+                                           sprintf("   %-20s 0 %.15e", m, ocean_scale * get_ep_moles(m, row_mix4)))),
                                        collapse = "\n"
                                      )
                                      ep2_block <- paste0("EQUILIBRIUM_PHASES 2\n",
@@ -5322,6 +5938,8 @@ KNOBS
 
 # k={self$simulator$params$k}, thickness={self$simulator$params$layer_thickness} m
 # Mode: tidal kinetic restart from previous CSV state
+{refill_header_line}
+{self$simulator$exchange_header_line()}
 # prev_csv: {prev_csv}
 {parent_fluid_header_lines(prev_csv)}
 {parent_mode_line}
@@ -5333,27 +5951,8 @@ KNOBS
 # mode: {mode}
 # time_step: {sprintf("%.4e", time_step_years)} years
 
-SOLUTION 1 Enceladus porewater (restarted)
-    temp      {round(porewater_temp_C, 2)}
-    pH        {sprintf("%.15g", soln1_pH)}
-    pe        {sprintf("%.15g", soln1_pe)}
-    redox     pe
-    units     mol/kgw
-    density   1
-    water     {sprintf("%.15g", soln1_h2o)}
-    pressure  {round(pore_pressure_atm, 1)}
-{soln1_elem_lines}
-
-SOLUTION 2 Enceladus ocean (restarted)
-    temp      {round(ocean_temp_C, 2)}
-    pH        {sprintf("%.15g", soln2_pH)}
-    pe        {sprintf("%.15g", soln2_pe)}
-    redox     pe
-    units     mol/kgw
-    density   1
-    water     {sprintf("%.15g", soln2_h2o)}
-    pressure  {round(ocean_pressure_atm, 1)}
-{soln2_elem_lines}
+{soln_defs}
+{refill_block}
 
 REACTION_TEMPERATURE 1
     {round(porewater_temp_C, 2)}
@@ -5371,11 +5970,11 @@ REACTION_PRESSURE 2
     {round(ocean_pressure_atm, 1)}
 
 {pore_gas_block}
-{if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
+{if (pore_gas_fate == "retain") gas_restore_block(1, gas_comps, row_react) else if (pore_gas_fate == "retain_to_pore_volume") gas_restore_block(1, gas_comps, poregas_last_row(prev_csv)) else "# pore_gas_fate = to_ocean: the porewater gas phase starts empty"}
 
 {ocean_gas_block}
-{gas_restore_block(2, gas_comps, row_mix4)}
-{if (pore_gas_fate == "to_ocean") paste0("\n", gas_transfer_block(gas_comps)) else ""}
+{gas_restore_block(2, gas_comps, row_mix4, ocean_scale)}
+{if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 {rates_block}
 
@@ -5441,7 +6040,7 @@ KNOBS
                                          "USE reaction_pressure 1\n",
                                          "SAVE solution 1\n",
                                          "SAVE equilibrium_phases 1\n",
-                                         if (pore_gas_fate == "retain") "SAVE gas_phase 1\n" else "",
+                                         if (pore_gas_fate != "to_ocean") "SAVE gas_phase 1\n" else "",
                                          "USER_PUNCH\n",
                                          "   -headings Time_Years Enst_remain_g Forst_remain_g Troil_remain_g Alb_remain_g Diop_remain_g Anorth_remain_g Kfs_remain_g Teph_remain_g Schr_remain_g Total_Initial_g",
                                          iom_punch_headings_tidal, SHARED_PUNCH_HEADINGS, gp$headings, "\n",
@@ -5454,7 +6053,9 @@ KNOBS
                                          iom_punch_lines_tidal,
                                          SHARED_PUNCH_LINES, gp$lines,
                                          "END\n\n",
-                                         if (pore_gas_fate == "to_ocean") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
+                                         if (pore_gas_fate == "retain_to_pore_volume") pore_gas_out_block() else "",
+                                         OCEAN_STEP_KNOBS_ON,
+                                         if (pore_gas_fate != "retain") "USE kinetics 3\n" else "USE kinetics none\n",  # 3: the pore bubble
                                          "USE equilibrium_phases 2\n",
                                          "USE gas_phase 2\n",
                                          "USE reaction none\n",
@@ -5467,6 +6068,7 @@ KNOBS
                                          "SAVE equilibrium_phases 2\n",
                                          "SAVE gas_phase 2\n",
                                          "END\n\n",
+                                         OCEAN_STEP_KNOBS_OFF,
                                          "USE kinetics none\n",
                                          "USE equilibrium_phases none\n",
                                          "USE reaction none\n",
@@ -5484,7 +6086,7 @@ KNOBS
                                          sprintf("  4  %.15e\n", f_ocean / (f_ocean + f_x)),
                                          "SAVE solution 2\n",
                                          "END\n",
-                                         if (i < kinetic_cycles &&
+                                         if (stop_on_depletion && i < kinetic_cycles &&
                                              length(depletion_mineral) == 1 && length(proxy_mineral) == 1 &&
                                              depletion_mineral != proxy_mineral)
                                            paste0(
@@ -5499,7 +6101,7 @@ KNOBS
 
                                      content <- self$stamp_pqi_header(self$apply_ch4_mode(paste0(template, "\n", cycle_blocks), ch4_mode),
                                                                       ch4_mode$database, list(pore = pore_pressure_atm, ocean = ocean_pressure_atm))
-                                     writeLines(knobs_logfile(content, logfile), filename)
+                                     writeLines(knobs_logfile(self$apply_ssa(paste0(content, dump_block(filename))), logfile), filename)
                                      return(filename)
                                    }
                                  )

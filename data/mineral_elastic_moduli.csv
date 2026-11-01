@@ -1,0 +1,14 @@
+phase,K_GPa,G_GPa,G_low_GPa,G_high_GPa,K_type,K_source,G_source,entry,note
+Forsterite,127.3,81.6,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,fo,K and G from I89 (Isaak et al. 1989)
+Enstatite,107.8524,77.9,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,en,K and G from J07 (Jackson et al. 2007)
+Diopside,116.5,72.8,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,di,K and G from IOL06 (Isaak et al. 2006)
+Anorthite,81.86,36.04844,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,an,K from A04 (Angel 2004); G from their note 9
+Albite,60.06,36.0,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,lAb,low albite; K and G from B07
+K-Feldspar,58.3,28.1,,,isothermal,Abers & Hacker 2016,Abers & Hacker 2016,or,orthoclase; K from AA97 (Allan & Angel 1997); G from B95 (Bass 1995)
+Tephroite,128,54,,,adiabatic,Bass 1995,Bass 1995,Table 7 Mn2SiO4,Hill average; their ref. 117
+Magnesiochromite,203.3,104.9,,,adiabatic,Bass 1995,Bass 1995,Table 1 FeCr2O4 chromite,PROXY: the Fe end-member chromite (MgCr2O4 is not listed); their ref. 47
+Iron,166.7,81.5,,,adiabatic,Bass 1995,Bass 1995,Table 1 Fe alpha-iron,Hill average; their ref. 47
+Troilite,65.8,31.5,27.0,35.5,isothermal,Holland & Powell via Perple_X 7.2.1 hp634ver.dat,estimate (Bass 1995 monosulfide G/K),tro,K0 = b6 658000 bar (K' = b8 4.17; trot/lot/trov identical); file title Holland & Powell JMG 2011 (TC-DS633 23 Jun 2017) + additional data. G is an estimate: K0 x the G/K of Bass 1995's monosulfides (sphalerite 0.41; galena 0.54); central 0.48
+IOM,10.2,3,1,5,isothermal,Delarue et al. 2026,"terrestrial-kerogen analogue: Othman et al. 2022; Yan & Han 2013",Eq. 7 / Fig. 1,"K0 10.2 GPa (K' 7.7): Murnaghan fit to an anthracite coal in a DAC to 7 GPa (their text assumes 10 GPa for low-temperature carbonaceous matter). G bracket 1-5 GPa (PI), central 3: Yan & Han 2013 (SEG Expanded Abstracts, doi:10.1190/segam2013-1319.1) invert K 3.5-5.0 GPa for Green River kerogen and speculate G ~ K/2 (1.75-2.5 GPa; not measured); Othman et al. 2022 (ACS Omega 7, 32829-32839) Table: nanoindentation E 1.9-2.2 GPa (porous) to 6-15 GPa (non-porous), i.e. G 0.7-6.3 GPa at nu 0.2-0.3; atomistic type II kerogen G 4-7.5 GPa"
+Nickel,,,,,,none,none,,not in Abers & Hacker 2016 or Bass 1995
+Schreibersite,,,,,,none,none,,not in Abers & Hacker 2016 or Bass 1995

@@ -983,3 +983,188 @@ One commit per item; each commit message has its pass check.
   full cometary ocean with a carbon-free porewater is slow, not stuck (1,459 s unseeded vs 394 s
   seeded; the earlier "> 20 min" was a timeout); a CO2-only ocean does stall unseeded (no progress
   in 3,000 s) and completes in 267 s seeded. `docs/MATRIX_2026-10-28.md`.
+
+### exchange-physics branch, 2026-10-29
+
+- **Darcy flow no longer multiplied by porosity** (PI): `flow_velocity` is the Darcy flux, per unit
+  total area, and `flow_area` is the core's whole surface, so the flow is q * A. The extra factor
+  made the exchange 1/porosity (3.125x) too small. Lucas's production case (k 1e-7, full core):
+  exchange per orbit 3.342e-5 -> 1.044e-4 of the porewater; circulation time 243 -> 78 yr; auto
+  grouping factor 242 -> 77. Every tidal run's exchange changes; earlier results need rerunning.
+- **Exchange per half-orbit = min(poroelastic, Darcy, pore volume)** (PI): replaces the Darcy-only
+  exchange (`Simulator$calculate_exchange()`, `sim$exchange`). The poroelastic term is
+  alpha * eps_v * V_layer with eps0 from Liao et al. (2020) (Fig. 2 caption form, reproduces their Fig.
+  2a; the 3/5 in their text does not) and a degree-2 dilatation factor (0.115 for the full core); core
+  rigidity and viscosity are Bagheri et al. (2025) placeholders (17 GPa, 1e12 Pa s); biot_alpha 0.2.
+  Per orbit the halves compound, so x <= 1. At production k the poroelastic limit binds: exchange
+  1.25e-6 of the pore volume per half-orbit, circulation 3,250 yr (78 yr Darcy-only); Darcy binds
+  below k ~ 2.4e-9. The pore-volume limit cannot bind at real porosities. Header line and metrics
+  report the binding limit. `tests/exchange_check.R`.
+- **Known failure (open):** at 25 C the ocean step fails to converge when the porewater fraction mixed
+  in is ~1e-6 (3.3e-6 fails, 3.3e-7 and 3.3e-5 run; the pre-branch code fails the same way at k
+  1e-8). The new production exchange (2.5e-6 per orbit) falls in this window: the 25 C smoke run
+  now gives 18 errors; 100 and 160 C (1 orbit) run with 0 errors.
+- **Darcy term over the poroelastic skin depth** (PI): the pressure gradient acts over L_eff =
+  min(layer_thickness, delta), delta = sqrt(c/omega) with Liao et al. (2020) Table A1's c (K_f 2.2 GPa,
+  K_s 10 GPa; new config fields). delta: 28 m (k 1e-14), 0.9 km (1e-11), 88 km (1e-7). The Darcy volume
+  now grows as sqrt(k); Darcy/poro crossover 2.4e-9 -> 1.2e-11 m2. Circulation: 1.1e5 yr (1e-14), 3.5e4
+  (1e-13), 1.1e4 (1e-12), 3,530 (1e-11); production unchanged (poro binds, 3,250 yr). Cross-check:
+  S dP delta A = Darcy / 2.02 at every k. Note alpha 0.2 < phi 0.32 (not physical for a porous solid).
+- **25 C ocean-step convergence fixed** (PI): KNOBS -diagonal_scale true around every ocean step (MIX 4)
+  of tidal_kinetic, tidal_equil and the tidal restart, off after it. Without it the 25 C ocean step
+  failed at scattered porewater fractions (3e-8, 2e-6, 5e-6 of 12 tested from 1e-8 to 1e-3, and the
+  production 2.5e-6); with it all converge. A 160 C orbit is unchanged (1e-8 relative); set globally
+  it moved the porewater m_H2S by 0.9%, so it is ocean-step only. The 25 C 1-orbit and 2-orbit runs
+  give 0 errors. Trace seeds were not tried (not needed).
+- **The reacting box is the skin** (PI): `Simulator$new(reactive_depth = "skin")` (default) or "layer" (old).
+  `sim$reactive_thickness()` = min(L, delta) sets the porewater T and P (profile means over it), the rock
+  mass and pore volume, and the exchange fraction (relative to the skin's pore volume). Poro binds at
+  every k: x_half 2.1e-6 (k 1e-14 to 1e-11, skin 28-883 m, 1.4 C, 66.7 atm; circulation 4.5e6-1.4e5 yr)
+  and 1.4e-6 at production (88 km, 36.7 C, 177.3 atm; 3,410 yr). Tidal pumping alone reaches only cold
+  near-seafloor rock at low k. Header "Reacting box" line; pressure stamp "(profile mean over the
+  reacting box)". pressure_check and initial_fluid_check use reactive_depth = "layer" for their
+  full-layer pressures; exchange_check gains skin-box checks.
+- **Porosity and the Biot coefficient** (PI): `Simulator$new(phi0 = 0.32, phi_c = 0.5, alpha = NULL)`
+  (`porosity` still accepted). alpha = min(1, phi/phi_c) from the critical-porosity model (Nur et al. 1998,
+  The Leading Edge 17, 357-362; cited via Dvorkin & Nur 2000); `alpha =` overrides, below phi is an error.
+  The config's free `biot_alpha` (0.2, below phi) is removed. The box's solid mass is V (rho_core -
+  phi rho_water). `phi_from_core_density()`; `bulk_density()` flags (`core_density_ok`) and warns when
+  the final rho_bulk is outside Bagheri's 2.16-2.40 g/cm3. At phi0 0.32 (alpha 0.64): skin 23 m-74 km;
+  production circulation 1,117 yr (skin box); x_half 6.66e-6 at low k for any phi0 (= eps_v/phi_c).
+  Bagheri gives no frame/grain moduli (one fixed core bulk modulus), so alpha is not computed from them.
+- **Porosity that evolves with the chemistry** (PI): `run_tidal_evolution()` (`porosity_evolution.R`),
+  rigid frame, phi = 1 - V_solid/V_total, updated between chunks (k via `k_of_phi`, alpha, storage,
+  delta, box, exchange); chunks rerun at half length if phi changes > 1%; phi_min 0.01 and `clogged`.
+  Option, default FALSE. `bulk_density(origin_pqi =)` carries the IOM inventory across restarts.
+  `tidal_kinetic_restart(stop_on_depletion = TRUE)` (the USER_PRINT STOP once depletion_mineral is
+  exhausted, which PHREEQC reports as 2 errors) can now be turned off. 160 C, 24 orbits: phi 0.32 ->
+  0.219 (15 wt% IOM) / 0.165 (none), k 1e-7 -> 2.5e-8 / 9.1e-9 (Kozeny-Carman), delta 74 -> 45 / 32 km,
+  circulation 1,117 -> 2,014 / 3,334 yr; poro binds throughout; the core closes, no clogging. Water:
+  PHREEQC's porewater runs 37% (IOM) / 20% (none) short of the solids' pore volume after orbit 1.
+  `tests/porosity_evolution_check.R`.
+- **The tidal pore pressure is derived from the strain** (PI, 10-30): dP = alpha eps_v M, M = 1/S
+  (Simulator$tidal_pressure(); tidal_strain()). config `max_tidal_stress` defaults to NULL; a number
+  overrides it. Placeholders (alpha 0.64): pole 6.2e4 Pa; box mean 1.2e4 (thin skin), 8.6e3 (k 1e-7
+  skin), 7.2e3 Pa (layer). At Liao et al.'s Fig. B3 case the formula gives 1.1e3 Pa against their
+  ~3e4 (their ocean-loading term is not in it). Storage volume = strain volume in the skin, Darcy =
+  2.2x storage: the strain binds at every k in the skin box. Header and `sim$exchange` report dP.
+- **Strain factor follows the box** (PI, 10-30): eps_v/eps0 = (mean |P2| / 2 = 0.192) x the radial mean of (r/R)^2
+  over the reacting box: 0.192 for a thin skin (0.138 for the 74 km skin at k 1e-7), 0.115 for the full layer.
+  Already how tidal_strain() evaluates it; documented and tested (exchange_check 3d).
+- **phi_c = 0.4 by default** (PI, 10-30): Dvorkin & Nur (2000)'s table (36-40% for sorted grain packs and
+  sandstones) after Nur et al. (1998); phi >= phi_c gives alpha = 1 (a suspension, not a frame). At phi0
+  0.32, alpha 0.80: skin box x_half 8.3e-6 at low k, production 6.1e-6 (69 km skin, 31 C, 156 atm),
+  circulation 912 yr. README tables recomputed with dP from the strain.
+- **Refill of the pores from the ocean** (PI, 10-30): `tidal_kinetic_restart(refill_kg =)` mixes ocean water
+  into the porewater (negative: the reverse) before the first orbit, without output rows; run_tidal_evolution()
+  refills to m_pw(0) phi(t)/phi0 between chunks and reports it next to the tidal exchange. After orbit 1 it
+  moves 0.033-0.044 kg (normalised) against 1.9e-6 kg of tidal exchange per orbit. restart_closure_check:
+  whole-system totals conserved for +0.02 / -0.01 kg refills. `porosity_evolution` defaults to TRUE in
+  run_tidal_evolution() (FALSE in the quick self-test).
+- **The 10-29 porosity test overrode the temperature** (porewater_temp = 160 on the skin box, whose own T is
+  31 C at k 1e-7). Rerun at the skin's temperature (new defaults, refill on): phi 0.32 -> 0.279 (15 wt% IOM)
+  / 0.259 (none) in 24 orbits; at 160 C -> 0.222 / 0.169. The core closes, no clogging, poro binds.
+- **Ocean tidal loading at the seafloor** (PI, 10-31): Simulator$tidal_load_pressure(), rho_w g_c |u_ocean - u_core|
+  with u_r = h2 U2/g at the pole (Bagheri et al. 2025 Eqs. 1-2; surface |h2| 0.0459, lag 2.95 deg, Table 3
+  dissipative core; core h2 = (5/3) k2* of the uniform Maxwell core). Pole 213 Pa (108-459 over eta), box
+  mean 25-41 Pa; added to the strain dP as an amplitude (upper bound) and its stored volume to the poro
+  limit. 0.3% of the strain term at every k and eta. `ocean_load = FALSE` drops it. It does not explain
+  Liao's ~3e4 Pa (README corrected). Flag: the core h2 behind eps0 (0.29) is 6x the whole-body h2 (0.046).
+- **Water drawn in by the refill** (PI, 10-31): `refill_summary()` (porosity_evolution.R) per chunk and
+  cumulatively, scaled to the whole core by the box's rock mass (new `layer_mass_kg` column), as a fraction
+  of the profile's ocean (`profile_ocean_mass_kg()`, 2.13e19 kg), and the ocean's concentration factor.
+  24-orbit runs: 1.27e18-1.82e18 kg, 6.0-8.5% of the ocean, almost all in orbit 1; concentration factor
+  1.06-1.09 (model's own ocean 1.08-1.12).
+- **strain_scale** (PI, 10-31): config factor on eps0 (default 1) for the N6 sweep; the core h2 bracket is
+  strain_scale 0.046/0.29 = 0.16 to 1, documented as the largest uncertainty in the exchange. At 0.16 the
+  thin-skin exchange is 1.3e-6 per half-orbit (from 8.3e-6). exchange_check 3f.
+- **The ocean per kg of rock** (PI, 10-31): the PHREEQC basis now takes the profile's ocean mass (Mocean_kg,
+  2.131e19 kg; the config's geometric 2.113e19 gave 0.9914 of the geometric ratio at every k), and each
+  restart scales the parent's ocean (water, ocean minerals, ocean gas) by old box rock / new box rock
+  (`tidal_kinetic_restart(ocean_scale =)`, gas_restore_block(scale =)), applied by run_tidal_evolution(),
+  so the ocean per kg of rock follows the skin depth. The two concentration factors now agree to four
+  digits (1.0749, 1.0713, 1.0933, 1.0633 for the four 24-orbit runs).
+- **Cumulative drift diagnostic** (PI, K): run_tidal_evolution() checks each chunk's whole-system element
+  totals against its start (whole_system_parts(), whole_system_t0()) and reports the cumulative drift
+  (drift_max, drift_element), warning above 1e-4. 24-orbit runs: <= 7e-9 at 160 C; 4-6e-6 (H) at the
+  skin's changing temperature, from restarts redefining the porewater at the new T from its pH.
+
+### exchange-physics, items 3-8 (2026-10-31)
+
+- **Item 3, permeability and surface area from grain size:** `Simulator$new(k = "kozeny_carman", grain_diameter =)`
+  (k = d^2 phi^3 / (180 (1-phi)^2), Carman 1937); `ssa = "geometric"` (6/(rho_i d_i) x roughness, per-mineral
+  diameters optional; applied to every generated input by PhreeqcIntegrator$apply_ssa()), `ssa = "legacy"`
+  default. run_tidal_evolution() follows phi(t) through a Kozeny-Carman k. Choblet's 1e-14-1e-13 at phi 0.32
+  needs 5-16 um grains; production k 1e-7 implies 1.6 cm gravel. The N6 sweep is one (phi, d, strain_scale)
+  grid (README). `tests/kozeny_carman_check.R`.
+- **Item 4, cometary-ice ocean extended:** `cometary_ice_ocean(v, f = 1, include_NH3 = TRUE, include_less_volatile =
+  FALSE, include_O2 = TRUE)`. NH3 now by default (7.44e-3 molal; Table 5's omission). f scales the load.
+  `data/comet67p_volatility.csv`: Rubin et al. (2019) Table 2 classified against NH3 at 273 K (Fray &
+  Schmitt 2009 Table 5 evaluated, or a boiling-point proxy); the 21 less-volatile CHONS species add C 1.08,
+  N 0.177, S 0.177 per 100 H2O (6.2x, 50x, 8x Table 5), entered by their elements. With them: pH 5.8, DIC
+  0.56 molal (f = 1), no sulfate, H2 saturated and a bubble under c4_only; CH4 hydrate oversaturated (SI
+  +0.30) under coupled. The initial-ocean CSV gains the clathrate SIs. cometary_ocean_check: defaults, f
+  linearity, less-volatile closure (with the gas bubble) and the c4_only leak check.
+- **Item 5, trace N and S seeds: tested, not added.** 25 and 160 C, 2 orbits, 15 wt% IOM, seeds C / C+N / C+S /
+  C+N+S: all 0 errors; 160 C retries 33 in every variant; 25 C retries 4 / 18 / 12 / 4 (no pattern). The C seed and
+  the ocean-step -diagonal_scale already make the default converge (README section 6).
+- **Item 6, D6 closed; early-outgassing outputs; retain_to_pore_volume:** instantaneous corrosion documented as
+  an accepted idealisation (README, PROGRESS D6; D9 optional). `h2_budget()` (H2 generated by metal and by
+  schreibersite as electrons/2, lower bounds; H2 in the ocean, ocean gas, porewater, pore gas, per orbit) and
+  `scale_to_core()` (box, layer, core). Lucas's 160 C case: 1.25e20 mol from metal, 2.4e18 from schreibersite,
+  1.51e20 mol in the ocean gas (whole core). `pore_gas_fate = "retain_to_pore_volume"` (tidal_kinetic and its
+  restart): excess beyond the pore volume PUT, removed after the porewater step (KINETICS 4, unpunched;
+  pore gas left written to <base>_poregas.csv) and added to the ocean (KINETICS 3). Worked example 1: ocean H2
+  saturated under to_ocean and retain_to_pore_volume, 5.7e-7 under retain.
+- **Item 7, steady-state framing and diagnostic:** README section 7 (ingested water has the evolving ocean's
+  composition; a steady state need not be zero net exchange; true equilibrium needs the IOM exhausted, no
+  kinetic primaries and equal temperatures). `steady_state_diagnostics()`: per-orbit net elemental flux into
+  the ocean and secondary-mineral change in the porewater and in the ocean. Lucas's 160 C case: porewater
+  secondaries +1.09 -> +0.0038 mol per orbit (orbit 1 -> 12); Na flux 2.4e-6 per orbit; C flux rising.
+- **Item 8, docs:** worked examples 1 and 2 refreshed (README section 4, ENTICES_runs.Rmd: e.g. example 1 ocean pH
+  7.57, H2 0.065 saturated, porewater pH 11.04, 0.115 molal Na; example 2 ocean pH 10.63, DIC 3.4e-8 at orbit 12).
+  README subsection "What tidal-only circulation can reach" (k, L_eff, T, exchange per half-orbit, circulation).
+  PROGRESS Part 10: D6 closed, D7/D12 merged, N12 implemented, phi(t) implemented, buoyancy flow out of scope.
+- **N, core strain from a layered forward model** (PI 10-31): `scripts/layered_core_strain.py` (TidalPy 0.8.1
+  radial solver; Bagheri et al. 2025 structure: shell, ocean, core, compressible, Andrade, Table 5 ranges,
+  log-uniform, core density from the mass) writes `data/layered_core_strain.csv` (pole volumetric strain vs
+  depth 0-180 km, mean and sd, per scenario and core viscosity) and `data/layered_core_strain_summary.csv`.
+  Validation: Table 3 Love numbers and lags reproduced within 5% for both scenarios (heat 18-28 GW, >= 90% in
+  the scenario's layer). `EnceladusConfig$strain_model = "layered"` (default; `"liao"` keeps the old isolated
+  core) and `tidal_scenario`: eps_v = 0.19245 x the box's volume mean of the strain; the ocean load uses the
+  layered displacements. The volumetric strain is ~8e-9 at the core surface (any scenario or eta; set by K =
+  100 GPa), 2200x below Liao's eps0: the exchange per half-orbit falls from 8.3e-6 to 1.9e-8 at the
+  placeholders, circulation 6.2e8 yr at k 1e-14 and 2.9e5 yr at 1e-7. The h2 bracket is removed from the docs;
+  the N6 sweep takes the scenario and eta. `tests/exchange_check.R` section 7.
+- **Comparison rule for log-scale columns (PI 11-01):** column_differences() (phreeqc_tools.R): pe, pH, la_ and si_
+  columns are compared only where the relevant species is above 1e-10 molal in both runs (log_column_gate()), then
+  within 1e-4 log units; below the gate the molality floor applies. Replaces the la_-only gate.
+  gas_mass_balance_check 7/7 (the no-metal check had failed on la_SO4-2, 1.2e-4 log units at <= 4e-9 molal).
+- **Core bulk modulus = the drained frame (PI 11-01):** K_d = K_grain (1 - phi/phi_c), mu_d likewise, K_grain and
+  mu_grain the Hill average, by volume, of the reconstruction's minerals and the IOM (data/mineral_elastic_moduli.csv:
+  Abers & Hacker 2016; Bass 1995, chromite as the magnesiochromite proxy; troilite K0 65.8 GPa from Perple_X 7.2.1
+  hp634ver.dat ("TC-DS633, 23 Jun 2017"), its mu an estimate 27-35.5; IOM K0 10.2 GPa from Delarue et al. 2026, its mu 1-5 (terrestrial kerogen: Othman et al. 2022, Yan & Han 2013); Ni and
+  schreibersite out). K_grain 49.0 GPa, K_d 9.80 GPa, mu_d 5.21 GPa (Table 5's 4-70: inside); minerals only 19.8 /
+  11.9. K_d follows phi(t) and the remaining IOM in run_tidal_evolution(); phi >= phi_c stops (flagged);
+  config$core_bulk_modulus overrides. Layered tables regenerated at K_d (Table 3 still matched); strain 8.0e-8,
+  exchange 5.4e-8 per half-orbit, circulation 2.2e8 / 7.1e6 / 1.2e5 yr at k 1e-14 / 1e-11 / 1e-7. Bagheri Eq. 8's
+  dimensional inconsistency and the energy-flux alternative documented (README, the script).
+- **Item 1, exact restarts (PI 11-01):** tidal_kinetic inputs and restarts DUMP solutions 1 and 2 (SOLUTION_RAW,
+  <base>_dump.txt); restarts read them back (restart_raw_solutions(); ocean_scale applied by MIX) and change the
+  temperature only by REACTION_TEMPERATURE; parents without a dump fall back to the CSV redefinition with a warning.
+  H drift per chunk 4.0e-6 -> <= 2.1e-9 (24-orbit skin-temperature evolution); restart_closure_check: a restart at
+  130 C from a 160 C parent keeps whole-system totals to 5.4e-10.
+- **Item 2, restart_closure_check rerun on the final tree (11-01):** all 8 checks pass (tidal orbit 2 element
+  totals to 2e-13 in REACT; refill +0.02 / -0.01 kg to 2.5e-11 / 5.8e-12; restart at a new temperature 5.4e-10; bulk
+  6.6e-12).
+- **Item 3, restart reproducibility documented (PI 11-01):** a restart reproduces the continuous run to ~1e-9 in
+  whole-system totals and ~1e-5 relative in solution composition, for every pore_gas_fate (not specific to
+  retain_to_pore_volume: to_ocean Na 6e-6): the CVODE integrator's accuracy (README, Restarts).
+- **Item 4, H2 by electron balance (PI 11-01):** h2_budget() adds H2_from_Fe (half the change of sum n z_Fe over every
+  Fe-bearing phase, z_Fe by charge balance, fe_valence(); dissolved Fe as Fe(II), bounded by dissolved_Fe_mol),
+  H2_from_Ni, H2_from_P, H2_generated, H2_present and H2_other_redox. Lucas's 160 C case, orbit 12: generated 2.462
+  mol/kg (Fe 2.444, P 0.018) = present 2.462 to 2.4e-4 (the lower bound was 2.04); 1.54e20 mol for the whole core.
+- **Worked examples refreshed (11-01, the layered strain at K_d):** example 1 ocean pH 7.41; example 2 ocean pH 8.51,
+  DIC 2.9e-10 at orbit 12; example 3 organics add 1.25e-15 molal DIC (expected at this exchange; the long runs N8
+  answer the organics question); the three-fates table (ocean pH 7.41 / 7.62 / 7.62); steady-state fluxes (Na
+  1.75e-8 per orbit).
