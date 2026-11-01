@@ -40,6 +40,24 @@
 # frame) the run is flagged and stopped: a warning, and the chunks so far are returned with
 # stopped = "phi reached phi_c".
 #
+# Long runs: grouped chunks with a geometric time step (production kit, item 1, PI 2026-11-01). With
+# grouped = TRUE (the default when t_end_years is given) a chunk is steps_per_chunk PHREEQC steps of G orbits
+# each (tidal_kinetic's grouped mode: the exchange compounds as x_step = 1 - (1 - x_orbit)^G), so the output
+# is log-spaced in time. G starts at 1 and grows by g_growth per accepted chunk, limited by accuracy, not
+# convenience:
+#   - x_step <= x_step_max (0.1): G <= ln(1 - x_step_max) / ln(1 - x_orbit), from the chunk's own exchange;
+#     this bounds the operator-splitting error of reacting the porewater for G orbits between exchanges;
+#   - the porosity change per chunk within phi_tol: G <= phi_tol / (|dphi/phi| per orbit x steps_per_chunk),
+#     from the last chunk's rate; a chunk that still exceeds phi_tol is redone at G/2;
+#   - g_max (default Inf). There is no fixed cap: the 1e5-orbit cap of calculate_phreeqc_parameters()'s
+#     automatic grouping (mode "ocean_circulations") is not used here, because the two criteria above already
+#     bound the step and would be hidden by it (at the reference, x_step <= 0.1 allows ~1e6 orbits).
+# Near the end the step shrinks so the run lands on the end time. End conditions, the first reached:
+# t_end_years (default 4.5e9 in run_case.R); a steady state, ss_tol (relative change of the ocean's C(+4)
+# (carbon_by_oxidation_state()), pH and Na over one ocean circulation time all below ss_tol); clogging
+# (phi <= phi_min); phi reaching phi_c; max_chunks. `stopped` names it. Without t_end_years and grouped,
+# n_orbits ends the run and chunks are ungrouped, as before.
+#
 # porosity_evolution: TRUE for production runs (default, PI 10-30, once the refill passed its checks);
 # FALSE keeps phi0 (and no refill) and reports the phi the solids imply; the quick self-tests use both.
 
@@ -59,11 +77,17 @@ evolution_simulator <- function(template, phi, k, iom_vol_frac = template$params
 # calculate_phreeqc_parameters(). n_orbits: total orbits. Further arguments go to both generators
 # (porewater_temp, pore_gas_fate, carbon_mode, ...); trace_C_molal only to the first.
 # Returns list(chunks = one row per accepted chunk, files = the chunks' .pqi).
-run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_dir, porosity_evolution = TRUE,
+run_tidal_evolution <- function(template, organic_wt_percent, n_orbits = NULL, output_dir, porosity_evolution = TRUE,
                                 phi_tol = 0.01, phi_min = 0.01, k_of_phi = NULL, first_chunk = 1, max_chunk = 64,
-                                trace_C_molal = 1e-14, refill = porosity_evolution, ...) {
+                                trace_C_molal = 1e-14, refill = porosity_evolution,
+                                t_end_years = NULL, grouped = !is.null(t_end_years), steps_per_chunk = 4, g_growth = 2,
+                                x_step_max = 0.1, g_max = Inf, ss_tol = NULL, max_chunks = Inf, ...) {
   quiet <- function(e) { invisible(capture.output(r <- suppressMessages(e))); r }
   phi0 <- template$params$porosity; phi <- phi0
+  yr_per_orbit <- template$config$orbital_period / (365.25 * 24 * 3600)
+  if (is.null(n_orbits) && is.null(t_end_years)) stop("run_tidal_evolution: give n_orbits or t_end_years")
+  n_tot <- if (!is.null(t_end_years)) ceiling(t_end_years / yr_per_orbit) else n_orbits
+  S <- steps_per_chunk; G_try <- 1
   # a Kozeny-Carman template follows phi(t) through k unless k_of_phi is given (item 3)
   if (is.null(k_of_phi) && identical(template$params$permeability, "kozeny_carman"))
     k_of_phi <- function(phi) kozeny_carman_k(template$params$grain_diameter, phi)
@@ -74,25 +98,39 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
   # the IOM's share of the solid volume for the frame moduli: t = 0 from the template, then from each chunk's
   # remaining IOM at the Delarue density (bulk_density()); the minerals' volume is the reconstruction's
   iom_vf <- template$params$iom_vol_frac
-  while (done < n_orbits) {
+  while (done < n_tot && chunk < max_chunks) {
     if (phi >= template$params$phi_c) {
       stopped <- "phi reached phi_c"
       warning(sprintf("run_tidal_evolution: after chunk %d (orbit %g) phi = %.4g has reached phi_c = %.4g: no frame (alpha = 1, K_d = 0); stopped",
                       chunk, done, phi, template$params$phi_c))
       break
     }
-    n <- min(n, n_orbits - done)
     sim <- evolution_simulator(template, phi, k, iom_vf)
+    if (grouped) {
+      x_orb <- sim$exchange$x_orbit
+      G_x <- if (x_orb > 0) max(1, floor(log(1 - x_step_max) / log(1 - x_orb))) else Inf
+      rem <- n_tot - done
+      G <- max(1, min(G_try, G_x, g_max, floor(rem / S)))
+      n <- if (rem < S) rem else S * G
+    } else {
+      G <- 1; n <- min(n, n_tot - done)
+    }
     ph <- quiet(PhreeqcIntegrator$new(sim)); quiet(ph$calculate_phreeqc_parameters(organic_wt_percent = organic_wt_percent))
     ocean_scale <- if (is.na(lm_prev)) 1 else lm_prev / ph$phreeqc_params$layer_mass
-    dir <- file.path(output_dir, sprintf("chunk%03d_orb%g-%g", chunk + 1, done + 1, done + n))
+    # short chunk directories: the generators' file names are long, and Windows refuses paths over 260
+    # characters (PHREEQC then cannot open its DUMP file); the orbits are in the chunk table and the .pqi header
+    dir <- file.path(output_dir, if (grouped) sprintf("c%04d", chunk + 1) else sprintf("chunk%03d_orb%g-%g", chunk + 1, done + 1, done + n))
+    if (.Platform$OS.type == "windows" && nchar(normalizePath(dir, mustWork = FALSE)) > 120)
+      stop(sprintf("run_tidal_evolution: the output path %s is %d characters long; with the generated file names (~130 characters) it would pass Windows' 260-character limit. Use a shorter output directory (e.g. clone the repository nearer the drive root).",
+                   normalizePath(dir, mustWork = FALSE), nchar(normalizePath(dir, mustWork = FALSE))))
+    gm <- if (G > 1) list(mode = "grouped", grouping_factor = G) else list(mode = "ungrouped")
     unlink(dir, recursive = TRUE)
     f <- suppressWarnings(quiet(if (is.null(prev_csv))
-      ph$generate_phreeqc_input_tidal_kinetic(output_dir = dir, mode = "ungrouped", n_orbital_cycles = n, trace_C_molal = trace_C_molal, ...)
+      do.call(ph$generate_phreeqc_input_tidal_kinetic, c(list(output_dir = dir, n_orbital_cycles = n, trace_C_molal = trace_C_molal), gm, list(...)))
     else
-      ph$generate_phreeqc_input_tidal_kinetic_restart(output_dir = dir, prev_csv = prev_csv, n_orbital_cycles = n,
+      do.call(ph$generate_phreeqc_input_tidal_kinetic_restart, c(list(output_dir = dir, prev_csv = prev_csv, n_orbital_cycles = n,
                                                       allow_pressure_change = TRUE, stop_on_depletion = FALSE,
-                                                      refill_kg = refill_next, ocean_scale = ocean_scale, ...)))
+                                                      refill_kg = refill_next, ocean_scale = ocean_scale), gm, list(...)))))
     db <- sub("^# Database: ", "", grep("^# Database: ", readLines(f, n = 30), value = TRUE)[1])
     r <- run_phreeqc(f, db, output = sub("\\.pqi$", ".out", f), workdir = dirname(f), warn_version = FALSE)
     if (r$status != 0 || r$errors > 0) stop(sprintf("chunk %d (%s): PHREEQC status %s, %d errors", chunk + 1, basename(f), r$status, r$errors))
@@ -102,7 +140,8 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
     V_end <- bd$solid_volume_cm3[nrow(bd)]
     phi_raw <- 1 - V_end / V_total
     rel <- abs(phi_raw - phi) / phi
-    if (porosity_evolution && rel > phi_tol && n > 1) { n <- max(1, floor(n / 2)); next }   # too big a step: redo
+    if (porosity_evolution && rel > phi_tol && grouped && G > 1) { G_try <- max(1, floor(G / 2)); next }   # too big a step: redo
+    if (porosity_evolution && rel > phi_tol && !grouped && n > 1) { n <- max(1, floor(n / 2)); next }
     chunk <- chunk + 1; files <- c(files, f)
     if (is.null(origin)) origin <- f
     x <- read.delim(csv, check.names = FALSE, strip.white = TRUE); names(x) <- trimws(names(x))
@@ -110,6 +149,10 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
     w_ph <- as.numeric(x$mass_H2O[rr[length(rr)]])          # the porewater after the last exchange (MIX 1)
     ro <- which(trimws(x$state) == "react" & trimws(x$soln) == "2")
     w_oc <- as.numeric(x$mass_H2O[ro[length(ro)]])          # the ocean (MIX 2)
+    # the ocean at the chunk's end, for the steady-state test: pH, Na and C(+4) by actual oxidation state
+    io <- ro[length(ro)]
+    cb <- carbon_by_oxidation_state(csv)$by_state
+    oc_C4 <- sum(cb$C_molal[cb$block == io & cb$ox == 4 & !cb$decoupled])
     if (is.na(m_pw0)) m_pw0 <- as.numeric(x$mass_H2O[which(trimws(x$state) == "i_soln" & trimws(x$soln) == "1")[1]])
     # drift: this chunk's end against its start
     if (is.null(pq0)) pq0 <- pqi_initial_solids(f)
@@ -135,8 +178,23 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
       iom_vol_frac = sim$iom_volume_fraction(),
       ocean_per_rock = w_oc, ocean_per_rock_geometric = ph$phreeqc_params$ocean_mass / ph$phreeqc_params$layer_mass,
       drift_max = max(rel_d), drift_element = names(rel_d)[which.max(rel_d)],
+      G = G, steps = if (G > 1) ceiling(n / G) else n, x_step = 1 - (1 - xch$x_orbit)^G,
+      time_end_yr = (done + n) * yr_per_orbit, ocean_pH = as.numeric(x$pH[io]), ocean_Na = as.numeric(x$Na[io]),
+      ocean_C4 = oc_C4, ocean_H2 = as.numeric(x$m_H2[io]), steady = FALSE,
       seconds = r$seconds)
     done <- done + n; prev_csv <- csv
+    # steady state: the ocean's C(+4), pH and Na each within ss_tol (relative) of their values one circulation
+    # time earlier (the last chunk end at or before t - tau)
+    if (!is.null(ss_tol)) {
+      tnow <- rows[[chunk]]$time_end_yr; tau <- rows[[chunk]]$circulation_yr
+      past <- Filter(function(r) r$time_end_yr <= tnow - tau, rows)
+      if (length(past)) {
+        p <- past[[length(past)]]; q <- rows[[chunk]]
+        rc <- c(abs(q$ocean_C4 - p$ocean_C4) / abs(q$ocean_C4), abs(q$ocean_pH - p$ocean_pH) / abs(q$ocean_pH),
+                abs(q$ocean_Na - p$ocean_Na) / abs(q$ocean_Na))
+        if (all(is.finite(rc)) && all(rc < ss_tol)) { rows[[chunk]]$steady <- TRUE; stopped <- "steady state" }
+      }
+    }
     if (porosity_evolution) {
       clogged <- phi_raw <= phi_min
       phi <- max(phi_min, phi_raw)
@@ -145,8 +203,14 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits, output_d
     refill_next <- if (refill) m_pw0 * phi / phi0 - w_ph else 0
     nb <- nrow(bd); iom_vf <- iom_volume_fraction(template$params$iom_wt_percent, iom_g = bd$iom_g[nb], iom_density = bd$iom_density[nb])
     n_prev <- n; lm_prev <- ph$phreeqc_params$layer_mass
-    n <- if (rel > 0) max(1, min(max_chunk, floor(n * phi_tol / rel))) else min(max_chunk, 2 * n)
+    if (grouped) {
+      G_phi <- if (rel > 0) floor(phi_tol / (rel / n * S)) else Inf
+      G_try <- max(1, min(G * g_growth, G_phi))
+    } else n <- if (rel > 0) max(1, min(max_chunk, floor(n * phi_tol / rel))) else min(max_chunk, 2 * n)
+    if (identical(stopped, "steady state")) break
+    if (grouped && clogged) { stopped <- "clogged"; break }
   }
+  if (is.na(stopped)) stopped <- if (done >= n_tot) "end time" else if (chunk >= max_chunks) "max_chunks" else NA_character_
   list(chunks = do.call(rbind, rows), files = files, stopped = stopped)
 }
 

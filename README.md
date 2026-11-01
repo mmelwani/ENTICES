@@ -671,6 +671,24 @@ box, the strain-limited volume and the exchange fraction. A chunk whose φ chang
 (`over_tol`); the next chunk is scaled from the last one's rate. φ ≤ `phi_min` (0.01) is capped and
 flagged `clogged`. `tests/porosity_evolution_check.R` checks the bookkeeping.
 
+**Long runs: grouped chunks and a geometric time step (production kit, item 1, PI 2026-11-01).** With
+`t_end_years` (or `grouped = TRUE`), `run_tidal_evolution()` runs chunks of `steps_per_chunk` (4) PHREEQC
+steps of G orbits each, the exchange compounded as x_step = 1 − (1 − x_orbit)^G (`tidal_kinetic`'s grouped
+mode), so the output is log-spaced in time. G starts at 1 and doubles per accepted chunk, limited by
+accuracy: **x_step ≤ 0.1** (G ≤ ln 0.9 / ln(1 − x_orbit), from each chunk's own exchange; it bounds the
+error of reacting the porewater for G orbits between exchanges) and **the porosity change per chunk within
+`phi_tol`** (from the last chunk's rate; a chunk that exceeds it is redone at G/2). There is no fixed cap
+(`g_max`, default none): the 1e5-orbit cap of the automatic `"ocean_circulations"` grouping is not used,
+because the two criteria already bound the step (x_step ≤ 0.1 allows ~1.7e6 orbits, 6,000 yr, at the
+reference). The run ends at `t_end_years`, at a **steady state** (`ss_tol`: the ocean's C(+4) by actual
+oxidation state, pH and Na each change by less than `ss_tol` relative over one ocean circulation time), at
+clogging or at φ = φc (`stopped` says which). Chunk directories are short (`c0001`, ...): Windows refuses
+paths over 260 characters, and an output path over 120 characters is an error before any run.
+**Validation** (`tests/grouped_validation_check.R`, ~10 min): the reference case to orbit 1,000 grouped (14
+chunks, 56 steps, G up to 84) and ungrouped (1,000 steps) agree within 0.41% in the ocean's C(+4), pH, H₂
+and Na. **Cost:** at the reference the step is set by the porosity (φ falls from 0.32 to ~0.17 by 5e4 yr,
+by hydration), not by x_step; G reaches ~2.5e5 orbits (950 yr) by 5e4 yr, at 3–16 s per chunk.
+
 **Refill (PI, 2026-10-30).** Hydration consumes porewater (after the first orbit the porewater was
 20–37% short of the pores). Between chunks the porewater is now brought back to the pore volume φ(t)
 implies, m_pw(0)·φ(t)/φ0 (m_pw(0) the first chunk's porewater, so the target is on the run's own

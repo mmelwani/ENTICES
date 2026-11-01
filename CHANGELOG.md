@@ -1168,3 +1168,9 @@ One commit per item; each commit message has its pass check.
   DIC 2.9e-10 at orbit 12; example 3 organics add 1.25e-15 molal DIC (expected at this exchange; the long runs N8
   answer the organics question); the three-fates table (ocean pH 7.41 / 7.62 / 7.62); steady-state fluxes (Na
   1.75e-8 per orbit).
+- **Production kit, item 1: long runs (PI 11-01).** run_tidal_evolution(t_end_years =, grouped =, steps_per_chunk = 4,
+  g_growth = 2, x_step_max = 0.1, g_max = Inf, ss_tol =, max_chunks =): grouped chunks with G growing geometrically,
+  limited by x_step <= 0.1 and the porosity change per chunk (phi_tol); ends at t_end, steady state (ocean C(+4), pH,
+  Na within ss_tol over one circulation time), clogging or phi_c. New chunk columns: G, steps, x_step, time_end_yr,
+  ocean_pH, ocean_Na, ocean_C4, ocean_H2, steady. Short chunk directories (Windows path limit). Validation:
+  tests/grouped_validation_check.R, grouped vs ungrouped to orbit 1000 within 0.41%.
