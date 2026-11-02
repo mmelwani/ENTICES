@@ -161,15 +161,14 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits = NULL, o
     if (!is.na(stopped)) return(result())
   } else logf("start: %s", output_dir)
   leader_row <- function(i) {
-    lf <- file.path(follow, "state.rds")
+    lf <- file.path(follow, "state.rds"); dead <- liveness_watch(follow, file.path(follow, "lock"))
     repeat {
       L <- if (file.exists(lf)) tryCatch(readRDS(lf), error = function(e) NULL) else NULL
       if (!is.null(L) && length(L$rows) >= i) return(L$rows[[i]])
-      if (!is.null(L) && !is.na(L$stopped)) return(structure(list(), stopped = L$stopped))
+      # A leader that ended at an earlier t_end is being extended (t_end raised): wait for its next rows
+      if (!is.null(L) && !is.na(L$stopped) && !(L$stopped == "t_end" && L$done < n_tot)) return(structure(list(), stopped = L$stopped))
       if (file.exists(file.path(follow, "FAILED"))) stop("run_tidal_evolution: the leader run failed (", follow, ")")
-      lk <- file.path(follow, "lock")
-      if (file.exists(lk) && !pid_alive(suppressWarnings(as.integer(readLines(lk, n = 1, warn = FALSE)))))
-        stop("run_tidal_evolution: the leader run (", follow, ") is not running and has not finished; rerun the case to resume both")
+      if (dead()) stop("run_tidal_evolution: the leader run (", follow, ") is not running and has not finished; rerun the case to resume both")
       Sys.sleep(follow_poll_s)
     }
   }
@@ -327,13 +326,46 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits = NULL, o
   result()
 }
 
-# Whether process `pid` is running (the run locks of run_case.R; the blank's wait for its leader).
-pid_alive <- function(pid) {
+# Whether process `pid` is running: TRUE, FALSE (the process table answered and it is not there), or NA (no
+# answer: tasklist failed or printed nothing, as it can on a loaded machine; tried 3 times).
+pid_state <- function(pid) {
   if (length(pid) != 1 || is.na(pid)) return(FALSE)
-  if (.Platform$OS.type == "windows") {
+  if (.Platform$OS.type != "windows") return(isTRUE(tools::pskill(pid, 0L)))
+  for (i in 1:3) {
     o <- suppressWarnings(system2("tasklist", c("/FI", shQuote(sprintf("PID eq %d", pid)), "/NH", "/FO", "CSV"), stdout = TRUE, stderr = FALSE))
-    any(grepl(sprintf('"%d"', pid), o, fixed = TRUE))
-  } else isTRUE(tools::pskill(pid, 0L))
+    if (any(grepl(sprintf('"%d"', pid), o, fixed = TRUE))) return(TRUE)
+    if (is.null(attr(o, "status")) && any(nzchar(trimws(o)))) return(FALSE)   # answered (the "no tasks" line): not running
+    Sys.sleep(1)
+  }
+  NA
+}
+# The run locks of run_case.R: an unanswered check counts as running, so a busy machine never frees a live lock.
+pid_alive <- function(pid) !identical(pid_state(pid), FALSE)
+
+# Seconds since anything in run directory `dir` last changed: its log, console log, state and chunk table, and the
+# files of its newest chunk directory (PHREEQC's .out grows during a chunk). Inf if there is nothing.
+run_activity_age <- function(dir) {
+  f <- file.path(dir, c("run.log", "console.log", "state.rds", "chunks.csv", "lock", "run_case.console.log"))
+  cd <- sort(list.files(dir, "^c[0-9]{4}$", full.names = TRUE), decreasing = TRUE)[1]
+  if (!is.na(cd)) f <- c(f, list.files(cd, full.names = TRUE))
+  m <- file.mtime(f[file.exists(f)])
+  if (!length(m)) Inf else as.numeric(difftime(Sys.time(), max(m), units = "secs"))
+}
+
+# A watchdog for a run that should be alive (PI 2026-11-02: a busy shared machine must never stop a healthy run).
+# Each call is one check; it returns TRUE only when the run has looked stopped on n_checks consecutive checks
+# spanning at least span_s seconds. A check looks stopped only if the file activity under `dirs` is older than
+# stale_s (the primary signal) and the process table says the lock's process is gone (tasklist answered "no";
+# no answer counts as alive). A dead run is reported ~stale_s after its last write.
+liveness_watch <- function(dirs, lock, stale_s = 600, n_checks = 6, span_s = 60) {
+  n <- 0; first <- NULL
+  function() {
+    age <- min(vapply(dirs, run_activity_age, 0))
+    pid <- if (file.exists(lock)) suppressWarnings(as.integer(readLines(lock, n = 1, warn = FALSE))[1]) else NA
+    if (age <= stale_s || !identical(pid_state(pid), FALSE)) { n <<- 0; first <<- NULL; return(FALSE) }
+    n <<- n + 1; if (is.null(first)) first <<- Sys.time()
+    n >= n_checks && as.numeric(difftime(Sys.time(), first, units = "secs")) >= span_s
+  }
 }
 
 # The ocean mass in a PlanetProfile profile's header (Mocean_kg).

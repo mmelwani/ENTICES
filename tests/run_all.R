@@ -14,9 +14,9 @@ TESTS <- list(
   list("carbon_rebin_check.R", 0.2, FALSE), list("c4only_db_check.R", 0.5, FALSE), list("gas_eos_check.R", 0.5, FALSE),
   list("bulk_density_check.R", 0.5, FALSE), list("kozeny_carman_check.R", 1, FALSE), list("pressure_check.R", 1, FALSE),
   list("initial_fluid_check.R", 2, FALSE), list("cometary_ocean_check.R", 2, FALSE), list("exchange_check.R", 3, FALSE),
-  list("porosity_evolution_check.R", 3, FALSE),
+  list("porosity_evolution_check.R", 3, FALSE), list("liveness_check.R", 1, FALSE),
   list("restart_closure_check.R", 20, TRUE), list("gas_mass_balance_check.R", 20, TRUE),
-  list("pipeline_check.R", 5, TRUE), list("resume_check.R", 5, TRUE), list("grouped_validation_check.R", 10, TRUE))
+  list("pipeline_check.R", 5, TRUE), list("resume_check.R", 20, TRUE), list("grouped_validation_check.R", 10, TRUE))
 if (!file.exists("ENTICES_LF_20260917.R")) stop("run from the repository root: Rscript tests/run_all.R", call. = FALSE)
 run <- Filter(function(t) !(quick && t[[3]]), TESTS)
 logdir <- file.path("tests", "output", "run_all"); dir.create(logdir, recursive = TRUE, showWarnings = FALSE)

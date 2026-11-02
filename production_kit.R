@@ -174,14 +174,27 @@ run_variant <- function(case, variant, run_dir, max_chunks = Inf) {
 }
 
 # The status of a variant directory: "done" (its state has ended), "failed", "running" (its lock's process is
-# alive), or "stopped" (none of these: never started, or killed).
-variant_status <- function(out) {
+# alive), or "stopped" (none of these: never started, or killed). With t_end_yr (the case's), a run that ended at
+# an earlier t_end is not done: raising t_end reopens it (the staged runs of PRODUCTION_GUIDE.md). Runs that ended
+# at a steady state, clogging or phi_c stay done.
+variant_status <- function(out, t_end_yr = NULL) {
   if (file.exists(file.path(out, "FAILED"))) return("failed")
-  st <- file.path(out, "state.rds")
-  if (file.exists(st)) { s <- tryCatch(readRDS(st), error = function(e) NULL); if (!is.null(s) && !is.na(s$stopped)) return("done") }
+  s <- variant_state(out)
+  if (!is.null(s) && !is.na(s$stopped) && !variant_extends(s, t_end_yr)) return("done")
   lk <- file.path(out, "lock")
   if (file.exists(lk) && pid_alive(suppressWarnings(as.integer(readLines(lk, n = 1, warn = FALSE))))) return("running")
   "stopped"
+}
+variant_state <- function(out) { st <- file.path(out, "state.rds"); if (file.exists(st)) tryCatch(readRDS(st), error = function(e) NULL) else NULL }
+variant_extends <- function(s, t_end_yr) !is.null(t_end_yr) && identical(s$stopped, "t_end") && t_end_yr > s$time_yr * (1 + 1e-9)
+# Why a done variant is not run again (printed by run_case.R and logged by run_sweep.R).
+variant_done_note <- function(out, t_end_yr) {
+  s <- variant_state(out); v <- basename(out)
+  if (identical(s$stopped, "t_end")) {
+    if (t_end_yr < s$time_yr * (1 - 1e-9))
+      sprintf("%s: already at t = %.6g yr, past t_end_yr = %.6g: kept as it is (not truncated, not rerun)", v, s$time_yr, t_end_yr)
+    else sprintf("%s: finished at t_end (t = %.6g yr)", v, s$time_yr)
+  } else sprintf("%s: ended by %s at t = %.6g yr; it stays done, and raising t_end_yr won't reopen it", v, s$stopped, s$time_yr)
 }
 
 # The fields that must match for runs/<name> to be resumed (end conditions and labels may change).
@@ -214,30 +227,35 @@ run_case <- function(path, parallel = NA, max_chunks = Inf, runs_dir = "runs", n
   variants <- c("organic", if (isTRUE(case$blank)) "blank")
   if (is.na(parallel)) parallel <- length(variants) == 2 && isTRUE(parallel::detectCores() >= 2)
   t0 <- Sys.time()
+  status <- function(v) variant_status(file.path(run_dir, v), case$t_end_yr)
+  for (v in variants) if (status(v) == "done") message("run_case: skipping ", variant_done_note(file.path(run_dir, v), case$t_end_yr))
   if (parallel && length(variants) == 2) {
     for (v in variants) {
-      if (variant_status(file.path(run_dir, v)) %in% c("done", "running")) next
+      if (status(v) %in% c("done", "running")) next
       dir.create(file.path(run_dir, v), showWarnings = FALSE)
       unlink(file.path(run_dir, v, "FAILED"))
       system2(rscript, c("run_case.R", "--variant", v, "--runs-dir", shQuote(runs_dir), "--name", case$name,
                          if (is.finite(max_chunks)) c("--max-chunks", max_chunks), shQuote(case$case_file)),
               wait = FALSE, stdout = file.path(run_dir, v, "console.log"), stderr = file.path(run_dir, v, "console.log"))
     }
-    started <- Sys.time()
+    # The watchdog (liveness_watch()): a variant is given up on only after its files have been still for 10 min and
+    # the process table has said its process is gone on 6 consecutive checks over at least a minute.
+    dead <- lapply(setNames(variants, variants), function(v) liveness_watch(file.path(run_dir, v), file.path(run_dir, v, "lock")))
     repeat {
-      st <- vapply(variants, function(v) variant_status(file.path(run_dir, v)), "")
+      st <- vapply(variants, status, "")
       if (any(st == "failed")) {
         v <- variants[st == "failed"][1]
         stop(sprintf("the %s run failed: %s (log: %s)", v, paste(readLines(file.path(run_dir, v, "FAILED"), warn = FALSE), collapse = " "),
                      file.path(run_dir, v, "run.log")), call. = FALSE)
       }
       if (all(st == "done")) break
-      if (any(st == "stopped") && difftime(Sys.time(), started, units = "secs") > 300)
-        stop(sprintf("the %s run is not running and has not finished; see %s", variants[st == "stopped"][1],
-                     file.path(run_dir, variants[st == "stopped"][1], "console.log")), call. = FALSE)
-      Sys.sleep(5)
+      gone <- variants[st != "done" & vapply(variants, function(v) dead[[v]](), TRUE)]
+      if (length(gone))
+        stop(sprintf("the %s run is not running and has not finished (no file activity for 10 min, and its process is gone); see %s",
+                     gone[1], file.path(run_dir, gone[1], "console.log")), call. = FALSE)
+      Sys.sleep(10)
     }
-  } else for (v in variants) if (variant_status(file.path(run_dir, v)) != "done") run_variant(case, v, run_dir, max_chunks)
+  } else for (v in variants) if (status(v) != "done") run_variant(case, v, run_dir, max_chunks)
   wall <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   s <- build_summary(run_dir, case)
   utils::write.csv(s, file.path(run_dir, "summary.csv"), row.names = FALSE)
