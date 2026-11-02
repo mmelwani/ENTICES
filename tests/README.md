@@ -16,6 +16,11 @@ Run everything from the repo root.
 | `gas_eos_check.R` | `Rscript tests/gas_eos_check.R` | Every gas a generator puts in a GAS_PHASE has Peng-Robinson constants in all three databases; H2 at 160 C, 261.2 atm, PR against ideal. |
 | `gas_mass_balance_check.R` | `Rscript tests/gas_mass_balance_check.R` | Whole-system element totals per orbit for both `pore_gas_fate` options (160 C, 15 wt% IOM, <= 1e-9); the no-bubble identity (25 C, no metal). Runs PHREEQC, about 15 minutes. |
 | `cometary_ocean_check.R` | `Rscript tests/cometary_ocean_check.R` | The cometary-ice initial ocean: C(+4)-only leak check, element closure, the expected numbers, the include_O2 and include_NH3 toggles. |
+| `exchange_check.R`, `kozeny_carman_check.R`, `porosity_evolution_check.R` | `Rscript tests/<name>` | The exchange physics, Kozeny-Carman k and the porosity-evolution driver (minutes each). |
+| `grouped_validation_check.R` | `Rscript tests/grouped_validation_check.R` | Grouped time steps against one orbit per step to orbit 1000 (ocean C(+4), pH, H2, Na within 1%). ~10-15 min. |
+| `pipeline_check.R` | `Rscript tests/pipeline_check.R` | `run_case.R` on two short cases (organic and blank), `summary.csv` columns and units, the RUNINFO and `.pqi` commit stamps, all six figures and an overlay. ~10 min. |
+| `resume_check.R` | `Rscript tests/resume_check.R` | A short case killed mid-chunk and rerun: resumes after the last complete chunk, duplicates none, ends with the uninterrupted run's `summary.csv` (1e-4 relative or 1e-6 absolute). ~10 min. |
+| `run_all.R` | `Rscript tests/run_all.R [--quick]` | **All of the above** in turn, each in its own process; logs in `output/run_all/`; ends `ALL n TESTS PASSED`. |
 | `test_A4_formulas.pqi` | `phreeqc tests/test_A4_formulas.pqi out.txt databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B2_Hdg_carbon.pqi` | same pattern, coupled coreclath | `docs/PHREEQC_TEST_RESULTS_2026-09-20.md` |
 | `test_B3_real_assemblage.pqi` | same pattern, `databases/coreclath_CH4coupled.dat` | `docs/PHREEQC_TEST_B3_real_assemblage_2026-09-27.md` |

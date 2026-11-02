@@ -1174,3 +1174,20 @@ One commit per item; each commit message has its pass check.
   Na within ss_tol over one circulation time), clogging or phi_c. New chunk columns: G, steps, x_step, time_end_yr,
   ocean_pH, ocean_Na, ocean_C4, ocean_H2, steady. Short chunk directories (Windows path limit). Validation:
   tests/grouped_validation_check.R, grouped vs ungrouped to orbit 1000 within 0.41%.
+- **Production kit, items 1 (decisions) and 2 (PI 11-02).** run_tidal_evolution(): end labels "steady state", "t_end",
+  "clogging", "phi_c"; clog_time_yr; k_floor (fracture-maintained k once clogged, Kelemen & Hirth 2012); with
+  porosity_evolution = FALSE only x_step limits G; a checkpoint (state.rds, chunks.csv) per chunk and resume (no chunk
+  repeated; settings must match); log_file; follow = a leader run (the same-rock blank takes its phi, k, G per chunk);
+  first_args (e.g. initial_ocean) for the first chunk only; mineral_basis_wt_percent; new chunk columns rho_solid,
+  rho_bulk, rho_bulk_in_bagheri, skin_T_C, skin_P_atm, k_floor_on, phreeqc_version. pid_alive().
+- **Production kit, items 3-4.** cases/ (reference.R, sweep/ with 15 cases), production_kit.R (load_case() with
+  inheritance, validate_case(), run_variant(), run_case(), build_summary(), summary_units(), write_runinfo()),
+  run_case.R, run_sweep.R, make_figures.R (six figures, overlay argument), tests/pipeline_check.R,
+  tests/resume_check.R. runs/ and figures/ are ignored by git.
+- **Production kit, item 5.** porewater_temp = NULL in every generator resolves to "profile" when reactive_depth =
+  "skin" (resolve_porewater_temp()); code_version() stamps the commit (and a dirty flag) in every .pqi header and
+  RUNINFO. README: parameter table (D6 closed, the SSA options, phi0/porosity merged, porewater_temp), section 8.
+- **Production kit, items 6-7.** PRODUCTION_GUIDE.md; tests/run_all.R.
+- **Step limits by validation (PI 11-02).** cases: x_step_max 0.03, phi_tol 0.003 (the largest within 1% of
+  x_step 0.01 / phi_tol 0.001, measured and extrapolated to zero step; 0.1 and 0.01 were 2% off in Na and C(+4)).
+  scripts/step_limit_validation.R. Worked example 5 rerun (README section 4, ENTICES_runs.Rmd).

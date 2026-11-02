@@ -130,6 +130,7 @@ for (fate in c("retain", "to_ocean")) {
 }
 ```
 
-Expect at orbit 12: ocean H₂ 1.5e-5 (retain) vs 6.5e-2 molal (to_ocean, saturated at 66.7 atm, with
-0.82 L of ocean gas); the organic DIC is the same, 1.29e-7 molal; organic Mtg 1e-13 vs 1.8e-9 molal
-(plus 2.4e-8 mol in the ocean gas). PROGRESS Part 7 has the full table at 150 and 160 °C.
+Expect at orbit 12 (rerun 2026-11-02, layered strain at K_d; 30-45 min each pair on a busy machine): ocean
+H₂ 1.8e-8 (retain) vs 6.5e-2 molal (to_ocean, saturated at 66.7 atm, 2.4 mol H₂ in the ocean gas); organic
+DIC 2.5e-10 vs 2.9e-10 molal; organic Mtg 1.2e-16 vs 1.9e-9 molal (plus 2.5e-8 mol in the ocean gas); ocean
+pH 8.51 under both. PROGRESS Part 7 has the older table at 150 and 160 °C (before the exchange physics).
