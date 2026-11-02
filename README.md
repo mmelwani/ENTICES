@@ -7,13 +7,13 @@ Enceladus Tidally-Induced Circulation and Exchange Simulator.
 ENTICES models water–rock reaction in Enceladus' porous core. An R model of tidally driven
 porewater circulation (a two-layer gravity field, tidal stress over each 1.375-day orbit, Darcy
 flow through the porous core) sets how much porewater exchanges with the ocean per orbit. It
-writes PHREEQC inputs that react a reconstructed primordial rock — kinetic silicates and sulfide,
-Fe–Ni metal, schreibersite and insoluble organic matter (IOM) — with porewater at the core's
+writes PHREEQC inputs that react a reconstructed primordial rock (kinetic silicates and sulfide,
+Fe–Ni metal, schreibersite and insoluble organic matter (IOM)) with porewater at the core's
 temperature and pressure, and exchange that porewater with the ocean every orbit. PHREEQC runs
 the inputs; ENTICES' R tools read the results.
 
-The science question is whether IOM degradation in the core adds carbon to the ocean — the
-carbonate Cassini saw in the plume — on a timescale that constrains how long hydrothermal
+The science question is whether IOM degradation in the core adds carbon to the ocean (the
+carbonate Cassini saw in the plume) on a timescale that constrains how long hydrothermal
 circulation has lasted. ENTICES therefore starts, by default, from pure water and attributes ocean
 carbon to the organics by difference against an otherwise identical run without them
 (`pair_organic_run()`).
@@ -27,7 +27,7 @@ carbon to the organics by difference against an otherwise identical run without 
   at `C:/Program Files/USGS/phreeqc-3.8.6-17100-x64/bin/Release/phreeqc.exe`, then on the `PATH`.
   Every generated `.pqi` is stamped `# Target PHREEQC version: 3.8.6`, and `run_phreeqc()` warns
   if the executable reports another version: minor phases and trace species differ between
-  versions (earlier outputs made with PHREEQC 3.5.0, rerun on 3.8.6, moved dissolved Mn 130× and sulfide ~11×; bulk
+  versions (earlier outputs made with PHREEQC 3.5.0 on a Mac, rerun on 3.8.6 in Windows and Linux, moved dissolved Mn 130× and sulfide ~11×; bulk
   chemistry was stable). Treat the warning as "not reproducible as stamped".
 - **Python 3** only for the database scripts (`scripts/make_c4only.py`, `strip_mineral_vm.py`,
   `gas_eos.py`, `export_mineral_volumes.py`).
