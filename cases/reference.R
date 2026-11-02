@@ -31,6 +31,7 @@ case <- list(
   cometary_f     = 1,            # -; (0, 1]; fraction of the cometary volatiles retained (initial_ocean = "cometary" only). README 6
   pore_gas_fate  = "to_ocean",   # "to_ocean" | "retain" | "retain_to_pore_volume"; the pore bubble's fate. README 6 (Gas)
   trace_C_molal  = 1e-14,        # mol/kgw; 0-1e-6; numerical carbon seed. README 6 (Trace C seed)
+  phosphate_phases = "apatite",  # "apatite" (Hydroxyapatite + precursors) | "precursor" (apatite kinetically inhibited); no "none". README 6 (Phosphate phases)
 
   # --- time and end conditions (the first reached ends the run) ---
   t_end_yr = 1e8,                # yr; (0, 4.5e9]; the backstop (PI 2026-11-02). README 3 (Production runs)

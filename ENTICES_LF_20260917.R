@@ -263,6 +263,23 @@ check_restart_carbon_mode <- function(prev_csv, ch4_mode) {
   sprintf("# parent carbon_mode: %s (this restart switches to %s)", parent, ch4_mode$carbon_mode)
 }
 
+# A restart's phosphate_phases against its parent's ("# phosphate_phases:" in the parent .pqi header; a parent
+# made before 2026-11-02 has none, and had no phosphate phases: an error too). A mismatch is an error: the parent's phase
+# assemblage would change at the restart. A parent .pqi that cannot be read is a warning.
+check_restart_phosphate_phases <- function(prev_csv, setting) {
+  pqi <- sub("\\.csv$", ".pqi", prev_csv)
+  if (!file.exists(pqi)) { warning("restart: no parent .pqi (", pqi, "): phosphate_phases not checked"); return(invisible(NA)) }
+  l <- grep("^# phosphate_phases: ", readLines(pqi, n = 60, warn = FALSE), value = TRUE)
+  if (!length(l))
+    stop(sprintf('restart: the parent (%s) was made before the phosphate phases (2026-11-02) and has none; a restart with phosphate_phases = "%s" would change its phase assemblage. Start a new run.',
+                 basename(pqi), setting))
+  parent <- trimws(sub("^# phosphate_phases: ", "", l[1]))
+  if (!identical(parent, setting))
+    stop(sprintf('restart: the parent ran phosphate_phases "%s", this restart would run "%s". Give phosphate_phases = "%s" to continue the parent, or start a new run.',
+                 parent, setting, parent))
+  invisible(parent)
+}
+
 # Initial ocean composition for the tidal generators (applied to the ocean SOLUTION 2 only).
 # "pure_water" (default) or a named list of element totals in mol/kgw, e.g. list(C = ..., N = ...),
 # for a cometary-ice scenario; names are PHREEQC elements or valence states such as "N(-3)".
@@ -1549,6 +1566,11 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    mineral_basis_wt_percent = NULL,
                                    iom_pools = NULL,
                                    profile_file = "profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
+                                   # Phosphate phases in the porewater and ocean equilibrium-phase lists (PI 2026-11-02;
+                                   # README section 6, Phosphate phases): "apatite" (default: Hydroxyapatite and the
+                                   # precursors) or "precursor" (apatite kinetically inhibited: the precursors only).
+                                   # Every generator takes phosphate_phases = and sets this; restarts must match their parent.
+                                   phosphate_phases = "apatite",
                                    
                                    # Factor applied to every primary mineral's moles (the rock minus its organics).
                                    mineral_scale_factor = function() {
@@ -1749,11 +1771,34 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      if (identical(self$simulator$params$reactive_depth, "skin")) "profile" else "ocean"
                                    },
 
+                                   # phosphate_phases: NULL keeps the integrator's setting; "apatite" or "precursor" sets it.
+                                   resolve_phosphate_phases = function(phosphate_phases) {
+                                     if (!is.null(phosphate_phases)) {
+                                       if (!(is.character(phosphate_phases) && length(phosphate_phases) == 1 && phosphate_phases %in% c("apatite", "precursor")))
+                                         stop('phosphate_phases must be "apatite" or "precursor" (there is no "none": PI 2026-11-02)')
+                                       self$phosphate_phases <- phosphate_phases
+                                     }
+                                     invisible(self$phosphate_phases)
+                                   },
+                                   # The phosphate phases of an equilibrium-phase block at temp_C (scripts/add_phosphate_phases.py),
+                                   # each kept within the temperatures its data support: Hydroxyapatite, Whitlockite and Brushite
+                                   # everywhere (Thermoddem analytic expressions, 0-300 C); Vivianite to 90 C (measured 5-90 C);
+                                   # Struvite to 60 C (fit to 10-60 C; it diverges above); OCP, Bobbierite and Newberyite to 50 C
+                                   # (25 C data only). The ocean (1.45 C) is a few degrees below Vivianite's and Struvite's
+                                   # measured range. "precursor" leaves out Hydroxyapatite.
+                                   phosphate_minerals = function(temp_C) {
+                                     upper <- c(Hydroxyapatite = Inf, Whitlockite = Inf, Brushite = Inf, OCP = 50, Bobbierite = 50,
+                                                Newberyite = 50, Vivianite = 90, Struvite = 60)
+                                     p <- names(upper)[temp_C <= upper]
+                                     if (identical(self$phosphate_phases, "precursor")) setdiff(p, "Hydroxyapatite") else p
+                                   },
+
                                    stamp_pqi_header = function(content, database, pressures = NULL) {
                                      lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
                                      dropped <- attr(content, "dropped")
                                      stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
                                                 sprintf("# Code: %s", code_version()),
+                                                sprintf("# phosphate_phases: %s", self$phosphate_phases),
                                                 sprintf("# Database: %s", database),
                                                 if (!is.null(pressures)) pressure_header_lines(pressures$pore, pressures$ocean),
                                                 if (length(dropped)) sprintf("# Not defined in %s, so removed from this input: %s",
@@ -2016,12 +2061,13 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    generate_phreeqc_input_tidal_kinetic = function(output_dir = "phreeqc_inputs", mode = "ocean_circulations",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
-                                                                     porewater_temp = NULL, substeps = 1, suffix = "",
+                                                                     porewater_temp = NULL, phosphate_phases = NULL, substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
                                                                      pore_gas_fate = c("to_ocean", "retain", "retain_to_pore_volume"), logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      porewater_temp <- self$resolve_porewater_temp(porewater_temp)
+                                     self$resolve_phosphate_phases(phosphate_phases)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -2251,9 +2297,9 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                      # Temperature-gated secondary minerals, appended per block below.
                                      # Clathrate phases stable at each reservoir's own conditions (see
                                      # resolve_clathrate_stability()) are appended the same way.
-                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C),
+                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C), self$phosphate_minerals(porewater_temp_C),
                                                                self$stable_clathrate_phases(porewater_temp_C, pore_pressure_atm, ch4_mode))
-                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C), self$phosphate_minerals(ocean_temp_C),
                                                                self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
                                      extra_pw_lines    <- if (length(extra_pw_minerals) > 0)
                                        paste0("   ", extra_pw_minerals, " 0 0", collapse = "\n") else ""
@@ -3084,7 +3130,7 @@ KNOBS
                                                                            n_circulations = NULL,
                                                                            grouping_factor = NULL,
                                                                            suffix = "",
-                                                                           porewater_temp = NULL,
+                                                                           porewater_temp = NULL, phosphate_phases = NULL,
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                            initial_ocean = "pure_water", charge_balance = NULL,
@@ -3092,6 +3138,7 @@ KNOBS
                                                                            logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      porewater_temp <- self$resolve_porewater_temp(porewater_temp)
+                                     self$resolve_phosphate_phases(phosphate_phases)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -3188,9 +3235,9 @@ KNOBS
                                      # Temperature-gated secondary minerals per block, as in tidal_kinetic. Each
                                      # block also gets the clathrate phases stable at its reservoir's own
                                      # conditions, gated as in tidal_kinetic (stable_clathrate_phases()).
-                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C),
+                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C), self$phosphate_minerals(porewater_temp_C),
                                                                self$stable_clathrate_phases(porewater_temp_C, pore_pressure_atm, ch4_mode))
-                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C), self$phosphate_minerals(ocean_temp_C),
                                                                self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
                                      clathrate_note_lines <- paste0(
                                        self$clathrate_stability_note(ocean_temp_C, ocean_pressure_atm, location = "Ocean"),
@@ -3722,11 +3769,12 @@ KNOBS
                                    generate_phreeqc_input_bulk_equil = function(output_dir = "phreeqc_inputs",
                                                                                  mode             = c("hydrosphere", "porewater"),
                                                                                  water_rock_ratio = NULL,
-                                                                                 water_temp       = "ocean",
+                                                                                 water_temp       = "ocean", phosphate_phases = NULL,
                                                                                  suffix = "",
                                                                                  CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                                  logfile = FALSE) {
                                      mode <- match.arg(mode)
+                                     self$resolve_phosphate_phases(phosphate_phases)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
 
@@ -3796,7 +3844,7 @@ KNOBS
                                      # Reaction pressure: porewater mode reacts porewater only, so it uses the
                                      # layer-mean porewater pressure; hydrosphere mode keeps the ocean-floor value.
                                      .solution_pressure_atm <- if (mode == "porewater") pore_pressure_atm else ocean_pressure_atm
-                                     extra_gated_minerals <- c(self$temp_gated_minerals(water_temp_C),
+                                     extra_gated_minerals <- c(self$temp_gated_minerals(water_temp_C), self$phosphate_minerals(water_temp_C),
                                                                self$stable_clathrate_phases(water_temp_C, .solution_pressure_atm,
                                                                                             ch4_mode))
                                      clathrate_note_lines <- self$clathrate_stability_note(water_temp_C, .solution_pressure_atm, location = "Solution")
@@ -4071,6 +4119,7 @@ END
                                      mode                = c("porewater", "hydrosphere"),
                                      water_rock_ratio    = NULL,
                                      porewater_temp      = NULL,
+                                     phosphate_phases    = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
@@ -4082,6 +4131,7 @@ END
                                    ) {
                                      mode <- match.arg(mode)
                                      porewater_temp <- self$resolve_porewater_temp(porewater_temp)
+                                     self$resolve_phosphate_phases(phosphate_phases)
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -4141,7 +4191,7 @@ END
                                      # temperature — porewater_temp_C — gates the whole block). Stable
                                      # clathrate phases (checked against .solution_pressure_atm) are
                                      # appended the same way.
-                                     extra_ocean_minerals <- c(self$temp_gated_minerals(porewater_temp_C),
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(porewater_temp_C), self$phosphate_minerals(porewater_temp_C),
                                                                self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
                                      extra_ocean_lines <- if (length(extra_ocean_minerals) > 0)
                                        paste0("   ", extra_ocean_minerals, " 0 0", collapse = "\n") else ""
@@ -4689,6 +4739,7 @@ END
                                      equil_minerals      = character(0),
                                      mode                = c("porewater", "hydrosphere"),
                                      porewater_temp      = NULL,
+                                     phosphate_phases    = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
@@ -4698,6 +4749,7 @@ END
                                    ) {
                                      mode <- match.arg(mode)
                                      porewater_temp <- self$resolve_porewater_temp(porewater_temp)
+                                     self$resolve_phosphate_phases(phosphate_phases)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
@@ -4768,6 +4820,7 @@ END
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
+                                     check_restart_phosphate_phases(prev_csv, self$phosphate_phases)
                                      parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
                                                                                      allow_pressure_change)
                                      ch4_override_note <- ch4_mode$note
@@ -4928,7 +4981,7 @@ END
                                      # Single solution (porewater_temp_C) gates the whole assemblage here.
                                      # Clathrate phases stable against .solution_pressure_atm (this function's
                                      # own reaction pressure) are appended the same way.
-                                     secondary_minerals <- c(secondary_minerals, self$temp_gated_minerals(porewater_temp_C),
+                                     secondary_minerals <- c(secondary_minerals, self$temp_gated_minerals(porewater_temp_C), self$phosphate_minerals(porewater_temp_C),
                                                              self$stable_clathrate_phases(porewater_temp_C, .solution_pressure_atm, ch4_mode))
 
                                      get_equil_moles <- function(mineral) {
@@ -5297,6 +5350,7 @@ END
                                      grouping_factor     = NULL,
                                      exchange_ratio      = NULL,
                                      porewater_temp      = NULL,
+                                     phosphate_phases    = NULL,
                                      depletion_mineral   = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
@@ -5311,6 +5365,7 @@ END
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
                                      porewater_temp <- self$resolve_porewater_temp(porewater_temp)
+                                     self$resolve_phosphate_phases(phosphate_phases)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
@@ -5432,6 +5487,7 @@ END
                                      # CH4 (redox-coupled) vs Mtg (decoupled) — see resolve_ch4_mode().
                                      ch4_mode <- self$resolve_ch4_mode(porewater_temp_C, CH4_redox_override, carbon_mode, ch4_cutoff_C)
                                      parent_mode_line <- check_restart_carbon_mode(prev_csv, ch4_mode)
+                                     check_restart_phosphate_phases(prev_csv, self$phosphate_phases)
                                      parent_pressure_line <- check_restart_pressures(prev_csv, pore_pressure_atm, ocean_pressure_atm,
                                                                                      allow_pressure_change)
                                      ch4_override_note <- ch4_mode$note
@@ -5620,9 +5676,9 @@ SOLUTION 2 Enceladus ocean (restarted)
                                      # for EQUILIBRIUM_PHASES 1, ocean_temp_C for EQUILIBRIUM_PHASES 2.
                                      # Clathrate phases stable at each reservoir's own conditions are
                                      # appended the same way.
-                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C),
+                                     extra_pw_minerals    <- c(self$temp_gated_minerals(porewater_temp_C), self$phosphate_minerals(porewater_temp_C),
                                                                self$stable_clathrate_phases(porewater_temp_C, pore_pressure_atm, ch4_mode))
-                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C),
+                                     extra_ocean_minerals <- c(self$temp_gated_minerals(ocean_temp_C), self$phosphate_minerals(ocean_temp_C),
                                                                self$stable_clathrate_phases(ocean_temp_C, ocean_pressure_atm, ch4_mode))
 
                                      # ---- RATES block ----

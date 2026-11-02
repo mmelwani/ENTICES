@@ -46,7 +46,7 @@ KIT_CASE_DEFAULTS <- list(
   phi0 = 0.32, phi_c = 0.4, phi_min = 0.01, grain_diameter_m = 0.0159, k_m2 = NULL, k_floor_m2 = NULL,
   core_viscosity_Pa_s = 1e12, tidal_scenario = "dissipative_core",
   iom_wt_percent = 15, carbon_mode = "c4_only", initial_ocean = "pure_water", cometary_f = 1,
-  pore_gas_fate = "to_ocean", trace_C_molal = 1e-14,
+  pore_gas_fate = "to_ocean", trace_C_molal = 1e-14, phosphate_phases = "apatite",
   t_end_yr = 1e8, ss_tol = 0.01,
   phi_tol = 0.003, x_step_max = 0.03, steps_per_chunk = 4,
   generator = "tidal_kinetic", blank = TRUE
@@ -94,6 +94,7 @@ validate_case <- function(case) {
   one_of("initial_ocean", c("pure_water", "cometary"))
   if (identical(case$initial_ocean, "cometary")) num("cometary_f", 0, 1, lo_open = TRUE)
   one_of("pore_gas_fate", c("to_ocean", "retain", "retain_to_pore_volume"))
+  one_of("phosphate_phases", c("apatite", "precursor"))
   num("trace_C_molal", 0, 1e-6, null_ok = TRUE)
   num("t_end_yr", 0, 4.5e9, lo_open = TRUE)
   num("ss_tol", 0, 0.5, null_ok = TRUE, lo_open = TRUE)
@@ -132,7 +133,8 @@ case_run_args <- function(case, variant, run_dir, max_chunks = Inf) {
        phi_tol = case$phi_tol, phi_min = case$phi_min, x_step_max = case$x_step_max, steps_per_chunk = case$steps_per_chunk,
        ss_tol = case$ss_tol, k_floor = case$k_floor_m2, trace_C_molal = case$trace_C_molal, max_chunks = max_chunks,
        log_file = file.path(out, "run.log"), follow = if (variant == "blank") file.path(run_dir, "organic") else NULL,
-       first_args = first, porewater_temp = case$porewater_temp, carbon_mode = case$carbon_mode, pore_gas_fate = case$pore_gas_fate)
+       first_args = first, porewater_temp = case$porewater_temp, carbon_mode = case$carbon_mode, pore_gas_fate = case$pore_gas_fate,
+       phosphate_phases = case$phosphate_phases)
 }
 
 kit_log <- function(file, fmt, ...) cat(format(Sys.time(), "%Y-%m-%d %H:%M:%S "), sprintf(fmt, ...), "\n", sep = "", file = file, append = TRUE)
@@ -248,7 +250,8 @@ run_case <- function(path, parallel = NA, max_chunks = Inf, runs_dir = "runs", n
 
 KIT_OCEAN_SPECIES <- list(pH = "pH", pe = "pe", DIC_C4 = NA, Mtg = "Mtg", H2 = "m_H2", NH4_NH3 = c("m_NH4+", "m_NH3"),
                           SO4 = "m_SO4-2", S_minus2 = c("m_HS-", "m_H2S"), Na = "Na", Cl = "Cl", K = "K", Ca = "Ca",
-                          Mg = "Mg", Si = "Si", P = "P", ionic_strength = "mu")
+                          Mg = "Mg", Si = "Si", P = "P", HPO4 = "m_HPO4-2", PO4 = "m_PO4-3", ionic_strength = "mu")
+KIT_PHOSPHATE_PHASES <- c("Hydroxyapatite", "Whitlockite", "Brushite", "OCP", "Bobbierite", "Newberyite", "Vivianite", "Struvite")
 KIT_GASES <- c("H2(g)", "CO2(g)", "Mtg(g)", "CH4(g)", "H2S(g)", "N2(g)", "NH3(g)", "SO2(g)", "Ntg(g)")
 
 # One row per chunk end of one variant: the ocean, the gases, the H2 budget (organic only when `h2` is TRUE).
@@ -267,6 +270,12 @@ variant_rows <- function(out, chunks, case, h2 = TRUE) {
     row <- data.frame(chunk = i)
     for (s in names(KIT_OCEAN_SPECIES)) row[[paste0("ocean_", s)]] <- if (s == "DIC_C4")
       sum(cb$C_molal[cb$block == io & cb$ox == 4 & !cb$decoupled]) else val(KIT_OCEAN_SPECIES[[s]])
+    # the porewater's phosphate (after the last exchange, MIX 1) and the phosphate phases held (REACT: pores; MIX 4: ocean)
+    pw <- r[j + 2, , drop = FALSE]
+    pcol <- c(P = "P", HPO4 = "m_HPO4-2", PO4 = "m_PO4-3")
+    for (s in names(pcol)) row[[paste0("pore_", s)]] <- if (pcol[[s]] %in% names(pw)) as.numeric(pw[[pcol[[s]]]][1]) else NA_real_
+    ep <- function(k, p) { w <- which(names(r) == p); if (length(w)) as.numeric(r[k, max(w)]) else 0 }
+    for (p in KIT_PHOSPHATE_PHASES) { row[[paste0("pore_", p, "_mol")]] <- ep(j, p); row[[paste0("ocean_", p, "_mol")]] <- ep(j + 1, p) }
     gas <- function(k, g) { cc <- paste0("g_", g); if (cc %in% names(r)) as.numeric(r[[cc]][k]) else 0 }
     pg <- if (identical(fate, "retain_to_pore_volume")) {
       y <- utils::read.delim(sub("\\.csv$", "_poregas.csv", csv), check.names = FALSE, strip.white = TRUE); names(y) <- trimws(names(y)); y } else NULL
@@ -316,7 +325,9 @@ build_summary <- function(run_dir, case) {
   }
   gascols <- grep("^(ocean|pore)_gas_.*_mol$", names(o), value = TRUE)
   gascols <- gascols[vapply(gascols, function(cc) any(o[[cc]] != 0, na.rm = TRUE), TRUE)]   # gases that appear
-  out <- cbind(out, o[gascols], o[grep("^h2_|^rock_", names(o), value = TRUE)])
+  phcols <- paste0(rep(c("pore_", "ocean_"), each = length(KIT_PHOSPHATE_PHASES)), KIT_PHOSPHATE_PHASES, "_mol")
+  phcols <- phcols[vapply(phcols, function(cc) any(o[[cc]] != 0, na.rm = TRUE), TRUE)]          # phases that formed
+  out <- cbind(out, o[c("pore_P", "pore_HPO4", "pore_PO4")], o[phcols], o[gascols], o[grep("^h2_|^rock_", names(o), value = TRUE)])
   out$phi <- pmax(oc$phi_end_solids, case$phi_min); out$phi_solids <- oc$phi_end_solids; out$phi_start <- oc$phi_start
   out$k_m2 <- oc$k; out$delta_m <- oc$delta_m; out$L_eff_m <- oc$L_eff_m
   out$skin_T_C <- oc$skin_T_C; out$skin_P_atm <- oc$skin_P_atm
@@ -344,6 +355,9 @@ summary_units <- function(cols) {
     ocean_S_minus2 = c("mol/kgw", "ocean HS- + H2S"), ocean_Na = c("mol/kgw", "ocean total Na"), ocean_Cl = c("mol/kgw", "ocean total Cl"),
     ocean_K = c("mol/kgw", "ocean total K"), ocean_Ca = c("mol/kgw", "ocean total Ca"), ocean_Mg = c("mol/kgw", "ocean total Mg"),
     ocean_Si = c("mol/kgw", "ocean total Si"), ocean_P = c("mol/kgw", "ocean total P"), ocean_ionic_strength = c("mol/kgw", "ocean ionic strength"),
+    ocean_HPO4 = c("mol/kgw", "ocean HPO4-2 (free species)"), ocean_PO4 = c("mol/kgw", "ocean PO4-3 (free species)"),
+    pore_P = c("mol/kgw", "porewater total P (after the last exchange)"), pore_HPO4 = c("mol/kgw", "porewater HPO4-2 (free species)"),
+    pore_PO4 = c("mol/kgw", "porewater PO4-3 (free species)"),
     h2_generated_chunk = c("mol/kg box rock", "H2 generated in the chunk by electron balance (h2_budget())"),
     h2_generated_cum = c("mol/kg box rock", "H2 generated since t = 0 (sum of the chunks; each on its own box's rock)"),
     h2_present = c("mol/kg box rock", "H2 present: ocean dissolved + ocean gas + porewater + pore gas"),
@@ -370,6 +384,9 @@ summary_units <- function(cols) {
     base <- sub("^(blank_|org_minus_blank_)", "", cc)
     if (startsWith(cc, "ocean_gas_") || startsWith(cc, "pore_gas_"))
       return(data.frame(column = cc, unit = "mol per kg box rock", description = sprintf("%s gas phase: moles of %s", sub("_gas_.*", "", cc), sub(".*_gas_(.*)_mol$", "\\1", cc))))
+    if (grepl("^(pore|ocean)_.+_mol$", cc) && sub("^(pore|ocean)_(.+)_mol$", "\2", cc) %in% KIT_PHOSPHATE_PHASES)
+      return(data.frame(column = cc, unit = "mol per kg box rock", description = sprintf("%s held in the %s (phosphate phase)", sub("^(pore|ocean)_(.+)_mol$", "\2", cc),
+                                                                                        if (startsWith(cc, "pore_")) "pores (REACT step)" else "ocean (ocean step)")))
     if (grepl("_core_mol$", cc))
       return(data.frame(column = cc, unit = "mol", description = paste(u[[sub("_core_mol$", "", cc)]][2], "- whole core (scale_to_core())")))
     v <- u[[base]]
