@@ -1203,3 +1203,11 @@ One commit per item; each commit message has its pass check.
   cited as Blanc et al. 2012 (full reference added).
 - **Worked examples rerun with the phosphate phases (11-02).** Examples 2-5 unchanged within rounding (ocean pH
   8.51 -> 8.52); example 1's porewater pH 11.04 -> 10.27 (hydroxyapatite 4.3e-4 mol), and it takes ~4 min.
+- **summary_units() fix (11-02).** Phosphate phase columns had an empty unit and description ("\2" was not a
+  backreference).
+- **Staged runs and the watchdog (PI 11-02).** Raising t_end_yr reopens runs that ended at t_end (organic and blank
+  in lockstep); runs ended at a steady state, clogging or phi_c stay done, and a lowered t_end_yr keeps a run whole;
+  reruns say why they skip. liveness_watch() replaces the one-reading checks in run_case.R, the blank's leader wait
+  and run_sweep.R: stale files (10 min) and a gone process on 6 checks over >= 60 s; no tasklist answer counts as
+  alive. tests/liveness_check.R; tests/resume_check.R steps 4-6. PRODUCTION_GUIDE.md: staged runs (1e6 yr, then
+  extend).
