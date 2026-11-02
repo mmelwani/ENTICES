@@ -754,6 +754,64 @@ further solid volume is taken up by the cracking, not by the pores; the `k_floor
 chunks); it reopens (k from φ) if the solids shrink again. At the reference grain size Kozeny–Carman gives
 1.4e-12 m² at φ = 0.01, so both floors act only at clogging.
 
+**Phosphate phases (PI 2026-11-02).** Schreibersite oxidises to orthophosphate (0.040 mol P per kg of
+rock, all released within ~1 yr at the reference). Without a phosphate sink, phosphate built up to ~1 eq/kg
+in the porewater (hydroxyapatite at SI +14) and, as Na phosphate, carried most of the ocean's alkalinity.
+Hydroxyapatite had been commented out of the lists because it precipitates slowly at low temperature
+(P often precipitates first as amorphous phases that later crystallise, and small organic acids inhibit
+Ca-phosphate precipitation: Hausrath et al. 2024, *Minerals* 14, 591, §4.3 and refs. 205–207, 285–287). On
+the model's timescales (to 1e8 yr) apatite belongs in the reference. Postberg et al. (2023, *Nature*)
+interpret Enceladus's plume phosphate through the hydroxyapatite–calcite buffer (hydroxyapatite + 5 CO₃²⁻ +
+H⁺ ↔ calcite + 3 PO₄³⁻ + H₂O; one point fits the whitlockite–calcite buffer better), and their experiments
+formed hydroxyapatite and Ca-/Mg-whitlockite. **`phosphate_phases`** (every generator and restart; a restart
+refuses a parent with a different setting; case files; RUNINFO): `"apatite"` (default; the reference) puts
+Hydroxyapatite and the precursors in the porewater and ocean lists; `"precursor"` (a sweep case) leaves out
+the apatite, so the metastable phases control P (the Ostwald step rule). There is no "no phosphate" option.
+
+*The data.* The phosphate set comes from one source, Thermoddem V1.10 (BRGM; `PHREEQC_ThermoddemV1.10_15Dec2020.dat`,
+database date 15 Dec 2020, shipped with PHREEQC 3.8.6; Blanc et al. 2012, *Appl. Geochem.* 27, 2107 is the
+usual citation [not checked against BRGM's request]), converted to coreclath's basis (HPO₄²⁻) with
+Thermoddem's own H₂PO₄⁻ = HPO₄²⁻ + H⁺ (log K −7.212, ΔH 3.6 kJ/mol, its analytic expression):
+`scripts/add_phosphate_phases.py` writes the block into the coupled and uncoupled databases and comments out
+coreclath's own Hydroxyapatite and Fluorapatite (`#tdP#`, kept for reference), and `make_c4only.py` carries it
+on. The two databases' aqueous P agrees (H₂PO₄⁻/HPO₄²⁻ within 0.007–0.06 log units over 0–150 °C), but their
+**apatite differs by 3–5 log units**: coreclath's (LLNL; Robie, Hemingway & Fisher 1979, USGS Bull. 1452, a
+compilation whose source for apatite was not traced) has log K −3.07 at 25 °C, Thermoddem's (Blanc &
+Piantone 2006) −7.30, McDowell et al. (1977) measured −7.37 to −7.56 on this basis. The spread across the
+databases is −3.1 to −7.3: the old entry may represent poorly crystalline apatite (unconfirmed). **The
+crystalline apatite now used is a much stronger P sink** (~10⁴ times less soluble).
+
+*Validation* (25 °C, coreclath basis, primary values converted with coreclath's pK₃ 12.3218 and pK_w 13.9951).
+Rule (PI): a phase whose database value is more than 0.5 log units from the primary value is not used until
+resolved; the primary value replaces it only for a clear sign or basis slip; a phase without a primary
+source is left out.
+
+| Phase | Database (converted) | Primary | Source | Difference | Used |
+|---|---|---|---|---|---|
+| Hydroxyapatite | −7.30 (Thermoddem Natur) | −7.56 (measured) / −7.37 (best value) | McDowell et al. 1977, *J. Res. NBS* 81A | +0.26 / +0.07 | yes |
+| Whitlockite (β-Ca₃(PO₄)₂) | −4.30 (Thermoddem "high") | −4.28 | Gregory et al. 1974, *J. Res. NBS* 78A | −0.03 | yes |
+| Whitlockite (low) | −6.03 (Thermoddem "low") | −4.28 | Gregory et al. 1974 | −1.75 | no |
+| Brushite | −6.61 | −6.59 | Gregory et al. 1970, *J. Res. NBS* 74A | −0.02 | yes |
+| OCP, Ca₄H(PO₄)₃ | −11.52 (Thermoddem ":3H2O", NIST46.4) | −11.44 (pK_sp 48.4, 23.5 °C) | Tung et al. 1988, *J. Res. NBS* 93 | −0.08 | yes |
+| OCP (":2.5H2O", 84nan) | −9.82 | −11.44 | Tung et al. 1988 | +1.61 | no |
+| Bobbierite | −0.50 | −0.56 | Taylor et al. 1963, *Trans. Faraday Soc.* 59 (also Thermoddem's source) | +0.06 | yes |
+| Newberyite | −5.80 | −5.82 | Taylor et al. 1963 | +0.03 | yes |
+| Vivianite | −17.70 | −11.12 | Al-Borno & Tomson 1994, *GCA* 58 | −6.57: Thermoddem's sign is flipped (+3.272 gives −11.15) | yes, the primary value |
+| Struvite | (none) | −10.28 (pK_sp 13.36); the fit used gives −10.47 | Bhuiyan et al. 2007, *Environ. Technol.* 28; Ohlinger et al. 1998: −10.18 | fit vs Ohlinger −0.29 | yes |
+| Monetite | −6.91 | not read (McDowell et al. 1971, *Inorg. Chem.* 10, paywalled) | — | — | no (unverified) |
+| Fluorapatite | −22.55 | −22.64 from McCann 1968 pK 59.6, seen only in a search snippet | — | — | no (unverified) |
+| Farringtonite, Na₃PO₄, Na₂HPO₄, NaH₂PO₄ | — | no primary solubility product found | — | — | no |
+
+*Temperatures.* Hydroxyapatite, whitlockite and brushite carry Thermoddem's analytic expressions (0–300 °C);
+vivianite Al-Borno & Tomson's fit (5–90 °C); struvite Bhuiyan et al.'s fit (10–60 °C, pK_sp 13.57 at 25 °C
+against their tabulated 13.36; it diverges outside, to log K −21 at 150 °C). OCP, bobbierite and newberyite
+have 25 °C values only (no enthalpy): reliable to about 50 °C, which covers the skin. Each phase is listed only
+where its data hold (`PhreeqcIntegrator$phosphate_minerals()`): vivianite to 90 °C, struvite to 60 °C, OCP,
+bobbierite and newberyite to 50 °C; the ocean (1.45 °C) is a few degrees below vivianite's and struvite's
+measured range. Molar volumes (`data/mineral_molar_volumes.csv`): hydroxyapatite from Core11; the others are
+**proposed from unit cells** (webmineral.com; OCP from Mathew et al. 1988; whitlockite approximate, from natural
+whitlockite scaled by P), for the PI to confirm.
+
 **Refill (PI, 2026-10-30).** Hydration consumes porewater (after the first orbit the porewater was
 20–37% short of the pores). Between chunks the porewater is now brought back to the pore volume φ(t)
 implies, m_pw(0)·φ(t)/φ0 (m_pw(0) the first chunk's porewater, so the target is on the run's own
