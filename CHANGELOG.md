@@ -1191,3 +1191,15 @@ One commit per item; each commit message has its pass check.
 - **Step limits by validation (PI 11-02).** cases: x_step_max 0.03, phi_tol 0.003 (the largest within 1% of
   x_step 0.01 / phi_tol 0.001, measured and extrapolated to zero step; 0.1 and 0.01 were 2% off in Na and C(+4)).
   scripts/step_limit_validation.R. Worked example 5 rerun (README section 4, ENTICES_runs.Rmd).
+- **Phosphate phases (PI 11-02).** Thermoddem V1.10's phosphate set, converted to the HPO4-2 basis by
+  scripts/add_phosphate_phases.py (coreclath's Hydroxyapatite and Fluorapatite kept as #tdP# comments), each phase
+  validated against a primary K_sp (README section 6; Vivianite from Al-Borno & Tomson 1994, Struvite from Bhuiyan et
+  al. 2007). phosphate_phases = "apatite" (default, the reference) or "precursor" (sweep case), in every generator,
+  case files and RUNINFO; a restart refuses a parent with another setting or none. phosphate_minerals(temp_C) gates
+  each phase by its data's temperature range. Molar volumes from unit cells (OCP and Whitlockite PROVISIONAL).
+- **Phosphate results (PI 11-02).** The reference's apatite is Ca-limited (diopside's kinetics, then the SR > 1 guard;
+  not an accounting artefact): no calcite forms, so the apatite-calcite buffer is inactive (README section 7). Run
+  time to 1e4 yr 2.8 h; -diagonal_scale in every step tested and not adopted (changes converged results). Thermoddem
+  cited as Blanc et al. 2012 (full reference added).
+- **Worked examples rerun with the phosphate phases (11-02).** Examples 2-5 unchanged within rounding (ocean pH
+  8.51 -> 8.52); example 1's porewater pH 11.04 -> 10.27 (hydroxyapatite 4.3e-4 mol), and it takes ~4 min.

@@ -204,14 +204,16 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
 `ENTICES_runs.Rmd` has each as code with narrative and expected results:
 
 1. **A 25 °C smoke test** (minutes): `tidal_kinetic`, 2 orbits, 15 wt% IOM, `trace_C_molal = 1e-14`.
-   Expect at orbit 2 (`to_ocean`): porewater pH 11.04, Na 0.115 molal, ionic strength 0.26; ocean pH
+   Expect at orbit 2 (`to_ocean`): porewater pH 10.27, Na 0.115 molal, ionic strength 0.20, 4.3e-4 mol
+   hydroxyapatite (pH 11.04 and ionic strength 0.26 without phosphate phases); ocean pH
    7.41, H₂ 0.065 molal (saturated), DIC 9.2e-15 (the seed), 0.90 L of ocean gas; a pore bubble of
    0.44 L (2.8 pore volumes) after orbit 1, none in orbit 2.
 2. **Lucas's production case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
-   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.51, ocean H₂
+   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.52, ocean H₂
    0.065 molal (saturated), ocean DIC 2.9e-10 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
    bubble 0.56 L (3.6 pore volumes) after the first orbit, 5e-4 L by orbit 12; ρ_solid 2.92 → 2.76
-   g/cm³, ρ_bulk 2.31 → 2.24 (numbers of 2026-11-01: the layered strain at K_d, exchange 4.5e-8 per
+   g/cm³, ρ_bulk 2.31 → 2.24; 0.0024 mol hydroxyapatite in the pores (rerun 2026-11-02 with the phosphate
+   phases; earlier numbers of 2026-11-01: the layered strain at K_d, exchange 4.5e-8 per
    half-orbit in the 69 km skin; at K = 100 GPa the ocean reached pH 8.15 and DIC 1.5e-10, under
    `strain_model = "liao"` pH 10.63 and DIC 3.4e-8).
 3. **A 100 °C organic vs blank pair** with `pair_organic_run()` (2 orbits). Expect: the organics add
@@ -223,11 +225,11 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
    10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
 5. **The pore-gas bracket:** the production case with `pore_gas_fate = "retain"` and `"to_ocean"`, each
-   with its blank (rerun 2026-11-02: layered strain at K_d). At orbit 12: ocean H₂ 1.8e-8 (retain) vs
+   with its blank (rerun 2026-11-02 with the phosphate phases: layered strain at K_d). At orbit 12: ocean H₂ 1.8e-8 (retain) vs
    6.5e-2 molal (to_ocean, saturated, with 2.4 mol H₂ in the ocean gas); the organic DIC 2.5e-10 vs
-   2.9e-10 molal (no longer the same; not investigated: a likely cause is the carbon the pore bubble takes to the ocean under to_ocean); organic
-   methane (Mtg) 1.2e-16 vs 1.9e-9 molal, plus 2.5e-8 mol in the ocean gas under to_ocean. The ocean pH is
-   8.51 under both.
+   2.9e-10 molal (they differ because under to_ocean the pore bubble's CO₂, 1.6e-11 mol, goes to the ocean
+   too); organic methane (Mtg) 1.3e-16 vs 1.9e-9 molal, plus 2.6e-8 mol in the ocean gas under to_ocean. The
+   ocean pH is 8.52 under both.
 
 ## 5. Parameters
 
