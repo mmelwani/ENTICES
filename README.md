@@ -21,7 +21,7 @@ carbon to the organics by difference against an otherwise identical run without 
 ## 2. Requirements
 
 - **R** (tested with 4.5.2) with the packages the code loads: `tidyverse`, `conflicted`, `dplyr`,
-  `patchwork`, `glue`, `R6` (`ENTICES_LF_20260917.R`); `ggplot2` for the rate plots in
+  `patchwork`, `glue`, `R6` (`ENTICES.R`); `ggplot2` for the rate plots in
   `mineral_dissolution_constants.r` and the worked examples.
 - **PHREEQC 3.8.6.** `phreeqc_tools.R` looks for it in the `PHREEQC_EXE` environment variable, then
   at `C:/Program Files/USGS/phreeqc-3.8.6-17100-x64/bin/Release/phreeqc.exe`, then on the `PATH`.
@@ -101,7 +101,7 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
 6. **Generate the `.pqi`:**
 
    ```r
-   source("ENTICES_LF_20260917.R")
+   source("ENTICES.R")
    sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new())
    sim$run_simulation()
    ph <- PhreeqcIntegrator$new(sim)
@@ -1307,7 +1307,7 @@ exceeds the backstop, is not at steady state by design.
 
 | Path | What it is |
 |---|---|
-| `ENTICES_LF_20260917.R` | **Entry point.** Circulation model and all PHREEQC input generators (`generate_phreeqc_input_*`). |
+| `ENTICES.R` | **Entry point.** Circulation model and all PHREEQC input generators (`generate_phreeqc_input_*`). |
 | `ENTICES_runs.Rmd` | The worked examples (§4). |
 | `iom_module.R` | IOM decomposition channels: calibrated sub-pools. |
 | `mineral_dissolution_constants.r` | Mineral rate laws in R (used by `rec_eqb_minerals`) and rate plots. |

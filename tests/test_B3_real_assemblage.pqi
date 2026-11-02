@@ -5,7 +5,7 @@ TITLE Test B3 -- Hdg carbon decoupling, REAL secondary mineral assemblage + real
 # 2-mineral toy assemblage -- Magnetite + Pyrrhotite only -- and
 # Core11_idealgas_mod_v4.dat, which has no clathrates). This file uses:
 #   - coreclath_CH4coupled.dat: the actual database in
-#     ENTICES_LF_20260917.R's example run (has Hdg/Sg/Mtg/Ntg, confirmed
+#     ENTICES.R's example run (has Hdg/Sg/Mtg/Ntg, confirmed
 #     2026-09-24, AND three clathrate phases Mohit's copy lacks).
 #   - The REAL 78-entry ocean secondary-mineral list (EQUILIBRIUM_PHASES 2),
 #     extracted directly from examples/from_lucas_20260924/

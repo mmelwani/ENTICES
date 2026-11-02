@@ -1156,7 +1156,7 @@ and Ni at each restart.
 
 | Path | Contents |
 |---|---|
-| top level | `ENTICES_LF_20260917.R` (main program), `iom_module.R`, `mineral_dissolution_constants.r`, `phreeqc_tools.R`, `organic_contribution.R`, `parameter_sweep.R`, `ENTICES_runs.Rmd` (a sandbox run in chunks; depends on local plot scripts) |
+| top level | `ENTICES.R` (main program), `iom_module.R`, `mineral_dissolution_constants.r`, `phreeqc_tools.R`, `organic_contribution.R`, `parameter_sweep.R`, `ENTICES_runs.Rmd` (a sandbox run in chunks; depends on local plot scripts) |
 | `databases/` | the three `.dat` files |
 | `reconstruction/` | the rock module |
 | `tests/` | the tests |
@@ -1186,7 +1186,6 @@ no schreibersite).
 - Element mass balance closes to 1e-8–1e-16 over a 160 °C orbit.
 
 **Still open in code:**
-- renaming `ENTICES_LF_20260917.R` → `ENTICES.R` (pending agreement);
 - database consolidation into one source (pending a decision).
 
 **Production runs made before `fixes` must be regenerated.** The tephroite

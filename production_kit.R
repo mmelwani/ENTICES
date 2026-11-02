@@ -1,6 +1,6 @@
 # production_kit.R -- the production kit (PI 2026-11-01/02): case files, one-command runs of a case and its
 # same-rock blank, resumable unattended runs, and the per-case summary. Used by run_case.R, run_sweep.R and
-# make_figures.R; sourced after ENTICES_LF_20260917.R. PRODUCTION_GUIDE.md is the user's guide; README section 3
+# make_figures.R; sourced after ENTICES.R. PRODUCTION_GUIDE.md is the user's guide; README section 3
 # (Production runs) the reference.
 #
 # A case is an R file in cases/ that assigns a list `case` (cases/reference.R documents every field). A case

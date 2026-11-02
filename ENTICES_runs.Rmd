@@ -13,7 +13,7 @@ Numbers quoted are from PHREEQC 3.8.6, all rerun on 2026-11-02 with the phosphat
 
 ```{r setup, eval = FALSE}
 knitr::opts_chunk$set(eval = FALSE)
-source("ENTICES_LF_20260917.R")   # also sources iom_module.R, phreeqc_tools.R, organic_contribution.R
+source("ENTICES.R")   # also sources iom_module.R, phreeqc_tools.R, organic_contribution.R
 ```
 
 ## The circulation model and the PHREEQC parameters

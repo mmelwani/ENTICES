@@ -90,7 +90,7 @@ k_primary_mineral <- function(mineral, mol=1.0, H=1e-7, TK = 274.6, fe3 = 1e-30)
         # anoxic). Ea decreases with increasing pH (Casey Fig 4), assumed
         # Ea=0 at pH~6.2, clamped at 0 above that. No base branch: pH>7
         # source data not fittable, so neutral rate is held flat at its
-        # pH=7 value for all pH>7. See ENTICES_LF_*.R's Tephroite RATES
+        # pH=7 value for all pH>7. See ENTICES.R's Tephroite RATES
         # block (ported 1:1 here) for the full derivation.
         # pH >= 7: acid branch evaluated at a(H+) = 1e-7, i.e. flat at the
         # pH-7 rate (no neutral term summed; that doubled the rate at pH 7).

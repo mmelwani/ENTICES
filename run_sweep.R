@@ -10,7 +10,7 @@ args <- commandArgs(trailingOnly = TRUE)
 opt <- function(flag, default = NULL) { i <- match(flag, args); if (is.na(i)) default else args[i + 1] }
 n_par <- as.integer(opt("--parallel", 2)); case_dir <- opt("--dir", "cases/sweep"); runs_dir <- opt("--runs-dir", "runs")
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 source("production_kit.R")
 files <- sort(list.files(case_dir, "\\.R$", full.names = TRUE))
 if (!length(files)) stop("no case files in ", case_dir, call. = FALSE)

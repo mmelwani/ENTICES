@@ -4,7 +4,7 @@
 # ref: Kozeny-Carman d = 1.59 cm; k11: d = 1.59e-4 m (k ~ 1e-11). Prints the ocean C(+4), pH, H2, Na at the end.
 a <- commandArgs(TRUE); setwd(a[1]); out <- a[2]; cs <- a[3]; test <- a[4]; v <- as.numeric(a[5]); te <- as.numeric(a[6])
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 d <- if (cs == "ref") 0.0159 else 1.59e-4
 tmpl <- Simulator$new(k = "kozeny_carman", grain_diameter = d, layer_thickness = 194200, config = EnceladusConfig$new(), phi0 = 0.32)
 t0 <- Sys.time()

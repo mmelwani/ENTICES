@@ -1,5 +1,5 @@
 # Porosity that evolves with the chemistry (exchange-physics E, PI 2026-10-29). Sourced by
-# ENTICES_LF_20260917.R after phreeqc_tools.R.
+# ENTICES.R after phreeqc_tools.R.
 #
 # Rigid frame, no compaction: phi(t) = 1 - V_solid(t) / V_total, with V_total = V_solid(0) / (1 - phi0) fixed
 # and V_solid from bulk_density() (minerals, the remaining IOM at the Delarue density, clathrates). The run
