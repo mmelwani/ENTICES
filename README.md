@@ -27,7 +27,7 @@ carbon to the organics by difference against an otherwise identical run without 
   at `C:/Program Files/USGS/phreeqc-3.8.6-17100-x64/bin/Release/phreeqc.exe`, then on the `PATH`.
   Every generated `.pqi` is stamped `# Target PHREEQC version: 3.8.6`, and `run_phreeqc()` warns
   if the executable reports another version: minor phases and trace species differ between
-  versions (Lucas's 3.5.0 outputs rerun on 3.8.6 moved dissolved Mn 130× and sulfide ~11×; bulk
+  versions (earlier outputs made with PHREEQC 3.5.0, rerun on 3.8.6, moved dissolved Mn 130× and sulfide ~11×; bulk
   chemistry was stable). Treat the warning as "not reproducible as stamped".
 - **Python 3** only for the database scripts (`scripts/make_c4only.py`, `strip_mineral_vm.py`,
   `gas_eos.py`, `export_mineral_volumes.py`).
@@ -44,6 +44,24 @@ carbon to the organics by difference against an otherwise identical run without 
 ## 3. How to run (regenerating production)
 
 Run everything from the repo root.
+
+**Production runs (the production kit, 2026-11): `PRODUCTION_GUIDE.md`.** A case is a small R file in
+`cases/` (`cases/reference.R` lists every field with units, range and the section here that justifies it;
+`cases/sweep/` holds the one-at-a-time sweep, each case inheriting the reference). `Rscript run_case.R
+cases/<name>.R` validates the case, runs it with `run_tidal_evolution()` (grouped chunks, §6 *Long runs*)
+together with its same-rock blank (the same minerals without the IOM, following the organic run's φ, k and
+time steps chunk by chunk, so the two share the exchange and the output times), and writes
+`runs/<name>/organic/`, `blank/`, `summary.csv` (one row per chunk end), `summary_units.csv` and
+`RUNINFO.txt` (commit, PHREEQC version, database, machine, wall time, and what ended the run). **End
+conditions** (PI 2026-11-02): a steady state (`ss_tol` 0.01: the ocean's C(+4), pH and Na over one
+circulation time), the backstop `t_end_yr` = 1e8 yr, clogging (φ ≤ `phi_min`; the clog time is a
+`summary.csv` column), or φ reaching φc. Runs are **resumable**: a checkpoint (`state.rds`) after every
+chunk, and the same command continues from the last complete chunk without repeating one
+(`tests/resume_check.R` kills a run mid-chunk). `Rscript run_sweep.R [--parallel N]` runs and resumes every
+case in `cases/sweep/`; `Rscript make_figures.R` draws the six paper figures from any set of runs (no
+observational data; an `overlay` argument takes the user's bands and points). `Rscript tests/run_all.R`
+runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the code's commit
+(`# Code: ENTICES commit <sha>`, "(dirty: uncommitted changes)" if tracked files were modified).
 
 1. **Pull `main`.**
 2. **Set paths.** PHREEQC as above (`Sys.setenv(PHREEQC_EXE = "...")` if needed).
@@ -149,7 +167,7 @@ Run everything from the repo root.
     tolerance moves the continuous run by ~4e-4 in Na between `-tol` 1e-8 and 1e-12 while the restart
     difference does not converge with it (6e-6, 1e-6, 1.3e-5 at 1e-8, 1e-10, 1e-12). The solutions and the
     pore gas carry over exactly.
-12. **Runtimes** (this machine, PHREEQC 3.8.6): Lucas's production case (12 orbits, 15 wt% IOM)
+12. **Runtimes** (this machine, PHREEQC 3.8.6): the 160 °C example case (§4; 12 orbits, 15 wt% IOM)
     320–515 s at 150–160 °C; 2 orbits at 160 °C 140–290 s; equilibrium generators seconds. The
     first orbit (the metal pulse into the gas phase) is the slowest.
 13. **Common failures:**
@@ -183,17 +201,20 @@ Run everything from the repo root.
 
 ## 4. Worked examples
 
-`ENTICES_runs.Rmd` has each as code with narrative and expected results:
+`ENTICES_runs.Rmd` has each as code with narrative and expected results. **The 160 °C example case** (example 2:
+k = 1e-7 m², full-core layer, 12 orbits, 15 wt% IOM) is the case the rest of this README quotes.
 
 1. **A 25 °C smoke test** (minutes): `tidal_kinetic`, 2 orbits, 15 wt% IOM, `trace_C_molal = 1e-14`.
-   Expect at orbit 2 (`to_ocean`): porewater pH 11.04, Na 0.115 molal, ionic strength 0.26; ocean pH
+   Expect at orbit 2 (`to_ocean`): porewater pH 10.27, Na 0.115 molal, ionic strength 0.20, 4.3e-4 mol
+   hydroxyapatite (pH 11.04 and ionic strength 0.26 without phosphate phases); ocean pH
    7.41, H₂ 0.065 molal (saturated), DIC 9.2e-15 (the seed), 0.90 L of ocean gas; a pore bubble of
    0.44 L (2.8 pore volumes) after orbit 1, none in orbit 2.
-2. **Lucas's production case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
-   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.51, ocean H₂
+2. **The 160 °C example case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
+   15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.52, ocean H₂
    0.065 molal (saturated), ocean DIC 2.9e-10 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
    bubble 0.56 L (3.6 pore volumes) after the first orbit, 5e-4 L by orbit 12; ρ_solid 2.92 → 2.76
-   g/cm³, ρ_bulk 2.31 → 2.24 (numbers of 2026-11-01: the layered strain at K_d, exchange 4.5e-8 per
+   g/cm³, ρ_bulk 2.31 → 2.24; 0.0024 mol hydroxyapatite in the pores (rerun 2026-11-02 with the phosphate
+   phases; earlier numbers of 2026-11-01: the layered strain at K_d, exchange 4.5e-8 per
    half-orbit in the 69 km skin; at K = 100 GPa the ocean reached pH 8.15 and DIC 1.5e-10, under
    `strain_model = "liao"` pH 10.63 and DIC 3.4e-8).
 3. **A 100 °C organic vs blank pair** with `pair_organic_run()` (2 orbits). Expect: the organics add
@@ -204,9 +225,12 @@ Run everything from the repo root.
    organics question is answered by the long runs (PROGRESS N8), not by this example.
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
    10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
-5. **The pore-gas bracket:** the production case with `pore_gas_fate = "retain"` and `"to_ocean"`:
-   ocean H₂ 1.5e-5 vs 6.5e-2 molal at orbit 12, the same organic DIC (numbers of 10-29, before the
-   exchange physics of this branch; not rerun).
+5. **The pore-gas bracket:** the 160 °C example case with `pore_gas_fate = "retain"` and `"to_ocean"`, each
+   with its blank (rerun 2026-11-02 with the phosphate phases: layered strain at K_d). At orbit 12: ocean H₂ 1.8e-8 (retain) vs
+   6.5e-2 molal (to_ocean, saturated, with 2.4 mol H₂ in the ocean gas); the organic DIC 2.5e-10 vs
+   2.9e-10 molal (they differ because under to_ocean the pore bubble's CO₂, 1.6e-11 mol, goes to the ocean
+   too); organic methane (Mtg) 1.3e-16 vs 1.9e-9 molal, plus 2.6e-8 mol in the ocean gas under to_ocean. The
+   ocean pH is 8.52 under both.
 
 ## 5. Parameters
 
@@ -221,15 +245,14 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `core_bulk_modulus` (`EnceladusConfig`); `iom_wt_percent`, `iom_vol_frac` (`Simulator`) | NULL (= K_d); 15; NULL | Pa; wt%; — | the core's bulk modulus for the strain: the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM | PI 2026-11-01; Abers & Hacker 2016, Bass 1995, Holland & Powell (Perple_X hp634ver.dat), Delarue et al. 2026 (§6, The strain) | decided; troilite μ an estimate, IOM μ a terrestrial-kerogen bracket | optional (μ brackets) |
 | `reactive_depth` (`Simulator`) | `"skin"` | — | the reacting box: the top min(L, δ), or `"layer"` | PI 2026-10-29 | decided | — |
 | `strain_scale` (`EnceladusConfig`) | 1 | — | factor on the core's tidal strain (not the ocean load) | an override for sweeps (PI, N) | — | optional |
-| `phi0` (`Simulator`; was `porosity`) | 0.32 | — | initial porosity: k, α, storage, δ, strain volume, pore water | PlanetProfile `phiRockMax` (one fit) | **one fit**; end-state check against Bagheri's core density | yes (0.1–0.4) |
+| `phi0` (`Simulator`; the older name `porosity` still works and wins if given) | 0.32 | — | initial porosity: k, α, storage, δ, strain volume, pore volume and porewater mass | PlanetProfile `phiRockMax` (one fit; Styczinski et al. 2023) | **one fit**; end-state check against Bagheri's core density | yes (0.20, 0.38 in the sweep) |
 | `phi_c` (`Simulator`) | 0.4 | — | critical porosity: α = min(1, φ/φc); φ ≥ φc is a suspension (α = 1) | Nur et al. 1998; Dvorkin & Nur 2000 (36–40% sorted grains, sandstones) | PI 10-30; still a placeholder | yes (0.4–0.6) |
 | `alpha` (`Simulator`) | NULL (from φ/φc) | — | Biot coefficient override (must be ≥ φ) | — | — | — |
 | `eccentricity` (`EnceladusConfig`) | 0.0047 | — | tidal strain | Enceladus's orbit | — | — |
 | `max_tidal_stress` (`EnceladusConfig`) | NULL: ΔP = α·ε_v·M | Pa | tidal pore-pressure amplitude driving the Darcy flow | derived from the strain (PI 10-30); a number overrides it (the old default was an UNSOURCED 1e5) | derived; override documented | through ε_v, η, φ |
-| `porosity` (`Simulator`) | 0.32 | — | pore volume, porewater mass | profile `phiRockMax`; Styczinski et al. 2023 | sourced | — |
 | `profile_file` | the Enceladus profile | — | porewater and ocean P, porewater T | PlanetProfile (Styczinski et al. 2023) | sourced | other profiles |
 | ocean temperature | 274.6 K (1.45 °C) | K | ocean SOLUTION and seafloor steps | profile, top of the rock layer (274.566 K) | sourced | — |
-| `porewater_temp` | `"ocean"` | °C or `"profile"` | porewater reaction temperature | production uses 150 and 160 °C | — | yes |
+| `porewater_temp` | `"profile"` when `reactive_depth = "skin"`, else `"ocean"` | °C, `"profile"` or `"ocean"` | porewater reaction temperature: the skin's own profile mean by default (production kit, PI 2026-11-01) | the profile; a fixed number is an explicit override, a bound (160 °C, the hot bound, in the sweep) | decided | the 160 °C bound |
 | `organic_wt_percent` | 0 (production 15) | wt% | IOM in the rock | deliberate, to be swept | — | yes |
 | `carbon_mode` | `"c4_only"` | — | carbon redox treatment and database | §6 | decided (PI, 10-27) | `"coupled"` as the bound |
 | `pore_gas_fate` | `"to_ocean"` | — | the pore bubble's fate | §6; PROGRESS Part 7 | decided (PI, 10-29); `"retain"` is the other bound | yes (the bracket) |
@@ -241,8 +264,8 @@ Status: **sourced** (a reference), placeholder (a stand-in with a stated basis),
 | `trace_C_molal` | NULL (production 1e-14) | mol/kgw | numerical C seed | smallest value tested to converge | numerical | — |
 | `mode`, `grouping_factor`, `substeps` | `"ocean_circulations"`, —, 1 | — | orbits per step | grouped mode compounds exchange: x_step = 1 − (1 − x_tide)^G | — | — |
 | `rec_eqb_minerals` | FALSE | — | promote fast primaries to equilibrium (bulk_kinetic) | a modelling choice | — | — |
-| mineral SSA | 0.1 (fo, en, di, teph); 5 (ab, an, Kfs, tro) | m²/g | reactive surface area | none (D7) | **UNSOURCED** | yes |
-| Fe, Ni metal | `dissolve_only` equilibrium | — | corrodes completely in step 1 | none (D6) | **UNSOURCED** | yes (D6) |
+| mineral SSA (`Simulator(ssa =)`) | `"legacy"`: 0.1 (fo, en, di, teph); 5 (ab, an, Kfs, tro); or `"geometric"`: 6/(ρ_i d_i) × `roughness` from `grain_diameter` | m²/g | reactive surface area | legacy: none (D7); geometric: grain size (§6, Permeability and surface area from grain size) | legacy **UNSOURCED**; geometric an option | yes |
+| Fe, Ni metal | `dissolve_only` equilibrium | — | corrodes completely in step 1 | §6 (Fe/Ni metal) | accepted idealisation (D6 closed) | — |
 | schreibersite rate | 1.370e-7 | s⁻¹ | bulk first-order | one 1-day lab measurement (RECONSTRUCTION_STATUS §4, §8) | placeholder | — |
 | IOM kinetics | A = 2e15 s⁻¹, distributed Ea | — | IOM channels | Burnham 2019; Miller et al. 2025 | sourced; `Ea_N` a one-point fit; `IOM_S` uncalibrated | Ea width, CHn m0 |
 | IOM density | Delarue Eq. 10 at the residual IOM's H/C (1.320 at t = 0) | g/cm³ | `bulk_density()` only | Delarue et al. 2026 | sourced (PI, 10-29); a fixed number is an option | — |
@@ -324,7 +347,7 @@ The circulation time is the ocean's mass over the exchange per orbit, as
 Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close to the ~7 cm implied by
 Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
 7.8e7–7.8e9 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
-2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
+2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The 160 °C example case (k = 1e-7 m²) circulates the ocean ~10⁵–10⁶×
 faster than Choblet et al. (This table is the Darcy term alone with the gradient over the whole layer; the exchange is now the
 smallest of three volumes with the Darcy gradient over the skin depth, see Exchange below: at
 production k the poroelastic term binds.)
@@ -671,6 +694,143 @@ box, the strain-limited volume and the exchange fraction. A chunk whose φ chang
 (`over_tol`); the next chunk is scaled from the last one's rate. φ ≤ `phi_min` (0.01) is capped and
 flagged `clogged`. `tests/porosity_evolution_check.R` checks the bookkeeping.
 
+**Long runs: grouped chunks and a geometric time step (production kit, item 1, PI 2026-11-01).** With
+`t_end_years` (or `grouped = TRUE`), `run_tidal_evolution()` runs chunks of `steps_per_chunk` (4) PHREEQC
+steps of G orbits each, the exchange compounded as x_step = 1 − (1 − x_orbit)^G (`tidal_kinetic`'s grouped
+mode), so the output is log-spaced in time. G starts at 1 and doubles per accepted chunk, limited by
+accuracy: **x_step ≤ 0.1** (G ≤ ln 0.9 / ln(1 − x_orbit), from each chunk's own exchange; it bounds the
+error of reacting the porewater for G orbits between exchanges) and **the porosity change per chunk within
+`phi_tol`** (from the last chunk's rate; a chunk that exceeds it is redone at G/2). There is no fixed cap
+(`g_max`, default none): the 1e5-orbit cap of the automatic `"ocean_circulations"` grouping is not used,
+because the two criteria already bound the step (x_step ≤ 0.1 allows ~1.7e6 orbits, 6,000 yr, at the
+reference). The run ends at `t_end_years`, at a **steady state** (`ss_tol`: the ocean's C(+4) by actual
+oxidation state, pH and Na each change by less than `ss_tol` relative over one ocean circulation time), at
+clogging or at φ = φc (`stopped` says which). Chunk directories are short (`c0001`, ...): Windows refuses
+paths over 260 characters, and an output path over 120 characters is an error before any run.
+**Validation** (`tests/grouped_validation_check.R`, ~10 min): the reference case to orbit 1,000 grouped (14
+chunks, 56 steps, G up to 84) and ungrouped (1,000 steps) agree within 0.41% in the ocean's C(+4), pH, H₂
+and Na. **Cost:** at the reference the step is set by the porosity (φ falls from 0.32 to ~0.17 by 5e4 yr,
+by hydration), not by x_step; G reaches ~2.5e5 orbits (950 yr) by 5e4 yr, at 3–16 s per chunk.
+
+**Step limits: set by validation (PI 2026-11-02).** The 1,000-orbit comparison above cannot test the step
+limits: there G stays below 100 orbits. An ungrouped run long enough for x_step to reach 0.1 (G ~1.7e6
+orbits) would take weeks, so each limit was tested separately against much finer grouped steps (which are
+themselves tied to ungrouped by the comparison above), on the reference and on k ≈ 1e-11
+(`scripts/step_limit_validation.R`; ocean C(+4), pH, H₂ and Na at the end):
+- **x_step_max**, porosity held fixed so that only x_step limits G (the regime of a clogged rock under
+  `k_floor`), to 1e6 yr, against x_step_max = 0.01. Reference: 0.03 → Na −0.47%, pH −0.04%, H₂ +0.04%,
+  C(+4) +0.08%; 0.05 → Na −0.96%; 0.1 → Na −2.1%; 0.3 → −6.7%; 0.5 → −11%; 1 → −23% (C(+4) +5.7%, pH
+  −3.0%). The Na error is linear in the step (0.235% per 0.01 of x_step), so extrapolated to a zero step
+  0.03 is 0.7% off and 0.05 1.2%. k ≈ 1e-11: 0.03 → Na −0.65% (pH −0.03%, C(+4) +0.03%, H₂ 0.00%); 0.1 →
+  Na −2.9%; 0.3 → −9.5%; the slope is steeper (0.33% per 0.01), so extrapolated to zero 0.03 is ~1.0% off
+  there: at the limit, not inside it.
+- **phi_tol**, porosity evolving (x_step_max 0.1, not binding there), to 5e4 yr, against phi_tol = 0.001.
+  Reference: 0.003 → C(+4) +0.66% (pH, H₂, Na ≤ 0.10%); 0.005 → C(+4) +0.96%; 0.01 → +2.05%; 0.03 → +7.6%;
+  0.05 → +10%. k ≈ 1e-11, against 0.003: 0.01 → C(+4) +2.2%; 0.03 → +3.7%; 0.05 → +4.3% (Na ≤ 0.9%). C(+4)
+  is the sensitive output (at 3e-10 molal at the reference; 3e-14 at k ≈ 1e-11, near the seed); pH, H₂ and
+  Na move by ≤ 0.9% at every phi_tol tried.
+
+**Adopted in the cases: x_step_max = 0.03 and phi_tol = 0.003**, the largest tested values within 1% both
+against the finest run and extrapolated to a zero step (0.05 and 0.005 pass the first by 0.04% and fail the
+second). The 0.1 and 0.01 of item 1 are 2% off. `run_tidal_evolution()` keeps its older defaults (0.1, 0.01)
+for the short self-tests; production goes through the case files.
+
+**Cost at the validated limits** (this machine, a Core Ultra 7 155H, while ~15 other runs shared it):
+the reference to 5e4 yr took 807 steps (phi-limited; 1.5 h); with porosity no longer limiting, x_step
+0.03 allows ~3.4e5 orbits (1,280 yr) per step at ~1.2 s per step, so 1e6 yr is ~800 steps (~20 min) and
+the 1e8 yr backstop ~78,000 steps (~1 day). k ≈ 1e-11: ~1,060 yr per step at 9–20 s per step, so its
+steady state (3τ ≈ 5e7 yr) is ~5–11 days. k ≈ 1e-14: ~1,450 yr per step at ~12 s, so the 1e8 yr backstop is
+~10 days. At the reference φ falls from 0.32 to 0.17 by 5e4 yr, so clogging may end it before a steady
+state. 4.5 Gyr is out of reach for every case at these limits (~40 days at the reference alone).
+
+**With the phosphate phases (`"apatite"`, measured 2026-11-02).** The reference to 1e4 yr took 134 chunks
+and 2.8 h (accepted). The first chunk took 845 s (its .out has 109 "Numerical method failed with this set of convergence
+parameters" and 112 "Maximum iterations exceeded" warnings); later chunks took ~26 s
+for 4 steps (~6.5 s per step, ~5× the cost without phosphates). Porosity still limits the step at 1e4 yr
+(φ = 0.20, Δt growing only as t^0.18). Projection to the 1e8 yr backstop: **~6 days** if the step limit
+takes over (x_step 0.03, ~1,280 yr per step); **~24 days** if porosity keeps limiting (the fitted Δt(t),
+~81,000 chunks); 1e6 yr is ~0.5 day either way. Clogging or a steady state may end it earlier.
+`-diagonal_scale true` in every step cut chunk 1 to 57 s but changed the converged results: 1,122 of
+7,308 values differ by more than 1e-8 relative, hydroxyapatite is missing from one step (9.4e-6 against 0
+mol), and dk_Diopside differs by 14%. It is not adopted; it stays only around the ocean step.
+
+**Clogging and k_floor (PI 2026-11-02).** The rigid-frame default ends a run when the solids fill the pores
+(φ ≤ `phi_min`, 0.01): the run reports the clog time and the state then (`clog_time_yr`, `end_reason =
+"clogging"`). `k_floor` (m²; `k_floor_m2` in a case) is the alternative: fracture-maintained permeability
+from reaction-driven cracking. Kelemen & Hirth (2012, EPSL 345–348, 81–89) estimate the crystallization
+pressure of olivine hydration and carbonation at > 300 MPa up to ~200 °C, above what is needed to fracture
+rock, and conclude that "the volume change due to hydration and carbonation can cause fracture formation
+and dilation, maintaining or increasing permeability and reactive surface", with permeability kept for tens
+of thousands of years in Oman and at Lost City. They give no permeability value: **the two
+floors swept, 1e-14 and 1e-12 m², are the PI's choice**, not from the paper. With `k_floor`, k = max(k(φ),
+k_floor), and where the rock would clog the run goes on with φ held at `phi_min` and k = `k_floor` (the
+further solid volume is taken up by the cracking, not by the pores; the `k_floor_on` column marks those
+chunks); it reopens (k from φ) if the solids shrink again. At the reference grain size Kozeny–Carman gives
+1.4e-12 m² at φ = 0.01, so both floors act only at clogging.
+
+**Phosphate phases (PI 2026-11-02).** Schreibersite oxidises to orthophosphate (0.040 mol P per kg of
+rock, all released within ~1 yr at the reference). Without a phosphate sink, phosphate built up to ~1 eq/kg
+in the porewater (hydroxyapatite at SI +14) and, as Na phosphate, carried most of the ocean's alkalinity.
+Hydroxyapatite had been commented out of the lists because it precipitates slowly at low temperature
+(P often precipitates first as amorphous phases that later crystallise, and small organic acids inhibit
+Ca-phosphate precipitation: Hausrath et al. 2024, *Minerals* 14, 591, §4.3 and refs. 205–207, 285–287). On
+the model's timescales (to 1e8 yr) apatite belongs in the reference. Postberg et al. (2023, *Nature*)
+interpret Enceladus's plume phosphate through the hydroxyapatite–calcite buffer (hydroxyapatite + 5 CO₃²⁻ +
+H⁺ ↔ calcite + 3 PO₄³⁻ + H₂O; one point fits the whitlockite–calcite buffer better), and their experiments
+formed hydroxyapatite and Ca-/Mg-whitlockite. **`phosphate_phases`** (every generator and restart; a restart
+refuses a parent with a different setting; case files; RUNINFO): `"apatite"` (default; the reference) puts
+Hydroxyapatite and the precursors in the porewater and ocean lists; `"precursor"` (a sweep case) leaves out
+the apatite, so the metastable phases control P (the Ostwald step rule). There is no "no phosphate" option.
+
+*The data.* The phosphate set comes from one source, Thermoddem V1.10 (BRGM; `PHREEQC_ThermoddemV1.10_15Dec2020.dat`,
+database date 15 Dec 2020, shipped with PHREEQC 3.8.6; cited as Blanc et al. 2012, *Appl. Geochem.* 27,
+2107–2116, the paper BRGM's PHREEQC download page names as describing the database; the site posts no
+other citation request that could be found, and the file's header gives none), converted to coreclath's basis (HPO₄²⁻) with
+Thermoddem's own H₂PO₄⁻ = HPO₄²⁻ + H⁺ (log K −7.212, ΔH 3.6 kJ/mol, its analytic expression):
+`scripts/add_phosphate_phases.py` writes the block into the coupled and uncoupled databases and comments out
+coreclath's own Hydroxyapatite and Fluorapatite (`#tdP#`, kept for reference), and `make_c4only.py` carries it
+on. The two databases' aqueous P agrees (H₂PO₄⁻/HPO₄²⁻ within 0.007–0.06 log units over 0–150 °C), but their
+**apatite differs by 3–5 log units**: coreclath's (LLNL; Robie, Hemingway & Fisher 1979, USGS Bull. 1452, a
+compilation whose source for apatite was not traced) has log K −3.07 at 25 °C, Thermoddem's (Blanc &
+Piantone 2006) −7.30, McDowell et al. (1977) measured −7.37 to −7.56 on this basis. The spread across the
+databases is −3.1 to −7.3: the old entry may represent poorly crystalline apatite (unconfirmed). **The
+crystalline apatite now used is a much stronger P sink** (~10⁴ times less soluble).
+
+*Validation* (25 °C, coreclath basis, primary values converted with coreclath's pK₃ 12.3218 and pK_w 13.9951).
+Rule (PI): a phase whose database value is more than 0.5 log units from the primary value is not used until
+resolved; the primary value replaces it only for a clear sign or basis slip; a phase without a primary
+source is left out.
+
+| Phase | Database (converted) | Primary | Source | Difference | Used |
+|---|---|---|---|---|---|
+| Hydroxyapatite | −7.30 (Thermoddem Natur) | −7.56 (measured) / −7.37 (best value) | McDowell et al. 1977, *J. Res. NBS* 81A | +0.26 / +0.07 | yes |
+| Whitlockite (β-Ca₃(PO₄)₂) | −4.30 (Thermoddem "high") | −4.28 | Gregory et al. 1974, *J. Res. NBS* 78A | −0.03 | yes |
+| Whitlockite (low) | −6.03 (Thermoddem "low") | −4.28 | Gregory et al. 1974 | −1.75 | no |
+| Brushite | −6.61 | −6.59 | Gregory et al. 1970, *J. Res. NBS* 74A | −0.02 | yes |
+| OCP, Ca₄H(PO₄)₃ | −11.52 (Thermoddem ":3H2O", NIST46.4) | −11.44 (pK_sp 48.4, 23.5 °C) | Tung et al. 1988, *J. Res. NBS* 93 | −0.08 | yes |
+| OCP (":2.5H2O", 84nan) | −9.82 | −11.44 | Tung et al. 1988 | +1.61 | no |
+| Bobbierite | −0.50 | −0.56 | Taylor et al. 1963, *Trans. Faraday Soc.* 59 (also Thermoddem's source) | +0.06 | yes |
+| Newberyite | −5.80 | −5.82 | Taylor et al. 1963 | +0.03 | yes |
+| Vivianite | −17.70 | −11.12 | Al-Borno & Tomson 1994, *GCA* 58 | −6.57: Thermoddem's sign is flipped (+3.272 gives −11.15) | yes, the primary value |
+| Struvite | (none) | −10.28 (pK_sp 13.36); the fit used gives −10.47 | Bhuiyan et al. 2007, *Environ. Technol.* 28; Ohlinger et al. 1998: −10.18 | fit vs Ohlinger −0.29 | yes |
+| Monetite | −6.91 | not read (McDowell et al. 1971, *Inorg. Chem.* 10, paywalled) | — | — | no (unverified) |
+| Fluorapatite | −22.55 | −22.64 from McCann 1968 pK 59.6, seen only in a search snippet | — | — | no (unverified) |
+| Farringtonite, Na₃PO₄, Na₂HPO₄, NaH₂PO₄ | — | no primary solubility product found | — | — | no |
+
+*Temperatures.* Hydroxyapatite, whitlockite and brushite carry Thermoddem's analytic expressions (0–300 °C);
+vivianite Al-Borno & Tomson's fit (5–90 °C); struvite Bhuiyan et al.'s fit (10–60 °C, pK_sp 13.57 at 25 °C
+against their tabulated 13.36; it diverges outside, to log K −21 at 150 °C). OCP, bobbierite and newberyite
+have 25 °C values only (no enthalpy): reliable to about 50 °C, which covers the skin. Each phase is listed only
+where its data hold (`PhreeqcIntegrator$phosphate_minerals()`): vivianite to 90 °C, struvite to 60 °C, OCP,
+bobbierite and newberyite to 50 °C; the ocean (1.45 °C) is a few degrees below vivianite's and struvite's
+measured range. **A hot porewater sees fewer phosphates:** the 160 °C bound case (`cases/sweep/T160.R`)
+lists only hydroxyapatite, whitlockite and brushite; the 25 °C-only phases (OCP, bobbierite, newberyite)
+are excluded there, and so are vivianite and struvite. The temperature limits are accepted (PI 2026-11-02).
+Molar volumes (`data/mineral_molar_volumes.csv`; accepted, PI 2026-11-02): hydroxyapatite from Core11; the
+others from unit cells (webmineral.com). **OCP and whitlockite are PROVISIONAL:** OCP from the Mathew, Brown,
+Schroeder & Dickens (1988) cell, read through search results only; whitlockite approximate, from natural
+whitlockite scaled by P, not from β-Ca₃(PO₄)₂.
+
 **Refill (PI, 2026-10-30).** Hydration consumes porewater (after the first orbit the porewater was
 20–37% short of the pores). Between chunks the porewater is now brought back to the pore volume φ(t)
 implies, m_pw(0)·φ(t)/φ0 (m_pw(0) the first chunk's porewater, so the target is on the run's own
@@ -822,7 +982,7 @@ The earlier lower bounds (metal and schreibersite to Fe(II): `H2_from_metal`, `H
 are kept.
 `scale_to_core(budget, sim)` multiplies by the rock mass of the reacting box, the whole permeable layer
 and the whole core (V (ρ_core − φ ρ_water) from the Simulator's geometry): the inventory available for
-early loss to space. Lucas's 160 °C case (k = 1e-7, skin box 69 km, 12 orbits, `to_ocean`):
+early loss to space. The 160 °C example case (§4; k = 1e-7, skin box 69 km, 12 orbits, `to_ocean`):
 
 | per kg of rock | orbit 1 | orbit 12 | whole core, orbit 12 |
 |---|---|---|---|
@@ -924,7 +1084,7 @@ O(0) at 250 °C).
 
 **Trace N and S seeds: tested, not added (item 5, 10-31).** The default ocean is pure water plus the C seed.
 Seeding N or S as well (1e-14 mol/kgw in every initial solution, alone or together) changed nothing that
-matters in Lucas's case at 25 and 160 °C (2 orbits, 15 wt% IOM): every variant ran with 0 errors with and
+matters in the example case (§4) at 25 and 160 °C (2 orbits, 15 wt% IOM): every variant ran with 0 errors with and
 without them; at 160 °C the solver's retries were 33 in every variant; at 25 °C they moved without
 pattern (4 with C alone, 18 with C + N, 12 with C + S, 4 with all three); runtimes differed only with the
 machine's load. With the C seed and the ocean step's `-diagonal_scale` (B) the default already converges,
@@ -971,10 +1131,10 @@ d$breakdown   # per phase: mass and volume, and their fractions
 - Gas beyond the pore volume is not counted (s_g is capped at 1; it is not rock volume either).
   Rows where Vgas > Vpore are flagged in the `gas_exceeds_pores` column (with `Vgas_Vpore`), and
   `bulk_density()` warns when there are any: their ρ_bulk is for pores full of gas, not a physical
-  state. In Lucas's 160 °C case that is the first REACT row under `"to_ocean"` (2.14 pore volumes,
+  state. In the 160 °C example case that is the first REACT row under `"to_ocean"` (2.14 pore volumes,
   before the transfer) and every row under `"retain"` (up to 2.26).
 
-For Lucas's 160 °C case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
+For the 160 °C example case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
 at orbit 12, ρ_solid 2.759 and ρ_bulk 2.255 (`"to_ocean"`) or 1.880 (`"retain"`, the bubble filling
 the pores). With the old fixed 1.4 g/cm³ these were 2.977 and 2.344 at t = 0 and 2.806 and 2.287 or
 1.912 at orbit 12: the Delarue density lowers ρ_solid by 1.9% at t = 0 and 1.7% at orbit 12, and
@@ -1042,7 +1202,7 @@ needs the IOM exhausted, no kinetic primaries left and equal temperatures.
 `steady_state_diagnostics(csv)` shows the approach directly, per orbit: the net elemental flux into the
 ocean (the change of the ocean side, water + minerals + gas, over the orbit; the ocean exchanges only
 with the porewater) and the net change of the secondary minerals in the porewater and in the ocean (mol
-of formula units per kg of the box's rock). In Lucas's 160 °C case (12 orbits): the porewater's
+of formula units per kg of the box's rock). In the 160 °C example case (12 orbits): the porewater's
 secondary minerals grow by 1.09 mol in orbit 1, 0.26 in orbit 2, 0.014 in orbit 6 and 0.0038 in orbit
 12 (the hydration transient dying away); the ocean's by ~3e-10 per orbit from orbit 6; the Na flux into
 the ocean settles at 1.75e-8 per orbit (2.1e-8 in orbit 1), Si falls from 8.7e-10 to 1.6e-10, and C is
@@ -1062,10 +1222,39 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
 - the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 (2.08 with NH₃, the default since
   10-31) it is almost all CO₂(aq) (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no
   Cl; with the less volatile ices it is 0.56 molal at pH 5.8;
-- the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 2.9e-10 molal DIC at pH
+- the pure-water default, after 12 orbits of the 160 °C example case, holds 2.9e-10 molal DIC at pH
   8.51 (layered strain at K_d; 3.4e-8 at pH 10.63 under the Liao strain). Whether the organic contribution can
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
   for.
+
+### Phosphate and calcium (PI 2026-11-02)
+
+**Ca-limited apatite; no calcite; the apatite–calcite buffer is inactive in this rock.** In the reference
+under `"apatite"` (pure-water ocean, to 1e4 yr), hydroxyapatite takes all the P (0.0133 mol per kg of box
+material from ~100 yr on; ocean P ~1.6e-6 molal) and nearly all the Ca the rock releases. The box material
+holds 0.286 mol Ca per kg (0.85 kg of silicate, 15 wt% IOM: diopside 0.233, anorthite 0.053 mol), but only
+0.0755 mol is released by 1e4 yr. Hydroxyapatite holds 0.0667 of it and mesolite 0.0088; dissolved Ca stays
+≤ 1e-7 molal, and no carbonate forms at any time. Why so little is released (by chunk, porewater SIs from
+SELECTED_OUTPUT):
+
+| t (yr) | porewater pH | Diopside left | SI | rate (mol/s) | Anorthite left | SI |
+|---|---|---|---|---|---|---|
+| 0 | | 0.2333 | | | 0.0528 | |
+| 0.26 | 11.4 | 0.2330 | −3.4 | 4.3e-11 | 6e-6 | −10.2 |
+| 5.4 | 12.6 | 0.2262 | −2.2 | 4.1e-11 | 0 | −10.6 |
+| 16 | 13.3 | 0.2148 | −0.40 | 2.3e-11 | 0 | −9.2 |
+| 40 | 13.6 | 0.2106 | +0.33 | 0 | 0 | −8.9 |
+| 1e4 | 13.9 | 0.2106 | +0.77 | 0 | 0 | −8.9 |
+
+- **Anorthite is not limiting:** it all dissolves within ~1 yr (0.053 mol).
+- **Diopside's slow kinetics, then the SR > 1 guard, stop it.** It dissolves at ~4e-11 mol/s (PK04, SSA
+  0.1 m²/g) and gives up 0.023 mol in ~30 yr. Then the porewater (pH 13.5–14) becomes supersaturated in
+  diopside (SI > 0 in 85 of 134 chunks, up to +1.5), and the rate law's guard sets its rate to 0.
+- **Not an accounting artefact.** Each chunk's −m0 equals the previous chunk's end moles exactly, for both
+  minerals; at most 5.5e-14 mol of anorthite is dropped where it falls below PHREEQC's precision.
+
+Na comparison at the same time (1e4 yr): 0.051 molal under `"apatite"` against 0.063 without phosphate
+phases. The 0.39 molal quoted earlier came from fixed-porosity runs, not from production.
 
 ### What tidal-only circulation can reach
 
@@ -1091,10 +1280,28 @@ of the range circulates the ocean through the core within Enceladus's age** (1.2
 
 ## 8. Known limitations and open decisions
 
-`docs/PROGRESS.md` Part 10 lists the decisions (D6 metal corrosion rate, D7 surface areas, D9 spin-up,
-D10 IOM sulfur, the default `pore_gas_fate`, NH₃ in the cometary ocean) and the next actions. In
-short: the H₂ pulse is the metal (D6, closed: an accepted idealisation); surface areas are unsourced (D7); the 25 °C brine exceeds the
-B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus pH.
+**Open decisions (2026-11-02).**
+- **The core viscosity η is the main one.** It selects the layered strain within the tidal scenario and
+  so the exchange. The reference uses 1e12 Pa·s (dissipative core); the sweep brackets it at 4.4e11 and
+  2.3e12 (Bagheri et al. 2025 Table 5) and tries the dissipative-shell scenario at 1e14. The core
+  rigidity µ (17 GPa, the geometric mean of 4–70 GPa) is a placeholder too.
+- **Surface areas (D7):** the legacy per-mineral values are UNSOURCED; the `"geometric"` option ties
+  them to the grain size.
+- **φc** (0.4) is a placeholder from sorted grain packs.
+- **The k_floor values** (1e-14, 1e-12 m²) are the PI's bracket, not from a measurement (§6).
+- **D9 (spin-up) and D10 (IOM sulfur)** are as in `docs/PROGRESS.md` Part 10.
+- **The OCP and whitlockite molar volumes are PROVISIONAL** (§6, Phosphate phases).
+
+**Closed:** the metal corrodes in the first step (D6, an accepted idealisation); the pore gas goes to the
+ocean (`"retain"` and `"retain_to_pore_volume"` are the bracket); the carbon mode is `c4_only`; the skin
+reacts at its own profile temperature (a fixed temperature is a bound). Phosphates (2026-11-02):
+`"apatite"` is the reference; the Ca-limited apatite stands (diopside's kinetics and the SR > 1 guard,
+§7); the phosphate temperature limits and the other volumes are accepted.
+
+**Limitations.** The 25 °C brine exceeds the B-dot range. The pure-water ocean is unbuffered, so its pH is
+not an Enceladus pH. A run cannot reach 4.5 Gyr at the validated step limits; production runs end at a
+steady state or the 1e8 yr backstop (§3), and the k ≈ 1e-14 case, whose circulation time (~5e8 yr)
+exceeds the backstop, is not at steady state by design.
 
 ## 9. Repository map
 
@@ -1108,12 +1315,18 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
 | `organic_contribution.R` | `pair_organic_run()`, `organic_contribution()`. |
 | `parameter_sweep.R` | Parameter sweep helper. |
 | `CHANGELOG.md` | Change log. |
+| `PRODUCTION_GUIDE.md` | **For production runs:** setup, running cases and the sweep, figures, outputs, failures. |
+| `run_case.R`, `run_sweep.R`, `make_figures.R` | Production: one case with its blank; the sweep; the figures (§3). |
+| `production_kit.R` | Case files, validation, the run/resume machinery, `summary.csv` (used by the scripts above). |
+| `porosity_evolution.R` | `run_tidal_evolution()`: chunked runs with evolving porosity, grouped steps, checkpoints. |
+| `cases/` | `reference.R` and `sweep/`: the production cases. |
+| `runs/`, `figures/` | Outputs (not in git). |
 | `databases/` | PHREEQC databases (`databases/README.md`). |
 | `profiles/` | The PlanetProfile interior profile (`profiles/README.md`). |
 | `data/` | `mineral_molar_volumes.csv` (`data/README.md`). |
 | `reconstruction/` | The primordial CI-chondrite rock reconstruction. |
 | `tests/` | Self-tests and PHREEQC test inputs (`tests/README.md`). |
-| `examples/` | Lucas's example production run and his run notebook; the redox budget diagnostic inputs. |
+| `examples/` | An example production run and the run notebook by L. Fifer (`ENTICES_runs_lucas_2026-10.Rmd`); the redox budget diagnostic inputs. |
 | `scripts/` | Database scripts and standalone analyses. |
 | `docs/` | Design decisions, test write-ups, progress (`docs/PROGRESS.md`); `reviews/`, `archive/`. |
 | `legacy/` | Retired files (`legacy/README.md`). **Do not use for runs.** |
@@ -1129,6 +1342,9 @@ B-dot range; the pure-water ocean is unbuffered, so its pH is not an Enceladus p
 - Bagheri, A., Simons, M., Park, R.S., Berne, A., Hemingway, D., Melwani Daswani, M., Vance, S.D.
   (2025). Exploring the interior structure and mode of tidal heating in Enceladus. *Planet. Sci. J.*
   6, 245. doi:10.3847/PSJ/ae0cab
+- Blanc, Ph., Lassin, A., Piantone, P., Azaroual, M., Jacquemet, N., Fabbri, A., Gaucher, E.C. (2012).
+  Thermoddem: A geochemical database focused on low temperature water/rock interactions and waste
+  materials. *Appl. Geochem.* 27, 2107–2116. doi:10.1016/j.apgeochem.2012.06.002
 - Burnham, A.K. (2019). Kinetic models of vitrinite, kerogen, and bitumen reflectance. *Org.
   Geochem.* 131, 50–59. doi:10.1016/j.orggeochem.2019.03.007
 - Casey, W.H., Hochella, M.F., Jr., Westrich, H.R. (1993). The surface chemistry of manganiferous

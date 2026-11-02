@@ -18,3 +18,8 @@ phreeqc.log
 
 # Python bytecode (scripts/make_c4only.py imports strip_mineral_vm.py)
 __pycache__/
+
+# Production runs and figures (production kit): outputs, not code
+/runs/
+/figures/
+/tests/output/run_all/

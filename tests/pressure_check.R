@@ -97,7 +97,8 @@ stub_parent <- function(dir, header, tidal) {
           else data.frame(state = "react", soln = 1, step = 1, pH = 9, pe = -8, mass_H2O = 1, Time_Years = 0.004)
   for (el in ENTICES_ELEMENTS) rows[[el]] <- 1e-6
   write.table(rows, csv, sep = "\t", quote = FALSE, row.names = FALSE)
-  writeLines(c("TITLE stub parent", "# Target PHREEQC version: 3.8.6", "# Database: databases/coreclath_C4only.dat", header), sub("\\.csv$", ".pqi", csv))
+  writeLines(c("TITLE stub parent", "# Target PHREEQC version: 3.8.6", "# Database: databases/coreclath_C4only.dat",
+               "# phosphate_phases: apatite", header), sub("\\.csv$", ".pqi", csv))
   csv
 }
 restart <- function(tidal, csv, ...) {

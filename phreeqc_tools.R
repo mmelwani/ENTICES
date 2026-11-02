@@ -17,6 +17,22 @@
 
 PHREEQC_EXPECTED_VERSION <- "3.8.6"
 
+# The code's version for the .pqi headers and RUNINFO (production kit, item 5): "ENTICES commit <sha>", with
+# " (dirty: uncommitted changes)" if tracked files differ from it, or "ENTICES commit unknown (not a git
+# checkout)". Run from the repo root. Cached for the session.
+code_version <- function() {
+  if (!is.null(CODE_VERSION$v)) return(CODE_VERSION$v)
+  git <- function(...) tryCatch(suppressWarnings(system2("git", c("--no-optional-locks", ...), stdout = TRUE, stderr = FALSE)),
+                                error = function(e) character(0))
+  sha <- git("rev-parse", "HEAD")
+  v <- if (length(sha) == 1 && grepl("^[0-9a-f]{40}$", sha))
+    paste0("ENTICES commit ", sha, if (length(git("status", "--porcelain", "--untracked-files=no"))) " (dirty: uncommitted changes)" else "")
+  else "ENTICES commit unknown (not a git checkout)"
+  CODE_VERSION$v <- v
+  v
+}
+CODE_VERSION <- new.env()
+
 phreeqc_exe <- function() {
   env <- Sys.getenv("PHREEQC_EXE")
   if (nzchar(env)) return(env)

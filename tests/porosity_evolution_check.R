@@ -72,7 +72,7 @@ vf_ok <- abs(on$iom_vol_frac[1] / iom_volume_fraction(15) - 1) < 1e-12 &&
   (n == 1 || abs(on$iom_vol_frac[n] / iom_volume_fraction(15, iom_g = bd_prev$iom_g[nrow(bd_prev)], iom_density = bd_prev$iom_density[nrow(bd_prev)]) - 1) < 1e-12)
 st <- suppressWarnings(run_tidal_evolution(Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new(), phi0 = 0.4),
                                            organic_wt_percent = 15, n_orbits = 1, output_dir = file.path(od, "pc"), k_of_phi = kc, porewater_temp = 25))
-check(kd_ok && vf_ok && identical(st$stopped, "phi reached phi_c") && is.null(st$chunks),
+check(kd_ok && vf_ok && identical(st$stopped, "phi_c") && is.null(st$chunks),
       sprintf("frame moduli per chunk: IOM fraction %s, K_d %s GPa; phi0 = phi_c: stopped (%s)",
               paste(sprintf("%.4f", on$iom_vol_frac), collapse = ", "), paste(sprintf("%.4g", on$K_d_Pa / 1e9), collapse = ", "), st$stopped))
 

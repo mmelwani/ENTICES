@@ -38,6 +38,7 @@ Beidellite-Na,Na.35Al2.35Si3.65O10(OH)2,367.9088,134.5220,legacy/Core11_idealgas
 Berlinite,AlPO4,121.9313,46.1900,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
 Bieberite,CoSO4:7H2O,281.0438,147.9500,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
 Bixbyite,Mn2O3,157.8580,31.8900,"legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com, density 4.95)",1,coupled;uncoupled;C4only,no
+Bobbierite,Mg3(PO4)2:8H2O,406.8930,190.7907,"webmineral.com unit cell (Bobierrite), Mg3(PO4)2.8H2O, V = 1267.27 A3, Z = 4",4,coupled;uncoupled;C4only,yes
 Boehmite,AlO2H,59.9774,19.5350,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Borax,Na2(B4O5(OH)4):8H2O,381.2796,222.6600,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Boric_acid,B(OH)3,61.8167,43.0900,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
@@ -45,6 +46,7 @@ Bornite,Cu5FeS4,501.8410,98.6000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled
 Brezinaite,Cr3S4,284.2523,69.1600,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Brochantite,Cu4(SO4)(OH)6,452.2374,113.6000,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Brucite,Mg(OH)2,58.3088,24.6300,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
+Brushite,CaHPO4:2H2O,172.0553,75.8017,"webmineral.com unit cell, CaHPO4.2H2O, V = 503.49 A3, Z = 4",4,coupled;uncoupled;C4only,yes
 Bunsenite,NiO,74.6840,10.9700,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 C,C,12.0110,5.2980,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled,no
 Ca,Ca,40.0780,26.1900,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
@@ -146,7 +148,6 @@ Ferrite-Mg,MgFe2O4,199.9750,44.5700,legacy/Core11_idealgas_mod_v4.dat -Vm (therm
 Ferrite-Zn,ZnFe2O4,241.0600,45.2300,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Ferrosilite,FeSiO3,131.9145,32.9520,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 FeSO4,FeSO4,151.8890,41.5800,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,yes
-Fluorapatite,Ca5(PO4)3F,504.2378,,UNFILLED: for the PI to source,,coupled;uncoupled;C4only,no
 Fluorite,CaF2,78.0748,,UNFILLED: for the PI to source,,coupled;uncoupled;C4only,no
 Forsterite,Mg2SiO4,140.6715,43.7900,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Foshagite,Ca4Si3O9(OH)2:0.5H2O,431.5232,154.2300,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,yes
@@ -171,7 +172,7 @@ Hillebrandite,Ca2SiO3(OH)2:0.17H2O,193.2890,71.7900,legacy/Core11_idealgas_mod_v
 Huntite,CaMg3(CO3)4,352.9650,122.9000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Hydromagnesite,Mg5(CO3)4(OH)2:4H2O,467.5400,208.8000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Hydrophilite,CaCl2,110.9834,49.9900,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
-Hydroxyapatite,Ca5(OH)(PO4)3,502.2413,128.9000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
+Hydroxyapatite,Ca5(PO4)3(OH),502.2413,128.9000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Ice,H2O,18.0098,19.6350,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Ilmenite,FeTiO3,151.7090,32.1500,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
 Jadeite,NaAl(SiO3)2,202.1063,60.4000,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
@@ -249,6 +250,7 @@ Natrosilite,Na2Si2O5,182.1206,72.5700,legacy/Core11_idealgas_mod_v4.dat -Vm (the
 NaUO3,NaUO3,309.0007,42.5600,legacy/Core11_idealgas_mod_v4.dat -Vm (gfw/density),1,coupled;uncoupled;C4only,no
 Nepheline,NaAlSiO4,142.0328,54.1600,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Nesquehonite,MgCO3:3H2O,138.3274,74.7900,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
+Newberyite,MgHPO4:3H2O,174.2921,82.2461,"webmineral.com unit cell, MgHPO4.3H2O, V = 1092.59 A3, Z = 8",4,coupled;uncoupled;C4only,yes
 NH4-feldspar,NH4AlSi3O8,257.2283,114.7800,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
 NH4-muscovite,NH4Al3Si3O10(OH)2,377.1831,146.0700,legacy/Core11_idealgas_mod_v4.dat -Vm (Hovis04),1,coupled;uncoupled;C4only,no
 NH4Cl,NH4Cl,53.4910,34.9600,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
@@ -267,6 +269,7 @@ Nontronite-Ca,Ca.175Fe2Al.35Si3.65H2O12,424.6071,137.7800,legacy/Core11_idealgas
 Nontronite-K,K.35Fe2Al.35Si3.65H2O12,431.2778,141.9130,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Nontronite-Mg,Mg.175Fe2Al.35Si3.65H2O12,421.8468,136.8150,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
 Nontronite-Na,Na.35Fe2Al.35Si3.65H2O12,425.6398,139.2210,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,yes
+OCP,Ca4H(PO4)3:3H2O,500.1987,182.6202,"PROVISIONAL (PI 2026-11-02): Mathew, Brown, Schroeder & Dickens 1988, J. Crystallogr. Spectrosc. Res. 18, 235, cell of Ca8(HPO4)2(PO4)4.5H2O, triclinic, a 19.692, b 9.523, c 6.835 A, alpha 90.15, beta 92.54, gamma 108.65 deg, V ~ 1213 A3, Z = 2, per Ca4H(PO4)3 (seen through search results, not the paper)",4,coupled;uncoupled;C4only,yes
 Okenite,CaSi2O4(OH)2:H2O,212.2386,94.7700,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 P,P,30.9738,17.2000,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Paragonite,NaAl3Si3O10(OH)2,382.1346,132.5300,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
@@ -325,6 +328,7 @@ Spinel-Co,Co3O4,240.7756,39.4100,legacy/Core11_idealgas_mod_v4.dat -Vm (gfw/dens
 Spodumene,LiAlSi2O6,186.0575,58.3700,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Stilbite,Ca1.019Na.136K.006Al2.18Si6.82O18:7.33H2O,714.4673,333.5000,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Strengite,FePO4:2H2O,186.8164,65.1000,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
+Struvite,MgNH4PO4:6H2O,245.3519,143.8017,"webmineral.com unit cell, NH4MgPO4.6H2O, V = 477.58 A3, Z = 2",4,coupled;uncoupled;C4only,yes
 Sylvite,KCl,74.5510,37.5240,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Talc,Mg3Si4O10(OH)2,379.2008,136.2500,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Tarapacaite,K2CrO4,194.1687,70.8700,legacy/Core11_idealgas_mod_v4.dat -Vm (Webmineral.com),1,coupled;uncoupled;C4only,no
@@ -371,7 +375,9 @@ UO2SO4:3H2O,UO2SO4:3H2O,420.0883,108.3400,legacy/Core11_idealgas_mod_v4.dat -Vm 
 UO3(beta),UO3,286.0109,34.4600,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
 Uraninite,UO2,270.0169,24.6380,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Vaesite,NiS2,122.8220,27.6970,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no
+Vivianite,Fe3(PO4)2:8H2O,501.5190,184.8423,"webmineral.com unit cell, Fe3(PO4)2.8H2O, V = 613.88 A3, Z = 2",4,coupled;uncoupled;C4only,yes
 Wairakite,CaAl2Si4O10(OH)4,434.3306,186.8700,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
+Whitlockite,Ca3(PO4)2,310.1336,98.3263,"PROVISIONAL (PI 2026-11-02), approximate: webmineral.com cell of natural whitlockite Ca9(Mg,Fe)(PO4)6(PO3OH), V = 3428.79 A3, Z = 6, scaled to 2 P of 7 for Ca3(PO4)2; the beta-TCP of the data would be better (not found)",4,coupled;uncoupled;C4only,yes
 Wollastonite,CaSiO3,116.1455,39.9300,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Wurtzite,ZnS,97.4560,23.8460,legacy/Core11_idealgas_mod_v4.dat -Vm,1,coupled;uncoupled;C4only,no
 Wustite,Fe.947O,68.8811,12.0400,legacy/Core11_idealgas_mod_v4.dat -Vm (thermo.com.V8.R6+.tdat),1,coupled;uncoupled;C4only,no

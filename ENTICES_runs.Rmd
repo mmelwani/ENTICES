@@ -7,7 +7,8 @@ These examples are what a production regeneration needs: how to set up the circu
 generate an input, run PHREEQC, read the output, pair a run with its blank, and run the two
 options (the cometary-ice ocean and the pore-gas bracket). Run from the repo root, after the
 self-tests pass (README §3). Each chunk is `eval = FALSE`: they take minutes to tens of minutes.
-Numbers quoted are from PHREEQC 3.8.6 on 2026-10-28; Lucas's earlier notebook is
+Numbers quoted are from PHREEQC 3.8.6, all rerun on 2026-11-02 with the phosphate phases (`phosphate_phases =
+"apatite"`, the default); Lucas's earlier notebook is
 `examples/ENTICES_runs_lucas_2026-10.Rmd`.
 
 ```{r setup, eval = FALSE}
@@ -48,15 +49,16 @@ x <- run_input(f)
 x[c(5, 8), c("soln", "pH", "Na", "mu", "m_H2", "C", "Vgas_L", "Vgas_Vpore")]   # orbit 2: porewater (REACT), ocean (MIX 2)
 ```
 
-Expect (15 s; numbers of 2026-11-01: skin box, φc 0.4, the layered strain at K_d, exchange 5e-8 per
-half-orbit): at orbit 2 a porewater of pH 11.04, 0.115 molal Na, ionic strength 0.26; an ocean of pH
+Expect (~4 min, mostly the first porewater step; 15 s before the phosphate phases; skin box, φc 0.4, the layered
+strain at K_d, exchange 5e-8 per half-orbit): at orbit 2 a porewater of pH 10.27 (11.04 without phosphate
+phases), 0.115 molal Na, ionic strength 0.20, with 4.3e-4 mol hydroxyapatite in the pores; an ocean of pH
 7.41 with 0.065 molal H₂ (saturated at 66.7 atm) and DIC 9.2e-15 (the seed: the IOM releases almost none
 at 25 °C); 0.90 L of ocean gas. The metal's H₂ forms a pore bubble of 0.44 L, 2.8× the pore volume, in
 the first orbit; under the default `pore_gas_fate = "to_ocean"` it goes to the ocean, which it
 saturates. `pore_gas_fate = "retain_to_pore_volume"` keeps the bubble up to the pore volume and still
 saturates the ocean (pH 7.62); `"retain"` leaves the ocean at 4.2e-9 molal H₂ (README §7, Gas).
 
-## 2. Lucas's production case
+## 2. The 160 °C example case
 
 k = 1e-7 m², full-core layer, 12 orbits, one orbit per step, 160 °C, 15 wt% IOM.
 
@@ -71,10 +73,10 @@ data.frame(orbit = 1:12, pH = ocean$pH, H2 = ocean$m_H2, DIC = ocean$C, bubble_L
 bulk_density(sub("\\.pqi$", ".csv", f), porosity = sim$params$porosity)$summary[c(1, 13), ]
 ```
 
-Expect at orbit 12 (the default `pore_gas_fate = "to_ocean"`; 350 s; numbers of 2026-11-01, layered strain at K_d): ocean pH
-8.51, H₂ 0.065 molal (saturated at 66.7 atm), DIC 2.9e-10 molal, 0.84 L of ocean gas; a pore bubble of
+Expect at orbit 12 (the default `pore_gas_fate = "to_ocean"`; 375 s; layered strain at K_d): ocean pH
+8.52, H₂ 0.065 molal (saturated at 66.7 atm), DIC 2.9e-10 molal, 0.84 L of ocean gas; a pore bubble of
 0.56 L after the first orbit (3.6× the pore volume) that has gone to the ocean by orbit 12 (5e-4 L);
-ρ_solid 2.92 → 2.76 g/cm³. The bubble is the metal's H₂: Fe and Ni corrode completely in the first step
+ρ_solid 2.92 → 2.76 g/cm³; 0.0024 mol hydroxyapatite in the pores, none in the ocean (P 1e-14 molal). The bubble is the metal's H₂: Fe and Ni corrode completely in the first step
 (D6, an accepted idealisation of early outgassing). `h2_budget()` and `scale_to_core()` give the H₂
 inventory (1.5e20 mol in the ocean gas for the whole core; README §6).
 
@@ -89,7 +91,7 @@ pr <- pair_organic_run(ph, "tidal_kinetic", mode = "ungrouped", n_orbital_cycles
 pr$contribution
 ```
 
-Expect (~8 minutes; numbers of 2026-11-01): after 2 orbits the organics add 1.25e-15 molal DIC to the
+Expect (~7 minutes): after 2 orbits the organics add 1.25e-15 molal DIC to the
 ocean (the blank's is the seed, 9.6e-15), 9.1e-15 molal CH₄ and 2.8e-16 molal NH₄⁺; the ocean gas holds
 2.16 mol H₂ in both, from the metal. An organic contribution of ~1e-15 molal is what this exchange rate
 (~5e-8 of the pore volume per half-orbit) and these skin temperatures give over a few orbits; the
@@ -119,7 +121,7 @@ adds 21 less-volatile ices (DIC 0.56 molal, pH 5.8, an H₂ bubble; README §6);
 
 ## 5. The pore-gas bracket
 
-The production case under both fates of the pore bubble, each with its blank.
+The 160 °C example case under both fates of the pore bubble, each with its blank.
 
 ```{r bracket}
 for (fate in c("retain", "to_ocean")) {
@@ -130,6 +132,7 @@ for (fate in c("retain", "to_ocean")) {
 }
 ```
 
-Expect at orbit 12: ocean H₂ 1.5e-5 (retain) vs 6.5e-2 molal (to_ocean, saturated at 66.7 atm, with
-0.82 L of ocean gas); the organic DIC is the same, 1.29e-7 molal; organic Mtg 1e-13 vs 1.8e-9 molal
-(plus 2.4e-8 mol in the ocean gas). PROGRESS Part 7 has the full table at 150 and 160 °C.
+Expect at orbit 12 (layered strain at K_d; 12-15 min each pair): ocean
+H₂ 1.8e-8 (retain) vs 6.5e-2 molal (to_ocean, saturated at 66.7 atm, 2.4 mol H₂ in the ocean gas); organic
+DIC 2.5e-10 vs 2.9e-10 molal (under to_ocean the pore bubble's CO₂ goes to the ocean too); organic Mtg
+1.3e-16 vs 1.9e-9 molal (plus 2.6e-8 mol in the ocean gas); ocean pH 8.52 under both. PROGRESS Part 7 has the older table at 150 and 160 °C (before the exchange physics).
