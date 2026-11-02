@@ -1211,3 +1211,7 @@ One commit per item; each commit message has its pass check.
   and run_sweep.R: stale files (10 min) and a gone process on 6 checks over >= 60 s; no tasklist answer counts as
   alive. tests/liveness_check.R; tests/resume_check.R steps 4-6. PRODUCTION_GUIDE.md: staged runs (1e6 yr, then
   extend).
+- **Entry point renamed (11-03).** ENTICES_LF_20260917.R is now ENTICES.R (git mv, so the history follows it), and
+  every live source() call, script, test, doc and the example notebook use the new name.
+  scripts/export_mineral_volumes.py reads ENTICES.R. ENTICES_LF_20260917.R remains as a shim that sources ENTICES.R
+  with a deprecation message, so existing personal scripts keep working. The shim will be removed in a later release.
