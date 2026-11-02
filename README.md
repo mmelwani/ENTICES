@@ -819,9 +819,13 @@ against their tabulated 13.36; it diverges outside, to log K −21 at 150 °C). 
 have 25 °C values only (no enthalpy): reliable to about 50 °C, which covers the skin. Each phase is listed only
 where its data hold (`PhreeqcIntegrator$phosphate_minerals()`): vivianite to 90 °C, struvite to 60 °C, OCP,
 bobbierite and newberyite to 50 °C; the ocean (1.45 °C) is a few degrees below vivianite's and struvite's
-measured range. Molar volumes (`data/mineral_molar_volumes.csv`): hydroxyapatite from Core11; the others are
-**proposed from unit cells** (webmineral.com; OCP from Mathew et al. 1988; whitlockite approximate, from natural
-whitlockite scaled by P), for the PI to confirm.
+measured range. **A hot porewater sees fewer phosphates:** the 160 °C bound case (`cases/sweep/T160.R`)
+lists only hydroxyapatite, whitlockite and brushite; the 25 °C-only phases (OCP, bobbierite, newberyite)
+are excluded there, and so are vivianite and struvite. The temperature limits are accepted (PI 2026-11-02).
+Molar volumes (`data/mineral_molar_volumes.csv`; accepted, PI 2026-11-02): hydroxyapatite from Core11; the
+others from unit cells (webmineral.com). **OCP and whitlockite are PROVISIONAL:** OCP from the Mathew, Brown,
+Schroeder & Dickens (1988) cell, read through search results only; whitlockite approximate, from natural
+whitlockite scaled by P, not from β-Ca₃(PO₄)₂.
 
 **Refill (PI, 2026-10-30).** Hydration consumes porewater (after the first orbit the porewater was
 20–37% short of the pores). Between chunks the porewater is now brought back to the pore volume φ(t)

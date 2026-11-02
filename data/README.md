@@ -34,12 +34,14 @@ The first source that has a phase is used.
    [citation needed: the primary crystal-structure reference mindat lists; mindat refused automated
    access, so it was not checked]
 
-   **Phosphate phases (2026-11-02), PROPOSED, for the PI to confirm** (none is in Core11, ds636 or hp636;
-   README §6, Phosphate phases): Vm = 0.60221 V / Z from unit cells on webmineral.com (Brushite 75.80,
-   Vivianite 184.84, Bobbierite 190.79, Newberyite 82.25, Struvite 143.80 cm³/mol); OCP 182.62 from the
-   Mathew et al. (1988) cell of Ca₈(HPO₄)₂(PO₄)₄·5H₂O (seen through search results, not the paper), per
-   Ca₄H(PO₄)₃; Whitlockite 98.33, approximate: the cell of natural whitlockite Ca₉(Mg,Fe)(PO₄)₆(PO₃OH) scaled
-   to 2 of its 7 P. Hydroxyapatite keeps Core11's 128.9. Fluorapatite left the table with its database entry.
+   **Phosphate phases (accepted by the PI 2026-11-02; OCP and Whitlockite PROVISIONAL)** (none is in Core11,
+   ds636 or hp636; README §6, Phosphate phases): Vm = 0.60221 V / Z from unit cells on webmineral.com
+   (Brushite 75.80, Vivianite 184.84, Bobbierite 190.79, Newberyite 82.25, Struvite 143.80 cm³/mol).
+   PROVISIONAL: OCP 182.62, from the cell of Ca₈(HPO₄)₂(PO₄)₄·5H₂O in Mathew, Brown, Schroeder & Dickens
+   (1988), *J. Crystallogr. Spectrosc. Res.* 18, 235 (seen through search results, not the paper), per
+   Ca₄H(PO₄)₃; Whitlockite 98.33, approximate: the webmineral.com cell of natural whitlockite
+   Ca₉(Mg,Fe)(PO₄)₆(PO₃OH) scaled to 2 of its 7 P (a β-Ca₃(PO₄)₂ cell, the phase the data describe, would
+   be better). Hydroxyapatite keeps Core11's 128.9. Fluorapatite left the table with its database entry.
 
 Levels 2 and 3 are only used through an explicit name map, and only where the stoichiometry is
 proportional to the PHREEQC formula (the ratio scales the volume). In the current table no phase
