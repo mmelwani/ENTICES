@@ -740,6 +740,17 @@ steady state (3τ ≈ 5e7 yr) is ~5–11 days. k ≈ 1e-14: ~1,450 yr per step a
 ~10 days. At the reference φ falls from 0.32 to 0.17 by 5e4 yr, so clogging may end it before a steady
 state. 4.5 Gyr is out of reach for every case at these limits (~40 days at the reference alone).
 
+**With the phosphate phases (`"apatite"`, measured 2026-11-02).** The reference to 1e4 yr took 134 chunks
+and 2.8 h (accepted). The first chunk took 845 s (its .out has 109 "Numerical method failed with this set of convergence
+parameters" and 112 "Maximum iterations exceeded" warnings); later chunks took ~26 s
+for 4 steps (~6.5 s per step, ~5× the cost without phosphates). Porosity still limits the step at 1e4 yr
+(φ = 0.20, Δt growing only as t^0.18). Projection to the 1e8 yr backstop: **~6 days** if the step limit
+takes over (x_step 0.03, ~1,280 yr per step); **~24 days** if porosity keeps limiting (the fitted Δt(t),
+~81,000 chunks); 1e6 yr is ~0.5 day either way. Clogging or a steady state may end it earlier.
+`-diagonal_scale true` in every step cut chunk 1 to 57 s but changed the converged results: 1,122 of
+7,308 values differ by more than 1e-8 relative, hydroxyapatite is missing from one step (9.4e-6 against 0
+mol), and dk_Diopside differs by 14%. It is not adopted; it stays only around the ocean step.
+
 **Clogging and k_floor (PI 2026-11-02).** The rigid-frame default ends a run when the solids fill the pores
 (φ ≤ `phi_min`, 0.01): the run reports the clog time and the state then (`clog_time_yr`, `end_reason =
 "clogging"`). `k_floor` (m²; `k_floor_m2` in a case) is the alternative: fracture-maintained permeability

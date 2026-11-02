@@ -40,7 +40,9 @@ every output time.
 
 `RUNINFO.txt` and the `end_reason` column of `summary.csv` say which ended it.
 
-**How long.** Expect hours to days. Each case runs two PHREEQC processes. `runs/reference/organic/run.log`
+**How long.** Expect hours to weeks. With the phosphate phases the reference takes ~3 h to 1e4 yr, ~0.5 day to
+1e6 yr and an estimated 6–24 days to the 1e8 yr backstop (README §6, Step limits). Each case runs two PHREEQC
+processes. `runs/reference/organic/run.log`
 gets one line per chunk, so watch that to see progress.
 
 **Resuming.** Just rerun the same command. It continues from the last complete chunk. This is the case
