@@ -10,7 +10,7 @@ depends only on its output, `rock_mol_per_kg.csv`.
 | `Primordial_CI_chondrite_mineralogy_montecarlo.Rmd` | Monte Carlo uncertainty propagation. Requires objects from the main Rmd. |
 | `RECONSTRUCTION_STATUS.md` | Status, verified results, errors found, and the open items (§8). |
 | `rock_mol_per_kg.csv` | Machine-readable output, one row per phase, with columns `phase, formula, mw_g_mol, wt_pct, mol_per_kg, role, scenario`. |
-| `notes/` | Tephroite kinetics notes and the hand-off to Lucas. |
+| `notes/` | Tephroite kinetics notes and kinetics hand-off notes. |
 | `archive/v0_uncommitted_edit_2026-09.patch` | An uncommitted edit (density citations) to the discredited v0 Rmd, saved before it was removed. **Don't use v0 for numbers**; the v0 file itself is in git history. |
 
 ## Regenerating the CSV

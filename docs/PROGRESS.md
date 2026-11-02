@@ -331,7 +331,7 @@ The B3 factor depends on the arbitrary inventories, so report it as "several
 orders of magnitude". Calcite still precipitates under `Hdg` (8.055e-04 mol
 at 66.7 atm).
 
-**Production never enters H₂.** Lucas's inputs start from pure water. All H₂
+**Production never enters H₂.** The production inputs start from pure water. All H₂
 comes from corroding native metal (~2.0 mol Fe and 0.24 mol Ni per unit rock
 at 15 wt% organics), written in coupled form:
 
@@ -343,8 +343,8 @@ metal and schreibersite H₂ stay on the same books as the ~3.1 mmol H₂/g
 habitability figure. **As specified, `Hdg` therefore acts on nothing in a
 production run.**
 
-The artefact it was meant to fix is real in production output. In Lucas's
-150 °C example run, pe is −11.69 and CH₄/CO₂ ≈ 1.7×10⁹.
+The artefact it was meant to fix is real in production output. In the
+150 °C example run (`examples/from_lucas_20260924/`), pe is −11.69 and CH₄/CO₂ ≈ 1.7×10⁹.
 
 **Rewriting the metal to release `Hdg` looks worse.** Untested, but from what
 is measured:
@@ -433,7 +433,7 @@ It still cuts ocean H₂ ~5×, through H₂ + HCO₃⁻ → HCOO⁻.
 - **`carbon_mode = "c4_only"` is the default at every temperature.**
 - **Coupled carbon** (`"coupled"`, or the old `"temperature"` rule with
   `ch4_cutoff_C`) is reported as an **upper bound** on abiotic methanation. At
-  150 °C it gave CH₄/CO₂ ≈ 10⁹ in Lucas's run. Methanation is kinetically slow
+  150 °C it gave CH₄/CO₂ ≈ 10⁹ in the 150 °C example run. Methanation is kinetically slow
   at 150–200 °C unless catalysed, and the rock's Fe–Ni metal is a possible
   catalyst.
 - **Formate** is a sensitivity case.
@@ -753,9 +753,9 @@ decision D7.
 K-feldspar) and 11 for acid-branch ones. At 160 °C it promotes albite
 (t½ ≈ 2,000 s) but not K-feldspar (2.2×10⁵ s at pH 9).
 
-**What it isn't.** It isn't needed for convergence. Lucas's TRUE/FALSE pair
+**What it isn't.** It isn't needed for convergence. The example TRUE/FALSE pair
 agrees within ~5% on bulk chemistry. Minor phases differ by about as much as
-the PHREEQC version does. The speed-up was 1.7× on Lucas's machine and
+the PHREEQC version does. The speed-up was 1.7× on the machine that made the pair and
 slower on ours.
 
 ## Na sink and the early porewater brine
@@ -874,11 +874,11 @@ skips aqueous molar volumes, water density and dielectric pressure terms
 volume was minus its whole molar volume, so every SI moved by
 −Vm·ΔP/(ln10·RT) (66.7 → 261.2 atm, 160 °C: forsterite −0.10, albite −0.23,
 antigorite −4.16), a physically meaningless shift. The mineral `-Vm` lines
-were stripped 10-28 (database change for Lucas to confirm). Aqueous speciation
+were stripped 10-28 (database change, pending review). Aqueous speciation
 and mineral equilibria are now at the database's reference pressure (1 bar to
 100 °C, the saturation curve above): with real dissolution volumes of tens of
 cm³/mol, leaving out 260 bar costs ~0.1–0.2 log units. After the strip the
-160 °C production case gives byte-identical output at 66.7 and 261.2 atm
+160 °C example case gives byte-identical output at 66.7 and 261.2 atm
 (until the gas phase).
 
 **300 °C.** Pure water at 300 °C failed at *every* pressure, not only below
@@ -912,7 +912,7 @@ cometary-ice ocean with a carbon-free porewater (Part 8).
 sets PHREEQC's mole-balance criterion to 1e-12; with a gas phase the metal-pulse
 step then ran > 15 min. A KNOBS after SELECTED_OUTPUT restores 1e-8 (the last
 setting read wins, read.cpp; the manual says "the smaller of"). Gas-phase runs
-are ~3.5× slower than before: Lucas's 12-orbit case at 150–160 °C takes
+are ~3.5× slower than before: the 160 °C example case (12 orbits) at 150–160 °C takes
 320–515 s (116 s with gases as equilibrium phases). `KNOBS -logfile` writes
 every solver iteration: ~300 MB per 12-orbit run, and 11.9 GB from one stalled
 run. **Off by default since 10-29** (PI); `logfile = TRUE` in any generator
@@ -922,7 +922,7 @@ turns it on.
 
 **Standard: 3.8.6.** Every generated `.pqi` is stamped with the target version
 and the database, and `run_phreeqc()` warns on a mismatch. Rerunning
-Lucas's 3.5.0 outputs on 3.8.6 moved dissolved Mn by 130× and sulfide by
+Earlier outputs made with PHREEQC 3.5.0, rerun on 3.8.6, moved dissolved Mn by 130× and sulfide by
 ~11×. Bulk chemistry was stable.
 
 ## Legacy
@@ -1021,7 +1021,7 @@ gas, ocean, ocean gas, solids, IOM) close to ≤ 9e-12 relative in both fates
 (`tests/gas_mass_balance_check.R`); with no bubble (25 °C, metal removed) the
 two fates agree to the solver's tolerance; restarts carry both gas phases.
 
-**The bracket.** Lucas's production case (k 1e-7, full-core layer, 12 orbits,
+**The bracket.** The 160 °C example case (k 1e-7, full-core layer, 12 orbits,
 sub 1, 15 wt% IOM, seed 1e-14), with its same-rock blank, `c4_only`:
 
 | T, fate | Pore bubble, orbit 1 → 12 (L) | Vgas/Vpore, orbit 12 | Ocean gas (L) | Ocean H₂ (molal) | Ocean pH | Mtg (molal) | ΣS(−2) | SO₄²⁻ | Organic − blank ocean C | Run / blank (s) |
@@ -1145,8 +1145,8 @@ Na zeolites) merged as `c33a77f`.
 them) and carried everything else at 4–5 significant figures. Every generator
 now punches all 36 database elements at high precision, and restarts carry
 them at 15 digits; a 2-orbit run and 1 + 1 restarted agree on every element's
-system total (`restart_closure_check.R`). **Ask Lucas which production runs
-used `tidal_kinetic_restart` or `bulk_kinetic_restart`**: those lost K, Mn, Cl
+system total (`restart_closure_check.R`). **Open: which production runs
+used `tidal_kinetic_restart` or `bulk_kinetic_restart`?** those lost K, Mn, Cl
 and Ni at each restart.
 
 **Rock density.** `bulk_density()` (`phreeqc_tools.R`) with
@@ -1186,8 +1186,8 @@ no schreibersite).
 - Element mass balance closes to 1e-8–1e-16 over a 160 °C orbit.
 
 **Still open in code:**
-- renaming `ENTICES_LF_20260917.R` → `ENTICES.R` (Lucas's agreement);
-- database consolidation into one source (Lucas's call).
+- renaming `ENTICES_LF_20260917.R` → `ENTICES.R` (pending agreement);
+- database consolidation into one source (pending a decision).
 
 **Production runs made before `fixes` must be regenerated.** The tephroite
 rate, rock table and `rec_eqb` default have all changed since.

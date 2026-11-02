@@ -58,7 +58,7 @@ the first orbit; under the default `pore_gas_fate = "to_ocean"` it goes to the o
 saturates. `pore_gas_fate = "retain_to_pore_volume"` keeps the bubble up to the pore volume and still
 saturates the ocean (pH 7.62); `"retain"` leaves the ocean at 4.2e-9 molal H₂ (README §7, Gas).
 
-## 2. Lucas's production case
+## 2. The 160 °C example case
 
 k = 1e-7 m², full-core layer, 12 orbits, one orbit per step, 160 °C, 15 wt% IOM.
 
@@ -121,7 +121,7 @@ adds 21 less-volatile ices (DIC 0.56 molal, pH 5.8, an H₂ bubble; README §6);
 
 ## 5. The pore-gas bracket
 
-The production case under both fates of the pore bubble, each with its blank.
+The 160 °C example case under both fates of the pore bubble, each with its blank.
 
 ```{r bracket}
 for (fate in c("retain", "to_ocean")) {

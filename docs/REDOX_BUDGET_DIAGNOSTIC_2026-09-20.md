@@ -5,7 +5,7 @@ Closes: `PROGRESS.md` Part 5 item 1 (the last item from the original
 `NEXT_STEPS.md` list). Run with PHREEQC 3.8.6 batch against
 `Core11_idealgas_mod_v4.dat`.
 
-**This was not actually blocked on Lucas's runs.** `phreeqc_inputs/` already
+**This was not actually blocked on new production runs.** `phreeqc_inputs/` already
 contains a real ENTICES-generated input at 15 wt% organics
 (`enceladus_k1.00e-12_d600_t7.50e+04_circ1.pqi`). Its organics-off twin was
 built by removing only the 9-line `REACTION 1` block (verified: the diff

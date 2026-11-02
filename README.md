@@ -27,7 +27,7 @@ carbon to the organics by difference against an otherwise identical run without 
   at `C:/Program Files/USGS/phreeqc-3.8.6-17100-x64/bin/Release/phreeqc.exe`, then on the `PATH`.
   Every generated `.pqi` is stamped `# Target PHREEQC version: 3.8.6`, and `run_phreeqc()` warns
   if the executable reports another version: minor phases and trace species differ between
-  versions (Lucas's 3.5.0 outputs rerun on 3.8.6 moved dissolved Mn 130× and sulfide ~11×; bulk
+  versions (earlier outputs made with PHREEQC 3.5.0, rerun on 3.8.6, moved dissolved Mn 130× and sulfide ~11×; bulk
   chemistry was stable). Treat the warning as "not reproducible as stamped".
 - **Python 3** only for the database scripts (`scripts/make_c4only.py`, `strip_mineral_vm.py`,
   `gas_eos.py`, `export_mineral_volumes.py`).
@@ -167,7 +167,7 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
     tolerance moves the continuous run by ~4e-4 in Na between `-tol` 1e-8 and 1e-12 while the restart
     difference does not converge with it (6e-6, 1e-6, 1.3e-5 at 1e-8, 1e-10, 1e-12). The solutions and the
     pore gas carry over exactly.
-12. **Runtimes** (this machine, PHREEQC 3.8.6): Lucas's production case (12 orbits, 15 wt% IOM)
+12. **Runtimes** (this machine, PHREEQC 3.8.6): the 160 °C example case (§4; 12 orbits, 15 wt% IOM)
     320–515 s at 150–160 °C; 2 orbits at 160 °C 140–290 s; equilibrium generators seconds. The
     first orbit (the metal pulse into the gas phase) is the slowest.
 13. **Common failures:**
@@ -201,14 +201,15 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
 
 ## 4. Worked examples
 
-`ENTICES_runs.Rmd` has each as code with narrative and expected results:
+`ENTICES_runs.Rmd` has each as code with narrative and expected results. **The 160 °C example case** (example 2:
+k = 1e-7 m², full-core layer, 12 orbits, 15 wt% IOM) is the case the rest of this README quotes.
 
 1. **A 25 °C smoke test** (minutes): `tidal_kinetic`, 2 orbits, 15 wt% IOM, `trace_C_molal = 1e-14`.
    Expect at orbit 2 (`to_ocean`): porewater pH 10.27, Na 0.115 molal, ionic strength 0.20, 4.3e-4 mol
    hydroxyapatite (pH 11.04 and ionic strength 0.26 without phosphate phases); ocean pH
    7.41, H₂ 0.065 molal (saturated), DIC 9.2e-15 (the seed), 0.90 L of ocean gas; a pore bubble of
    0.44 L (2.8 pore volumes) after orbit 1, none in orbit 2.
-2. **Lucas's production case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
+2. **The 160 °C example case:** k = 1e-7 m², full-core layer (69 km reacting skin), 12 orbits, 160 °C,
    15 wt% IOM. Expect (the default `pore_gas_fate = "to_ocean"`, orbit 12): ocean pH 8.52, ocean H₂
    0.065 molal (saturated), ocean DIC 2.9e-10 molal (the seed is 1e-14), 0.84 L of ocean gas; the pore
    bubble 0.56 L (3.6 pore volumes) after the first orbit, 5e-4 L by orbit 12; ρ_solid 2.92 → 2.76
@@ -224,7 +225,7 @@ runs the whole test suite. Every generated `.pqi` header and RUNINFO carry the c
    organics question is answered by the long runs (PROGRESS N8), not by this example.
 4. **The cometary-ice ocean:** `initial_ocean = cometary_ice_ocean()` (NH₃ included by default since
    10-31); the ocean starts at pH 2.08 with 0.087 molal DIC and 7.4e-3 molal NH₄⁺.
-5. **The pore-gas bracket:** the production case with `pore_gas_fate = "retain"` and `"to_ocean"`, each
+5. **The pore-gas bracket:** the 160 °C example case with `pore_gas_fate = "retain"` and `"to_ocean"`, each
    with its blank (rerun 2026-11-02 with the phosphate phases: layered strain at K_d). At orbit 12: ocean H₂ 1.8e-8 (retain) vs
    6.5e-2 molal (to_ocean, saturated, with 2.4 mol H₂ in the ocean gas); the organic DIC 2.5e-10 vs
    2.9e-10 molal (they differ because under to_ocean the pore bubble's CO₂, 1.6e-11 mol, goes to the ocean
@@ -346,7 +347,7 @@ The circulation time is the ocean's mass over the exchange per orbit, as
 Pa is 10× slower. At k = 1e-8 m² and 3e4 Pa the displacement, 5 cm, is close to the ~7 cm implied by
 Liao et al.'s 3.8e-6 m/s. Choblet et al.'s preferred k, with ΔP 1e4–1e5 Pa, gives circulation times of
 7.8e7–7.8e9 yr against their 25–250 Myr. Zandanel et al.'s 1–100 cm/yr corresponds here to k ≈
-2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The production case circulates the ocean ~10⁵–10⁶×
+2e-12 to 2e-10 m² at 1e5 Pa (2e-11 to 2e-9 at 1e4 Pa). The 160 °C example case (k = 1e-7 m²) circulates the ocean ~10⁵–10⁶×
 faster than Choblet et al. (This table is the Darcy term alone with the gradient over the whole layer; the exchange is now the
 smallest of three volumes with the Darcy gradient over the skin depth, see Exchange below: at
 production k the poroelastic term binds.)
@@ -981,7 +982,7 @@ The earlier lower bounds (metal and schreibersite to Fe(II): `H2_from_metal`, `H
 are kept.
 `scale_to_core(budget, sim)` multiplies by the rock mass of the reacting box, the whole permeable layer
 and the whole core (V (ρ_core − φ ρ_water) from the Simulator's geometry): the inventory available for
-early loss to space. Lucas's 160 °C case (k = 1e-7, skin box 69 km, 12 orbits, `to_ocean`):
+early loss to space. The 160 °C example case (§4; k = 1e-7, skin box 69 km, 12 orbits, `to_ocean`):
 
 | per kg of rock | orbit 1 | orbit 12 | whole core, orbit 12 |
 |---|---|---|---|
@@ -1083,7 +1084,7 @@ O(0) at 250 °C).
 
 **Trace N and S seeds: tested, not added (item 5, 10-31).** The default ocean is pure water plus the C seed.
 Seeding N or S as well (1e-14 mol/kgw in every initial solution, alone or together) changed nothing that
-matters in Lucas's case at 25 and 160 °C (2 orbits, 15 wt% IOM): every variant ran with 0 errors with and
+matters in the example case (§4) at 25 and 160 °C (2 orbits, 15 wt% IOM): every variant ran with 0 errors with and
 without them; at 160 °C the solver's retries were 33 in every variant; at 25 °C they moved without
 pattern (4 with C alone, 18 with C + N, 12 with C + S, 4 with all three); runtimes differed only with the
 machine's load. With the C seed and the ocean step's `-diagonal_scale` (B) the default already converges,
@@ -1130,10 +1131,10 @@ d$breakdown   # per phase: mass and volume, and their fractions
 - Gas beyond the pore volume is not counted (s_g is capped at 1; it is not rock volume either).
   Rows where Vgas > Vpore are flagged in the `gas_exceeds_pores` column (with `Vgas_Vpore`), and
   `bulk_density()` warns when there are any: their ρ_bulk is for pores full of gas, not a physical
-  state. In Lucas's 160 °C case that is the first REACT row under `"to_ocean"` (2.14 pore volumes,
+  state. In the 160 °C example case that is the first REACT row under `"to_ocean"` (2.14 pore volumes,
   before the transfer) and every row under `"retain"` (up to 2.26).
 
-For Lucas's 160 °C case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
+For the 160 °C example case (15 wt% IOM, φ = 0.32): ρ_solid 2.920 g/cm³ and ρ_bulk 2.305 g/cm³ at t = 0;
 at orbit 12, ρ_solid 2.759 and ρ_bulk 2.255 (`"to_ocean"`) or 1.880 (`"retain"`, the bubble filling
 the pores). With the old fixed 1.4 g/cm³ these were 2.977 and 2.344 at t = 0 and 2.806 and 2.287 or
 1.912 at orbit 12: the Delarue density lowers ρ_solid by 1.9% at t = 0 and 1.7% at orbit 12, and
@@ -1201,7 +1202,7 @@ needs the IOM exhausted, no kinetic primaries left and equal temperatures.
 `steady_state_diagnostics(csv)` shows the approach directly, per orbit: the net elemental flux into the
 ocean (the change of the ocean side, water + minerals + gas, over the orbit; the ocean exchanges only
 with the porewater) and the net change of the secondary minerals in the porewater and in the ocean (mol
-of formula units per kg of the box's rock). In Lucas's 160 °C case (12 orbits): the porewater's
+of formula units per kg of the box's rock). In the 160 °C example case (12 orbits): the porewater's
 secondary minerals grow by 1.09 mol in orbit 1, 0.26 in orbit 2, 0.014 in orbit 6 and 0.0038 in orbit
 12 (the hydration transient dying away); the ocean's by ~3e-10 per orbit from orbit 6; the Na flux into
 the ocean settles at 1.75e-8 per orbit (2.1e-8 in orbit 1), Si falls from 8.7e-10 to 1.6e-10, and C is
@@ -1221,7 +1222,7 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
 - the cometary-ice option starts with 0.087 molal DIC, but at pH 1.85 (2.08 with NH₃, the default since
   10-31) it is almost all CO₂(aq) (0.0866 molal, log a(CO₂) ≈ −1.1); TDC is 2e-6 molal and there is no
   Cl; with the less volatile ices it is 0.56 molal at pH 5.8;
-- the pure-water default, after 12 orbits of Lucas's 160 °C case, holds 2.9e-10 molal DIC at pH
+- the pure-water default, after 12 orbits of the 160 °C example case, holds 2.9e-10 molal DIC at pH
   8.51 (layered strain at K_d; 3.4e-8 at pH 10.63 under the Liao strain). Whether the organic contribution can
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
   for.
@@ -1325,7 +1326,7 @@ exceeds the backstop, is not at steady state by design.
 | `data/` | `mineral_molar_volumes.csv` (`data/README.md`). |
 | `reconstruction/` | The primordial CI-chondrite rock reconstruction. |
 | `tests/` | Self-tests and PHREEQC test inputs (`tests/README.md`). |
-| `examples/` | Lucas's example production run and his run notebook; the redox budget diagnostic inputs. |
+| `examples/` | An example production run and the run notebook by L. Fifer (`ENTICES_runs_lucas_2026-10.Rmd`); the redox budget diagnostic inputs. |
 | `scripts/` | Database scripts and standalone analyses. |
 | `docs/` | Design decisions, test write-ups, progress (`docs/PROGRESS.md`); `reviews/`, `archive/`. |
 | `legacy/` | Retired files (`legacy/README.md`). **Do not use for runs.** |
