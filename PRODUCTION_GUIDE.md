@@ -14,7 +14,7 @@ edit model code, and should not. Every command runs from the repository root.
    - **PHREEQC 3.8.6** (USGS). It is found at its default Windows install path, on the `PATH`, or through
      the `PHREEQC_EXE` environment variable.
 3. **Run the test suite:** `Rscript tests/run_all.R`.
-   - It takes about an hour (18 tests). `--quick` skips the long tests and takes a few minutes.
+   - It takes a few hours under "apatite" (19 tests). `--quick` skips the long tests and takes a few minutes.
    - Passing ends with `ALL n TESTS PASSED`.
    - If a test fails, it prints `n OF m TESTS FAILED`, and its log is in `tests/output/run_all/`.
      Don't run production then; send the log (section 7).
@@ -47,8 +47,10 @@ gets one line per chunk, so watch that to see progress.
 
 **Resuming.** Just rerun the same command. It continues from the last complete chunk. This is the case
 after a crash, a reboot or a power cut, and also if you stop it with Ctrl-C: the run redoes no completed
-chunk and repeats none. It also works to **extend** a finished run: raise `t_end_yr` in the case file and
-rerun.
+chunk and repeats none. It also **extends** a run that ended at `t_end`: raise `t_end_yr` in the case file
+and rerun, and it carries on from its last chunk (the blank with it). A run that ended at a steady state, by
+clogging or at φc stays as it is: the rerun says so and skips it. Lowering `t_end_yr` below what a run has
+reached neither truncates nor reruns it; the rerun says the run is already past that time.
 
 ## 3. Make a new case
 
@@ -82,6 +84,21 @@ Two cases are set apart on purpose:
   time (~5e8 yr) is longer than t_end, so it runs to the 1e8 yr backstop.
 - **`k_floor_1e-14` and `k_floor_1e-12`** keep a fracture-maintained permeability once the rock clogs,
   instead of ending the run. See README §6, *Clogging and k_floor*.
+
+### Staged runs (recommended)
+
+A full sweep to the 1e8 yr backstop is weeks of machine time per case. Run it in two stages instead:
+
+1. **Every case to 1e6 yr first.** In `cases/reference.R` set `t_end_yr = 1e6` (the sweep cases inherit it),
+   then run the sweep. Under the default `phosphate_phases = "apatite"` this takes about **half a day per
+   case** (measured on the reference: 2.8 h to 1e4 yr, projected ~0.5 day to 1e6 yr).
+2. **Then extend the cases that matter toward 1e8 yr.** Add `t_end_yr = 1e8` to those case files (or put
+   it back in `cases/reference.R` to extend them all) and rerun `run_case.R` on each, or rerun the sweep.
+   Each run resumes from its last chunk; nothing is redone. Expect **6–24 days per case** to 1e8 yr: ~6
+   days once the step limit takes over, ~24 if porosity keeps limiting the steps (README §6, *Step limits*).
+
+Runs that ended at a steady state, by clogging or at φc in stage 1 are finished: stage 2 skips them and the
+sweep log says why. Look at the stage-1 figures before choosing which cases to extend.
 
 ## 5. Make figures
 
@@ -152,7 +169,12 @@ Units are in `summary_units.csv`.
 - **A path too long** (Windows): clone nearer the drive root.
 - **PHREEQC not found:** set `PHREEQC_EXE`.
 - **"already being run by process N":** that case is still running. Don't start it twice.
-- **"holds a run of a different case":** you changed a case that has already run. Rename it.
+- **"holds a run of a different case":** you changed a case that has already run. Rename it. (Changing
+  `t_end_yr`, `ss_tol` or the label is allowed: see *Resuming*.)
+- **"not running and has not finished":** the run wrote nothing for 10 minutes and its process is gone.
+  A busy machine doesn't cause this: a run is given up on only when it has written nothing for 10 minutes
+  and the process table, asked again and again over at least a minute, says its process is gone (no answer
+  counts as running). The process crashed or was killed. See its `console.log`, then rerun to resume.
 - **A PHREEQC crash at one chunk.** Rerunning resumes and retries that chunk. If it fails again at the
   same chunk, send the files below.
 - **Known PHREEQC 3.8.6 failures** are described in `tests/known_failures/README.md`. The kit avoids them.
