@@ -780,8 +780,9 @@ Hydroxyapatite and the precursors in the porewater and ocean lists; `"precursor"
 the apatite, so the metastable phases control P (the Ostwald step rule). There is no "no phosphate" option.
 
 *The data.* The phosphate set comes from one source, Thermoddem V1.10 (BRGM; `PHREEQC_ThermoddemV1.10_15Dec2020.dat`,
-database date 15 Dec 2020, shipped with PHREEQC 3.8.6; Blanc et al. 2012, *Appl. Geochem.* 27, 2107 is the
-usual citation [not checked against BRGM's request]), converted to coreclath's basis (HPO₄²⁻) with
+database date 15 Dec 2020, shipped with PHREEQC 3.8.6; cited as Blanc et al. 2012, *Appl. Geochem.* 27,
+2107–2116, the paper BRGM's PHREEQC download page names as describing the database; the site posts no
+other citation request that could be found, and the file's header gives none), converted to coreclath's basis (HPO₄²⁻) with
 Thermoddem's own H₂PO₄⁻ = HPO₄²⁻ + H⁺ (log K −7.212, ΔH 3.6 kJ/mol, its analytic expression):
 `scripts/add_phosphate_phases.py` writes the block into the coupled and uncoupled databases and comments out
 coreclath's own Hydroxyapatite and Fluorapatite (`#tdP#`, kept for reference), and `make_c4only.py` carries it
@@ -1338,6 +1339,9 @@ exceeds the backstop, is not at steady state by design.
 - Bagheri, A., Simons, M., Park, R.S., Berne, A., Hemingway, D., Melwani Daswani, M., Vance, S.D.
   (2025). Exploring the interior structure and mode of tidal heating in Enceladus. *Planet. Sci. J.*
   6, 245. doi:10.3847/PSJ/ae0cab
+- Blanc, Ph., Lassin, A., Piantone, P., Azaroual, M., Jacquemet, N., Fabbri, A., Gaucher, E.C. (2012).
+  Thermoddem: A geochemical database focused on low temperature water/rock interactions and waste
+  materials. *Appl. Geochem.* 27, 2107–2116. doi:10.1016/j.apgeochem.2012.06.002
 - Burnham, A.K. (2019). Kinetic models of vitrinite, kerogen, and bitumen reflectance. *Org.
   Geochem.* 131, 50–59. doi:10.1016/j.orggeochem.2019.03.007
 - Casey, W.H., Hochella, M.F., Jr., Westrich, H.R. (1993). The surface chemistry of manganiferous
