@@ -1,22 +1,22 @@
 # Run the whole test suite (production kit, item 6). From the repo root:
 #
-#   Rscript tests/run_all.R            (everything: about 1-2 hours on a free machine)
-#   Rscript tests/run_all.R --quick    (skip the long ones: about 15 minutes)
+#   Rscript tests/run_all.R            (everything, 18 tests: about an hour)
+#   Rscript tests/run_all.R --quick    (skip the long ones: a few minutes)
 #
 # Each test runs in its own R process; its output goes to tests/output/run_all/<test>.log. At the end a table
 # lists PASS or FAIL and the time per test, and the script exits with status 1 if any failed. Passing looks like
 # "ALL n TESTS PASSED". If one fails, send its log (PRODUCTION_GUIDE.md, If something fails).
 args <- commandArgs(trailingOnly = TRUE)
 quick <- "--quick" %in% args
-# name, minutes (rough, on a free machine), long?
+# name, minutes (rough; measured on a shared machine 2026-11-02), long?
 TESTS <- list(
   list("db_load_check.R", 1, FALSE), list("rock_table_check.R", 0.2, FALSE), list("iom_selftest.R", 0.5, FALSE),
   list("carbon_rebin_check.R", 0.2, FALSE), list("c4only_db_check.R", 0.5, FALSE), list("gas_eos_check.R", 0.5, FALSE),
   list("bulk_density_check.R", 0.5, FALSE), list("kozeny_carman_check.R", 1, FALSE), list("pressure_check.R", 1, FALSE),
   list("initial_fluid_check.R", 2, FALSE), list("cometary_ocean_check.R", 2, FALSE), list("exchange_check.R", 3, FALSE),
   list("porosity_evolution_check.R", 3, FALSE),
-  list("restart_closure_check.R", 6, TRUE), list("gas_mass_balance_check.R", 15, TRUE),
-  list("pipeline_check.R", 10, TRUE), list("resume_check.R", 10, TRUE), list("grouped_validation_check.R", 15, TRUE))
+  list("restart_closure_check.R", 20, TRUE), list("gas_mass_balance_check.R", 20, TRUE),
+  list("pipeline_check.R", 5, TRUE), list("resume_check.R", 5, TRUE), list("grouped_validation_check.R", 10, TRUE))
 if (!file.exists("ENTICES_LF_20260917.R")) stop("run from the repository root: Rscript tests/run_all.R", call. = FALSE)
 run <- Filter(function(t) !(quick && t[[3]]), TESTS)
 logdir <- file.path("tests", "output", "run_all"); dir.create(logdir, recursive = TRUE, showWarnings = FALSE)

@@ -237,6 +237,8 @@ make_all_figures <- function(summaries, cases = NULL, species = c("pH", "DIC_C4"
     line_cases <- c(intersect("reference", line_cases), utils::head(sort(setdiff(line_cases, "reference")), length(FIG_SLOTS)))
     message("more than 8 cases: the line figures show ", paste(line_cases, collapse = ", "), "; the tornado shows all")
   }
+  if (!("reference" %in% summaries$case && length(unique(summaries$case)) > 1))
+    message("figure 5 (sensitivity) skipped: it needs the case \"reference\" and at least one other case")
   f <- c(save_figure(fig_skin_vs_k(summaries, line_cases), "fig1_skin_vs_k", out, height = 3.4),
          save_figure(fig_ocean(summaries, line_cases, species), "fig2_ocean", out, height = 5),
          if (any(grepl("^org_minus_blank_", names(summaries)))) save_figure(fig_org_minus_blank(summaries, line_cases), "fig3_org_minus_blank", out, height = 3.4),

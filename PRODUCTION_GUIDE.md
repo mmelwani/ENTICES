@@ -14,7 +14,7 @@ edit model code, and should not. Every command runs from the repository root.
    - **PHREEQC 3.8.6** (USGS). It is found at its default Windows install path, on the `PATH`, or through
      the `PHREEQC_EXE` environment variable.
 3. **Run the test suite:** `Rscript tests/run_all.R`.
-   - It takes about 1–2 hours. `--quick` skips the long tests and takes about 15 minutes.
+   - It takes about an hour (18 tests). `--quick` skips the long tests and takes a few minutes.
    - Passing ends with `ALL n TESTS PASSED`.
    - If a test fails, it prints `n OF m TESTS FAILED`, and its log is in `tests/output/run_all/`.
      Don't run production then; send the log (section 7).
@@ -101,7 +101,8 @@ This writes six figures as PDF and PNG:
 | 6 | the H₂ budget for the whole core |
 
 **Cases per figure.** One figure shows at most 8 cases besides the reference. The tornado figure (5) shows
-them all.
+them all, and needs the `reference` run plus at least one other case; without them it is skipped, with a
+message.
 
 **Species.** `--species` takes the names after `ocean_` in `summary.csv`: `pH`, `pe`, `DIC_C4`, `Mtg`, `H2`,
 `NH4_NH3`, `SO4`, `S_minus2`, `Na`, `Cl`, `K`, `Ca`, `Mg`, `Si`, `P`, `ionic_strength`.
