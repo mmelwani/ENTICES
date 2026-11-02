@@ -1741,10 +1741,19 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # and warns if the executable reports a different one.
                                    # With pressures = list(pore =, ocean =) (atm), also the two pressure lines
                                    # that a restart checks against (check_restart_pressures()).
+                                   # porewater_temp = NULL (the generators' default): the skin's own temperature ("profile", the
+                                   # profile's mean over the reacting box) when reactive_depth = "skin", else "ocean" (production
+                                   # kit item 5, PI 2026-11-01). A number or "ocean"/"profile" given explicitly is kept.
+                                   resolve_porewater_temp = function(porewater_temp) {
+                                     if (!is.null(porewater_temp)) return(porewater_temp)
+                                     if (identical(self$simulator$params$reactive_depth, "skin")) "profile" else "ocean"
+                                   },
+
                                    stamp_pqi_header = function(content, database, pressures = NULL) {
                                      lines <- strsplit(paste(content, collapse = "\n"), "\n", fixed = TRUE)[[1]]
                                      dropped <- attr(content, "dropped")
                                      stamp <- c(sprintf("# Target PHREEQC version: %s", PHREEQC_EXPECTED_VERSION),
+                                                sprintf("# Code: %s", code_version()),
                                                 sprintf("# Database: %s", database),
                                                 if (!is.null(pressures)) pressure_header_lines(pressures$pore, pressures$ocean),
                                                 if (length(dropped)) sprintf("# Not defined in %s, so removed from this input: %s",
@@ -1989,7 +1998,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    # @param n_orbital_cycles Number of orbits (1.375 d each).
                                    # @param grouping_factor Orbits per step (mode "grouped").
                                    # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
-                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default NULL: "profile" when the reacting box is the skin (reactive_depth = "skin", the default), else "ocean" (resolve_porewater_temp(); production kit, PI 2026-11-01). A fixed number is an explicit override, a bound (e.g. 160, the hot bound).
                                    # @param substeps KINETICS substeps per step. Default 1.
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
@@ -2007,11 +2016,12 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    generate_phreeqc_input_tidal_kinetic = function(output_dir = "phreeqc_inputs", mode = "ocean_circulations",
                                                                      n_circulations = NULL, n_orbital_cycles = NULL,
                                                                      grouping_factor = NULL, exchange_ratio = NULL,
-                                                                     porewater_temp = "ocean", substeps = 1, suffix = "",
+                                                                     porewater_temp = NULL, substeps = 1, suffix = "",
                                                                      CH4_redox_override = NULL, carbon_mode = NULL, ch4_cutoff_C = 150, trace_C_molal = NULL,
                                                                      initial_ocean = "pure_water", charge_balance = NULL,
                                                                      pore_gas_fate = c("to_ocean", "retain", "retain_to_pore_volume"), logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
+                                     porewater_temp <- self$resolve_porewater_temp(porewater_temp)
 
                                      # Auto-compute grouping_factor from exchange_ratio if provided.
                                      # exchange_ratio = target (fluid / porewater) fraction per model cycle.
@@ -3054,7 +3064,7 @@ KNOBS
                                    #
                                    # @param output_dir Directory for the .pqi (and, when run there, its .csv/.out). Default "phreeqc_inputs".
                                    # @param n_orbital_cycles Number of orbits (1.375 d each).
-                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default NULL: "profile" when the reacting box is the skin (reactive_depth = "skin", the default), else "ocean" (resolve_porewater_temp(); production kit, PI 2026-11-01). A fixed number is an explicit override, a bound (e.g. 160, the hot bound).
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
@@ -3074,13 +3084,14 @@ KNOBS
                                                                            n_circulations = NULL,
                                                                            grouping_factor = NULL,
                                                                            suffix = "",
-                                                                           porewater_temp = "ocean",
+                                                                           porewater_temp = NULL,
                                                                            CH4_redox_override = NULL,
                                                                            carbon_mode = NULL, ch4_cutoff_C = 150,
                                                                            initial_ocean = "pure_water", charge_balance = NULL,
                                                                            pore_gas_fate = c("to_ocean", "retain"), trace_C_molal = NULL,
                                                                            logfile = FALSE) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
+                                     porewater_temp <- self$resolve_porewater_temp(porewater_temp)
                                      if (is.null(n_orbital_cycles))
                                        stop("generate_phreeqc_input_tidal_equil requires n_orbital_cycles (mode/n_circulations/grouping_factor are unused)")
                                      dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -4041,7 +4052,7 @@ END
                                    # @param n_orbital_cycles Number of orbits (1.375 d each).
                                    # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
                                    # @param water_rock_ratio kg water per kg rock (mode "porewater"; required there).
-                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default NULL: "profile" when the reacting box is the skin (reactive_depth = "skin", the default), else "ocean" (resolve_porewater_temp(); production kit, PI 2026-11-01). A fixed number is an explicit override, a bound (e.g. 160, the hot bound).
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
@@ -4059,7 +4070,7 @@ END
                                      n_orbital_cycles    = NULL,
                                      mode                = c("porewater", "hydrosphere"),
                                      water_rock_ratio    = NULL,
-                                     porewater_temp      = "ocean",
+                                     porewater_temp      = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
@@ -4070,6 +4081,7 @@ END
                                      logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
+                                     porewater_temp <- self$resolve_porewater_temp(porewater_temp)
                                      trace_C_line <- trace_C_solution_line(trace_C_molal)
                                      if (mode == "porewater" && (is.null(water_rock_ratio) || water_rock_ratio <= 0))
                                        stop("water_rock_ratio must be a positive number when mode = 'porewater'")
@@ -4660,7 +4672,7 @@ END
                                    # @param orbits_per_step Orbits per KINETICS step; must divide n_orbital_cycles. Default 1.
                                    # @param equil_minerals Primaries to move from KINETICS to EQUILIBRIUM_PHASES (dissolve_only). Default none; Schreibersite cannot be one.
                                    # @param mode "porewater" (porewater only against 1 kg rock, at the porewater pressure) or "hydrosphere" (ocean + porewater combined, at the ocean-floor pressure).
-                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default NULL: "profile" when the reacting box is the skin (reactive_depth = "skin", the default), else "ocean" (resolve_porewater_temp(); production kit, PI 2026-11-01). A fixed number is an explicit override, a bound (e.g. 160, the hot bound).
                                    # @param suffix Appended to the file name. Default "".
                                    # @param CH4_redox_override Older spelling of carbon_mode: "coupled" or "decoupled" (= "ch4_uncoupled"). Default NULL; give this or carbon_mode, not both.
                                    # @param carbon_mode "c4_only" (NULL, the default: coupled carbon is C(+4) only, decided by the PI 2026-10-27), "coupled" (an upper bound on abiotic methanation), "ch4_uncoupled" (diagnostic), or "temperature" (the pre-10-26 rule). Picks the database.
@@ -4676,7 +4688,7 @@ END
                                      orbits_per_step     = 1,
                                      equil_minerals      = character(0),
                                      mode                = c("porewater", "hydrosphere"),
-                                     porewater_temp      = "ocean",
+                                     porewater_temp      = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
                                      carbon_mode         = NULL,
@@ -4685,6 +4697,7 @@ END
                                      logfile             = FALSE
                                    ) {
                                      mode <- match.arg(mode)
+                                     porewater_temp <- self$resolve_porewater_temp(porewater_temp)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
@@ -5253,7 +5266,7 @@ END
                                    # @param mode "ocean_circulations" (default: auto grouping, n_circulations), "ungrouped" (1 orbit per step, n_orbital_cycles) or "grouped" (grouping_factor orbits per step; exchange compounds as 1 - (1 - x_tide)^G).
                                    # @param grouping_factor Orbits per step (mode "grouped").
                                    # @param exchange_ratio Target exchanged fluid / porewater per step; sets grouping_factor and mode "grouped". Default NULL.
-                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default "ocean". Production: 150 and 160 C.
+                                   # @param porewater_temp Porewater reaction temperature: a number (deg C), "profile" (the profile's layer mean) or "ocean" (1.45 C, the profile's ocean floor). Default NULL: "profile" when the reacting box is the skin (reactive_depth = "skin", the default), else "ocean" (resolve_porewater_temp(); production kit, PI 2026-11-01). A fixed number is an explicit override, a bound (e.g. 160, the hot bound).
                                    # @param depletion_mineral Kinetic phase whose depletion stops the run early (USER_PRINT). Default: the fastest in depletion_order.
                                    # @param refill_kg Water (kg, on the run's normalised basis) moved from the ocean into the porewater
                                    #   before the first orbit, by MIX (negative: from the porewater to the ocean), so that the porewater fills
@@ -5283,7 +5296,7 @@ END
                                      mode                = "ungrouped",
                                      grouping_factor     = NULL,
                                      exchange_ratio      = NULL,
-                                     porewater_temp      = "ocean",
+                                     porewater_temp      = NULL,
                                      depletion_mineral   = NULL,
                                      suffix              = "",
                                      CH4_redox_override  = NULL,
@@ -5297,6 +5310,7 @@ END
                                      ocean_scale         = 1
                                    ) {
                                      pore_gas_fate <- match.arg(pore_gas_fate)
+                                     porewater_temp <- self$resolve_porewater_temp(porewater_temp)
                                      if (is.null(prev_csv) || !file.exists(prev_csv))
                                        stop("prev_csv must be a valid path to an existing CSV file")
                                      if (is.null(n_orbital_cycles) || n_orbital_cycles <= 0)
