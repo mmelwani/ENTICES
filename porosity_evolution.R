@@ -244,12 +244,19 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits = NULL, o
     cb <- carbon_by_oxidation_state(csv)$by_state
     oc_C4 <- sum(cb$C_molal[cb$block == io & cb$ox == 4 & !cb$decoupled])
     if (is.na(m_pw0)) m_pw0 <- as.numeric(x$mass_H2O[which(trimws(x$state) == "i_soln" & trimws(x$soln) == "1")[1]])
+    if (is.na(m_pw0)) {   # no t = 0 rows (a cometary initial ocean): the porewater SOLUTION's water in the .pqi
+      p <- readLines(f); s1 <- grep("^SOLUTION 1\\b", p)[1]
+      m_pw0 <- as.numeric(sub("^\\s*water\\s+", "", grep("^\\s*water\\s", p[s1:(s1 + 15)], value = TRUE)[1]))
+    }
     # drift: this chunk's end against its start
     if (is.null(pq0)) pq0 <- pqi_initial_solids(f)
     fate <- sub("^# pore_gas_fate: ", "", grep("^# pore_gas_fate: ", readLines(f, n = 80), value = TRUE)[1])
     parts <- whole_system_parts(x, pq0, fate)
     start <- if (is.null(parts_prev)) whole_system_t0(x, pq0) else parts_prev$pore + ocean_scale * parts_prev$ocean
     end <- parts$pore + parts$ocean
+    # a cometary initial ocean is made in a separate simulation, so the run's CSV has no t = 0 solutions: the
+    # drift is then counted from the end of the first chunk
+    if (anyNA(start)) { logf("chunk %d: no t = 0 solutions in the CSV (cometary initial ocean): drift counted from this chunk's end", chunk); start <- end }
     drift <- (if (is.null(drift)) 0 else drift) + (end - start)
     rel_d <- ifelse(abs(end) > 0, abs(drift) / abs(end), 0)
     if (max(rel_d) > 1e-4) warning(sprintf("run_tidal_evolution: chunk %d: cumulative drift of %s is %.2e relative", chunk, names(rel_d)[which.max(rel_d)], max(rel_d)))
