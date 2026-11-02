@@ -384,9 +384,10 @@ summary_units <- function(cols) {
     base <- sub("^(blank_|org_minus_blank_)", "", cc)
     if (startsWith(cc, "ocean_gas_") || startsWith(cc, "pore_gas_"))
       return(data.frame(column = cc, unit = "mol per kg box rock", description = sprintf("%s gas phase: moles of %s", sub("_gas_.*", "", cc), sub(".*_gas_(.*)_mol$", "\\1", cc))))
-    if (grepl("^(pore|ocean)_.+_mol$", cc) && sub("^(pore|ocean)_(.+)_mol$", "\2", cc) %in% KIT_PHOSPHATE_PHASES)
-      return(data.frame(column = cc, unit = "mol per kg box rock", description = sprintf("%s held in the %s (phosphate phase)", sub("^(pore|ocean)_(.+)_mol$", "\2", cc),
-                                                                                        if (startsWith(cc, "pore_")) "pores (REACT step)" else "ocean (ocean step)")))
+    if (grepl("^(pore|ocean)_.+_mol$", base) && sub("^(pore|ocean)_(.+)_mol$", "\\2", base) %in% KIT_PHOSPHATE_PHASES)
+      return(data.frame(column = cc, unit = "mol per kg box rock", description = sprintf("%s%s held in the %s (phosphate phase)",
+                        if (startsWith(cc, "blank_")) "blank: " else if (startsWith(cc, "org_minus_blank_")) "organic minus blank: " else "",
+                        sub("^(pore|ocean)_(.+)_mol$", "\\2", base), if (startsWith(base, "pore_")) "pores (REACT step)" else "ocean (ocean step)")))
     if (grepl("_core_mol$", cc))
       return(data.frame(column = cc, unit = "mol", description = paste(u[[sub("_core_mol$", "", cc)]][2], "- whole core (scale_to_core())")))
     v <- u[[base]]
