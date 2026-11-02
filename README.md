@@ -1208,6 +1208,35 @@ log a(CO₂) between −4.6 and −3.2 (their preferred estimate). The model's o
   approach the observed carbonate over the core's lifetime is what the long runs (PROGRESS N8) are
   for.
 
+### Phosphate and calcium (PI 2026-11-02)
+
+**Ca-limited apatite; no calcite; the apatite–calcite buffer is inactive in this rock.** In the reference
+under `"apatite"` (pure-water ocean, to 1e4 yr), hydroxyapatite takes all the P (0.0133 mol per kg of box
+material from ~100 yr on; ocean P ~1.6e-6 molal) and nearly all the Ca the rock releases. The box material
+holds 0.286 mol Ca per kg (0.85 kg of silicate, 15 wt% IOM: diopside 0.233, anorthite 0.053 mol), but only
+0.0755 mol is released by 1e4 yr. Hydroxyapatite holds 0.0667 of it and mesolite 0.0088; dissolved Ca stays
+≤ 1e-7 molal, and no carbonate forms at any time. Why so little is released (by chunk, porewater SIs from
+SELECTED_OUTPUT):
+
+| t (yr) | porewater pH | Diopside left | SI | rate (mol/s) | Anorthite left | SI |
+|---|---|---|---|---|---|---|
+| 0 | | 0.2333 | | | 0.0528 | |
+| 0.26 | 11.4 | 0.2330 | −3.4 | 4.3e-11 | 6e-6 | −10.2 |
+| 5.4 | 12.6 | 0.2262 | −2.2 | 4.1e-11 | 0 | −10.6 |
+| 16 | 13.3 | 0.2148 | −0.40 | 2.3e-11 | 0 | −9.2 |
+| 40 | 13.6 | 0.2106 | +0.33 | 0 | 0 | −8.9 |
+| 1e4 | 13.9 | 0.2106 | +0.77 | 0 | 0 | −8.9 |
+
+- **Anorthite is not limiting:** it all dissolves within ~1 yr (0.053 mol).
+- **Diopside's slow kinetics, then the SR > 1 guard, stop it.** It dissolves at ~4e-11 mol/s (PK04, SSA
+  0.1 m²/g) and gives up 0.023 mol in ~30 yr. Then the porewater (pH 13.5–14) becomes supersaturated in
+  diopside (SI > 0 in 85 of 134 chunks, up to +1.5), and the rate law's guard sets its rate to 0.
+- **Not an accounting artefact.** Each chunk's −m0 equals the previous chunk's end moles exactly, for both
+  minerals; at most 5.5e-14 mol of anorthite is dropped where it falls below PHREEQC's precision.
+
+Na comparison at the same time (1e4 yr): 0.051 molal under `"apatite"` against 0.063 without phosphate
+phases. The 0.39 molal quoted earlier came from fixed-porosity runs, not from production.
+
 ### What tidal-only circulation can reach
 
 The exchange in ENTICES is tidal only (buoyancy-driven flow is out of scope; Choblet et al. 2017 and
@@ -1242,10 +1271,13 @@ of the range circulates the ocean through the core within Enceladus's age** (1.2
 - **φc** (0.4) is a placeholder from sorted grain packs.
 - **The k_floor values** (1e-14, 1e-12 m²) are the PI's bracket, not from a measurement (§6).
 - **D9 (spin-up) and D10 (IOM sulfur)** are as in `docs/PROGRESS.md` Part 10.
+- **The OCP and whitlockite molar volumes are PROVISIONAL** (§6, Phosphate phases).
 
 **Closed:** the metal corrodes in the first step (D6, an accepted idealisation); the pore gas goes to the
 ocean (`"retain"` and `"retain_to_pore_volume"` are the bracket); the carbon mode is `c4_only`; the skin
-reacts at its own profile temperature (a fixed temperature is a bound).
+reacts at its own profile temperature (a fixed temperature is a bound). Phosphates (2026-11-02):
+`"apatite"` is the reference; the Ca-limited apatite stands (diopside's kinetics and the SR > 1 guard,
+§7); the phosphate temperature limits and the other volumes are accepted.
 
 **Limitations.** The 25 °C brine exceeds the B-dot range. The pure-water ocean is unbuffered, so its pH is
 not an Enceladus pH. A run cannot reach 4.5 Gyr at the validated step limits; production runs end at a
