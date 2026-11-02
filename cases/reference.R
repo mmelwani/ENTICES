@@ -36,9 +36,10 @@ case <- list(
   t_end_yr = 1e8,                # yr; (0, 4.5e9]; the backstop (PI 2026-11-02). README 3 (Production runs)
   ss_tol   = 0.01,               # -; (0, 0.5], or NULL (no steady-state stop); ocean C(+4), pH, Na within ss_tol over one circulation time. README 3
 
-  # --- accuracy (set by validation; do not loosen: README 6, Long runs) ---
-  phi_tol    = 0.01,             # -; largest relative porosity change per chunk
-  x_step_max = 0.1,              # -; largest fraction of the pore water exchanged per PHREEQC step
+  # --- accuracy (set by validation, PI 2026-11-02: the largest values within 1% of much finer steps; do not
+  #     loosen: README 6, Step limits) ---
+  phi_tol    = 0.003,            # -; largest relative porosity change per chunk (0.01 moved ocean C(+4) by 2%)
+  x_step_max = 0.03,             # -; largest fraction of the pore water exchanged per PHREEQC step (0.1 moved Na by 2%)
   steps_per_chunk = 4,           # -; PHREEQC steps per chunk
 
   generator = "tidal_kinetic",   # the only generator for long runs

@@ -48,7 +48,7 @@ KIT_CASE_DEFAULTS <- list(
   iom_wt_percent = 15, carbon_mode = "c4_only", initial_ocean = "pure_water", cometary_f = 1,
   pore_gas_fate = "to_ocean", trace_C_molal = 1e-14,
   t_end_yr = 1e8, ss_tol = 0.01,
-  phi_tol = 0.01, x_step_max = 0.1, steps_per_chunk = 4,
+  phi_tol = 0.003, x_step_max = 0.03, steps_per_chunk = 4,
   generator = "tidal_kinetic", blank = TRUE
 )
 
