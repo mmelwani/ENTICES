@@ -41,6 +41,18 @@ PI_VALUES = {
                       "mindat.org (min-3582), unit cell; Fe3P end-member assumed (mindat formula (Fe,Ni)3P; "
                       "ENTICES uses Fe3P). Tetragonal I-4, a = 9.05 A, c = 4.47 A, V = 366.10 A3, Z = 8 "
                       "[citation needed: primary crystal-structure reference listed by mindat]"),
+    # The phosphate phases (scripts/add_phosphate_phases.py, PI 2026-11-02): none is in Core11, ds636 or hp636.
+    # PROPOSED by Claude from unit cells (Vm = 0.60221 V / Z), for the PI to confirm; not PI-supplied yet.
+    "Brushite": (0.60221 * 503.49 / 4, "PROPOSED (PI to confirm): webmineral.com unit cell, CaHPO4.2H2O, V = 503.49 A3, Z = 4"),
+    "Vivianite": (0.60221 * 613.88 / 2, "PROPOSED (PI to confirm): webmineral.com unit cell, Fe3(PO4)2.8H2O, V = 613.88 A3, Z = 2"),
+    "Bobbierite": (0.60221 * 1267.27 / 4, "PROPOSED (PI to confirm): webmineral.com unit cell (Bobierrite), Mg3(PO4)2.8H2O, V = 1267.27 A3, Z = 4"),
+    "Newberyite": (0.60221 * 1092.59 / 8, "PROPOSED (PI to confirm): webmineral.com unit cell, MgHPO4.3H2O, V = 1092.59 A3, Z = 8"),
+    "Struvite": (0.60221 * 477.58 / 2, "PROPOSED (PI to confirm): webmineral.com unit cell, NH4MgPO4.6H2O, V = 477.58 A3, Z = 2"),
+    "Whitlockite": (0.60221 * 3428.79 / 6 * 2 / 7, "PROPOSED (PI to confirm), approximate: webmineral.com cell of natural whitlockite "
+                    "Ca9(Mg,Fe)(PO4)6(PO3OH), V = 3428.79 A3, Z = 6, scaled to 2 P of 7 for Ca3(PO4)2"),
+    "OCP": (0.60221 * 1213.0 / 4, "PROPOSED (PI to confirm): Mathew et al. 1988 cell of Ca8(HPO4)2(PO4)4.5H2O, triclinic, "
+            "a 19.692, b 9.523, c 6.835 A, alpha 90.15, beta 92.54, gamma 108.65 deg, V ~ 1213 A3, Z = 2, per Ca4H(PO4)3 "
+            "(seen through search results, not the paper)"),
 }
 # Clathrate cross-check against Sloan & Koh (2007), Clathrate Hydrates of Natural Gases, 3rd ed.,
 # Table 2.5a (p. 78): structure I lattice parameter a (0 C unless marked), 46 H2O per cell, so for
@@ -179,7 +191,9 @@ def production_phases():
         names |= set(re.findall(r'"([^"]+)"', vec))
     names |= {"Enstatite", "Forsterite", "Troilite", "Albite", "Diopside", "Anorthite", "K-Feldspar", "Tephroite",
               "Schreibersite", "Fe", "Ni", "Lawrencite", "Quartz", "Antigorite", "Foshagite", "Hatrurite", "Epidote",
-              "Epidote-ord", "CH4_hydrate", "Mtg_hydrate", "CO2_hydrate", "H2S_hydrate"}
+              "Epidote-ord", "CH4_hydrate", "Mtg_hydrate", "CO2_hydrate", "H2S_hydrate",
+              # PhreeqcIntegrator$phosphate_minerals()
+              "Hydroxyapatite", "Whitlockite", "Brushite", "OCP", "Bobbierite", "Newberyite", "Vivianite", "Struvite"}
     return {n for n in names if not n.endswith("(g)")}
 
 def main():

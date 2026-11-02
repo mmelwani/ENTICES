@@ -4674,13 +4674,14 @@ Ferrosilite
 #	Extrapol	supcrt92
 #	Ref		HDN+78
 
-Fluorapatite #Added by MMD on 2025/01/24
-        Ca5(PO4)3F + 3 H+  =  + F- + 3 HPO4-2 + 5 Ca+2
-        log_k           -24.9940
-#	-delta_H	-90.8915	kJ/mol	# Calculated enthalpy of reaction	Fluorapatite
-#	Enthalpy of formation:	-6836.12 kJ/mol
-        -analytic -9.3648e2 -3.2688e-1 2.4398e4 3.7461e2 3.8098e2
-#       -Range:  0-300
+#tdP# Replaced (PI 2026-11-02): the phosphate set is Thermoddem's. Thermoddem Fluorapatite(Natur) is not added yet: its primary check (McCann 1968, pKs0 59.6 at 25 C) was not read; this LLNL entry is 2.6 log units less soluble.
+#tdP# Fluorapatite #Added by MMD on 2025/01/24
+#tdP#         Ca5(PO4)3F + 3 H+  =  + F- + 3 HPO4-2 + 5 Ca+2
+#tdP#         log_k           -24.9940
+#tdP# #	-delta_H	-90.8915	kJ/mol	# Calculated enthalpy of reaction	Fluorapatite
+#tdP# #	Enthalpy of formation:	-6836.12 kJ/mol
+#tdP#         -analytic -9.3648e2 -3.2688e-1 2.4398e4 3.7461e2 3.8098e2
+#tdP# #       -Range:  0-300
 
 Fluorite
         CaF2  =  + Ca+2 + 2 F- #Added by MMD on 2025/01/24
@@ -4934,16 +4935,17 @@ Hydrophilite
 #	Extrapol	Cp integration
 #	Ref		RHF79
 
-Hydroxyapatite
-	Ca5(OH)(PO4)3 + 4 H+ = H2O + 3 HPO4-2 + 5 Ca+2
-	log_k		-3.0746
-	-delta_H	-191.982	kJ/mol
-#	deltafH		-6685.52	kJ/mol
-	-analytic	-8.5221e2 -2.9430e-1 2.8125e4 3.4044e2 4.3911e2
-#	Range		0-300
-#vm# 	-Vm		128.9
-#	Extrapol	Cp integration
-#	Ref		RHF79
+#tdP# Replaced by Thermoddem Hydroxyapatite(Natur) (PI 2026-11-02). This LLNL entry (Ref RHF79: Robie, Hemingway & Fisher 1979, USGS Bulletin 1452, a compilation; what its apatite value rests on was not traced) is ~4 log units more soluble (log_k -3.07 vs -7.30 at 25 C); it may represent poorly crystalline apatite (unconfirmed). McDowell et al. 1977 measured the equivalent of -7.37 to -7.56 on this basis.
+#tdP# Hydroxyapatite
+#tdP# 	Ca5(OH)(PO4)3 + 4 H+ = H2O + 3 HPO4-2 + 5 Ca+2
+#tdP# 	log_k		-3.0746
+#tdP# 	-delta_H	-191.982	kJ/mol
+#tdP# #	deltafH		-6685.52	kJ/mol
+#tdP# 	-analytic	-8.5221e2 -2.9430e-1 2.8125e4 3.4044e2 4.3911e2
+#tdP# #	Range		0-300
+#tdP# #vm# 	-Vm		128.9
+#tdP# #	Extrapol	Cp integration
+#tdP# #	Ref		RHF79
 
 Ice
 	H2O = H2O
@@ -7469,6 +7471,74 @@ H2Sg(g)
 	-delta_h   9.1
 	-analytic -45.07  -0.02418  0  17.9205 # H2S solubilities, 0 - 300�C, 1 - 987 atm, Jiang et al., 2020, CG 555, 119816
 	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1  # PR constants restored 2026-10-28 (scripts/gas_eos.py)
+
+# ==== Phosphate phases (scripts/add_phosphate_phases.py; README section 6, Phosphate phases) ====
+# Converted to the HPO4-2 basis from Thermoddem V1.10 (BRGM, 15 Dec 2020) with Thermoddem's own
+# H2PO4- = HPO4-2 + H+ (log_k -7.212, delta_h 3.6 kJ/mol); Vivianite and Struvite from the primary
+# literature. Each was checked against a primary solubility product (README section 6). Molar volumes
+# are in data/mineral_molar_volumes.csv, not here (mineral -Vm lines are stripped in these databases).
+
+Hydroxyapatite
+	Ca5(PO4)3(OH) + 4 H+ = 5 Ca+2 + 3 HPO4-2 + H2O
+	log_k		-7.3000
+	-delta_H	-167.596	kJ/mol
+	-analytic	-5.3299769e+03 -8.7319940e-01 2.9623162e+05 1.9325120e+03 -1.7104838e+07
+#	Thermoddem V1.10 Hydroxyapatite(Natur): Ca5(PO4)3(OH) + 7.000H+ = 5.000Ca+2 + 3.000H2PO4- + 1.000H2O; log_k 14.336, delta_h -178.396 kJ/mol (LogK/DGf: 06bla/pia; DHf/DHr: Internal calculation; S°: 71par/wag; Cp: 60kel; V°: 95rob/hem;)
+#	Range: 0-300 C (Thermoddem analytic)
+
+Whitlockite
+	Ca3(PO4)2 + 2 H+ = 3 Ca+2 + 2 HPO4-2
+	log_k		-4.3040
+	-delta_H	-117.530	kJ/mol
+	-analytic	-3.4871293e+03 -5.7010289e-01 1.9471800e+05 1.2634988e+03 -1.1265594e+07
+#	Thermoddem V1.10 Whitlockite(high): Ca3(PO4)2 + 4.000H+ = 3.000Ca+2 + 2.000H2PO4-; log_k 10.12, delta_h -124.73 kJ/mol (LogK/DGf: 84nan; DHf/DHr: Internal calculation; S°: 84nan; Cp: 60kel; V°: 95rob/hem;)
+#	Range: 0-300 C (Thermoddem analytic); beta-Ca3(PO4)2 as measured by Gregory et al. 1974
+
+Brushite
+	CaHPO4:2H2O = Ca+2 + HPO4-2 + 2 H2O
+	log_k		-6.6100
+	-delta_H	-3.775	kJ/mol
+	-analytic	-1.6468568e+03 -2.7126583e-01 8.8476702e+04 5.9919847e+02 -5.1829505e+06
+#	Thermoddem V1.10 Brushite: CaHPO4:2H2O + 1.000H+ = 1.000Ca+2 + 1.000H2PO4- + 2.000H2O; log_k 0.602, delta_h -7.375 kJ/mol (LogK/DGf: 84nan; DHf/DHr: Internal calculation; S°: 84nan; Cp: 70gre/mor, after 64aega/wak and bega/wak; V°: 84nri;)
+#	Range: 0-300 C (Thermoddem analytic); measured 5-37.5 C (Gregory et al. 1970)
+
+OCP
+	Ca4H(PO4)3:3H2O + 2 H+ = 4 Ca+2 + 3 HPO4-2 + 3 H2O
+	log_k		-11.5180
+#	Thermoddem V1.10 Ca4H(PO4)3:3H2O: Ca4H(PO4)3:3H2O + 5.000H+ = 4.000Ca+2 + 3.000H2PO4- + 3.000H2O; log_k 10.118 (LogK/DGf: NIST46.4;)
+#	Range: 25 C only (no enthalpy): treat as reliable to ~50 C
+
+Bobbierite
+	Mg3(PO4)2:8H2O + 2 H+ = 3 Mg+2 + 2 HPO4-2 + 8 H2O
+	log_k		-0.4960
+#	Thermoddem V1.10 Bobbierite: Mg3(PO4)2:8H2O + 4.000H+ = 3.000Mg+2 + 2.000H2PO4- + 8.000H2O; log_k 13.928 (LogK/DGf: 63tay/fra, 96bou;)
+#	Range: 25 C only (no enthalpy): treat as reliable to ~50 C
+
+Newberyite
+	MgHPO4:3H2O = Mg+2 + HPO4-2 + 3 H2O
+	log_k		-5.7990
+#	Thermoddem V1.10 Newberyite: MgHPO4:3H2O + 1.000H+ = 1.000Mg+2 + 1.000H2PO4- + 3.000H2O; log_k 1.413 (LogK/DGf: 01wen/mus;)
+#	Range: 25 C only (no enthalpy): treat as reliable to ~50 C
+
+Vivianite
+	Fe3(PO4)2:8H2O + 2 H+ = 3 Fe+2 + 2 HPO4-2 + 8 H2O
+	log_k		-11.0795
+	-analytic	3.8654500e+02 6.7148000e-02 -1.2510700e+04 -1.5182600e+02 -4.2280000e+00
+#	Al-Borno & Tomson (1994, GCA 58, 5373): pKsp = -234.205 + 12242.6/T + 92.510 log10 T, Ksp = (Fe+2)^3 (PO4-3)^2,
+#	log Ksp(25 C) = -35.767; with coreclath's HPO4-2 = PO4-3 + H+. Thermoddem's Vivianite (log_k -3.272 on H2PO4-, 94alb/tom)
+#	is this value with the sign flipped (+3.272 reproduces it to 0.03).
+#	Range: 5-90 C (the measurements)
+
+Struvite
+	MgNH4PO4:6H2O = Mg+2 + NH3 + HPO4-2 + 6 H2O
+	log_k		-10.4703
+	-analytic	-1.0667530e+03 -7.4537420e-01 -3.2426100e+03 5.2108550e+02 -3.0089000e+01
+#	Bhuiyan, Mavinic & Beckie (2007, Environ. Technol. 28, 1015): log10 Ksp = -1157.45 - 0.784 T - 63.86/T
+#	+ 556.83 log10 T + 19.54/T^2, Ksp = (Mg+2)(NH4+)(PO4-3) (their fit; it gives pKsp 13.57 at 25 C against the
+#	tabulated 13.36 +- 0.07); with coreclath's HPO4-2 = PO4-3 + H+ and NH3 + H+ = NH4+. Ohlinger et al. 1998: pKso 13.26.
+#	Range: 10-60 C (the measurements)
+
+# ==== end of phosphate phases ====
 
 RATES
 
