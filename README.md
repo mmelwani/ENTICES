@@ -718,7 +718,9 @@ themselves tied to ungrouped by the comparison above), on the reference and on k
   `k_floor`), to 1e6 yr, against x_step_max = 0.01. Reference: 0.03 → Na −0.47%, pH −0.04%, H₂ +0.04%,
   C(+4) +0.08%; 0.05 → Na −0.96%; 0.1 → Na −2.1%; 0.3 → −6.7%; 0.5 → −11%; 1 → −23% (C(+4) +5.7%, pH
   −3.0%). The Na error is linear in the step (0.235% per 0.01 of x_step), so extrapolated to a zero step
-  0.03 is 0.7% off and 0.05 1.2%.
+  0.03 is 0.7% off and 0.05 1.2%. k ≈ 1e-11: 0.03 → Na −0.65% (pH −0.03%, C(+4) +0.03%, H₂ 0.00%); 0.1 →
+  Na −2.9%; 0.3 → −9.5%; the slope is steeper (0.33% per 0.01), so extrapolated to zero 0.03 is ~1.0% off
+  there: at the limit, not inside it.
 - **phi_tol**, porosity evolving (x_step_max 0.1, not binding there), to 5e4 yr, against phi_tol = 0.001.
   Reference: 0.003 → C(+4) +0.66% (pH, H₂, Na ≤ 0.10%); 0.005 → C(+4) +0.96%; 0.01 → +2.05%; 0.03 → +7.6%;
   0.05 → +10%. k ≈ 1e-11, against 0.003: 0.01 → C(+4) +2.2%; 0.03 → +3.7%; 0.05 → +4.3% (Na ≤ 0.9%). C(+4)
