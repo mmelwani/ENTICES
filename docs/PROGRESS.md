@@ -1080,7 +1080,7 @@ an unrealistic upper bound (~2.6 molal CO₂ + 1.7 molal CO).
 `initial_ocean` (and `pore_gas_fate`) to the run and the blank. The ocean
 starts with ~0.087 molal DIC, so the organic contribution is organic − blank
 and can't be read from the ocean's carbon. Comparison with Glein & Waite
-(2020), GRL 47, e2019GL085885 (README §7, Carbon): they adopt Postberg et
+(2020), GRL 47, e2019GL085885 (docs/MODEL.md §3, Carbon): they adopt Postberg et
 al. (2009)'s envelopes, 0.2 molal Cl with 0.1 molal TDC (HCO₃⁻ + CO₃²⁻) or
 0.05 molal Cl with 0.01 molal TDC, and prefer pH 8.5–9, log a(CO₂) −4.6 to
 −3.2. The cometary option has 0.087 molal DIC, but at pH 1.85 it is 0.0866
@@ -1150,7 +1150,7 @@ used `tidal_kinetic_restart` or `bulk_kinetic_restart`?** those lost K, Mn, Cl
 and Ni at each restart.
 
 **Rock density.** `bulk_density()` (`phreeqc_tools.R`) with
-`data/mineral_molar_volumes.csv` (README, Interpreting outputs).
+`data/mineral_molar_volumes.csv` (docs/MODEL.md, Interpreting outputs).
 
 **Layout:**
 
@@ -1204,19 +1204,19 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D3 | ~~Carbon decoupling mechanism~~ | Part 3 | **Decided 10-27:** `c4_only` at every temperature; coupled runs are the methanation upper bound |
 | D4 | ~~`IOM_S` coupled or `Sg 1 H 1`~~ | Part 3 | **Decided:** coupled (H₂ stays coupled, so sulfide is stable) |
 | D5 | ~~`IOM_CHn` routing and formate~~ | Part 3 | **Decided:** CHn as `Mtg 1 H -2.2` (a 2.2 e⁻ reduction imposed by hand, documented); formate as a sensitivity case only |
-| D6 | ~~**Metal corrosion**~~ | Part 5 | **Closed 10-29 (PI):** instantaneous `dissolve_only` corrosion is an accepted idealisation of early differentiation's alteration and outgassing, not a rate claim; the first orbits are a transient, judge results on the long runs (N8). `h2_budget()` and `scale_to_core()` give the early H₂ inventory (README §6) |
+| D6 | ~~**Metal corrosion**~~ | Part 5 | **Closed 10-29 (PI):** instantaneous `dissolve_only` corrosion is an accepted idealisation of early differentiation's alteration and outgassing, not a rate claim; the first orbits are a transient, judge results on the long runs (N8). `h2_budget()` and `scale_to_core()` give the early H₂ inventory (docs/MODEL.md) |
 | D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
 | D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ included by default** (PI 10-29); `f` and `include_less_volatile` (21 species, `data/comet67p_volatility.csv`) added 10-31 |
 | D9 | **Spin-up** before tidal cycling | 10-06 review §4 | **Optional** (D6 closed: not needed for realism); kept as the use for the King et al. (2015) CI forward check (reconstruction §8 item 8) |
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
-| D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | README §6 (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 78 yr (243 yr before the ×φ fix of 10-29) against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange); the ×φ in the flow rate was a bug, **fixed 10-29** | **10-31: D7 and D12 merged into one (φ, d, strain_scale) sweep:** Kozeny–Carman k and geometric surface areas from the grain size (item 3; README §6).
-| D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | README §6 (The strain) | **N (10-31):** the strain and the ocean load come from a layered forward model of Bagheri et al. 2025's structure (TidalPy), validated against their Table 3; `tidal_scenario` and η select it; placeholders µ 17 GPa, η 1e12 Pa·s pending the PI. **11-01:** the core's bulk modulus is the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM (49.0 GPa; K_d 9.80 GPa at φ 0.32, μ_d 5.2 GPa inside Table 5's 4–70); troilite μ an estimate, IOM μ 1–5 GPa from terrestrial kerogen (Othman et al. 2022; Yan & Han 2013) |
-| D14 | **Initial porosity φ0 and critical porosity φc** | README §6 (Porosity and the Biot coefficient) | φ0 = 0.32 is one PlanetProfile fit; sweep 0.1–0.4; Bagheri's 2160–2400 kg/m³ is an end-state check (φ 0.27–0.40 at t = 0 with 15 wt% IOM). α = min(1, φ/φc), **φc = 0.4** (PI 10-30; Dvorkin & Nur 2000: 36–40%); φ ≥ φc gives α = 1 (a suspension); placeholders pending the PI: ε_v/ε₀ (0.192 skin, 0.115 layer), η = 1e12 Pa·s, φc = 0.4 |
+| D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | docs/MODEL.md (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 78 yr (243 yr before the ×φ fix of 10-29) against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange); the ×φ in the flow rate was a bug, **fixed 10-29** | **10-31: D7 and D12 merged into one (φ, d, strain_scale) sweep:** Kozeny–Carman k and geometric surface areas from the grain size (item 3; docs/MODEL.md).
+| D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | docs/MODEL.md (The strain) | **N (10-31):** the strain and the ocean load come from a layered forward model of Bagheri et al. 2025's structure (TidalPy), validated against their Table 3; `tidal_scenario` and η select it; placeholders µ 17 GPa, η 1e12 Pa·s pending the PI. **11-01:** the core's bulk modulus is the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM (49.0 GPa; K_d 9.80 GPa at φ 0.32, μ_d 5.2 GPa inside Table 5's 4–70); troilite μ an estimate, IOM μ 1–5 GPa from terrestrial kerogen (Othman et al. 2022; Yan & Han 2013) |
+| D14 | **Initial porosity φ0 and critical porosity φc** | docs/MODEL.md (Porosity and the Biot coefficient) | φ0 = 0.32 is one PlanetProfile fit; sweep 0.1–0.4; Bagheri's 2160–2400 kg/m³ is an end-state check (φ 0.27–0.40 at t = 0 with 15 wt% IOM). α = min(1, φ/φc), **φc = 0.4** (PI 10-30; Dvorkin & Nur 2000: 36–40%); φ ≥ φc gives α = 1 (a suspension); placeholders pending the PI: ε_v/ε₀ (0.192 skin, 0.115 layer), η = 1e12 Pa·s, φc = 0.4 |
 
 **Buoyancy-driven flow is out of scope (PI 10-29):** ENTICES tests whether tidally driven circulation
 alone can drive the exchange; buoyancy-driven results (Choblet et al. 2017 and others) are for
-comparison, not implementation (README §7, What tidal-only circulation can reach).
+comparison, not implementation (docs/MODEL.md §3, What tidal-only circulation can reach).
 
 ## Next actions (code and tests), in order
 
@@ -1243,13 +1243,13 @@ comparison, not implementation (README §7, What tidal-only circulation can reac
     4.8e-8 per half-orbit); the troilite and IOM shear moduli at their bracket ends;
   - flow driving (D12): k·ΔP/L over ΔP 1e4–1e5 Pa and k 1e-15–1e-7 m², each
     case reported as k·ΔP/L, mean Darcy flux and exchange per orbit, with its
-    ocean circulation time (README §6 has the design and the equivalents).
+    ocean circulation time (docs/MODEL.md has the design and the equivalents).
 - **N7.** Spin-up and the King et al. comparison (D9).
 - **N8.** Confirm in a long grouped run that the 25 °C porewater brine flushes
   as expected (Part 5).
 - ~~N9. pH 11 with 2e-4 molal Na~~ **Closed 10-27** (Part 5: pKw at 1.45 °C).
 - **N13.** Evolving porosity: **implemented 10-30** (`run_tidal_evolution()`, TRUE for production, FALSE
-  in the quick self-tests), with the refill of the pores from the ocean between chunks (README §6). At the
+  in the quick self-tests), with the refill of the pores from the ocean between chunks (docs/MODEL.md). At the
   skin's temperature (k = 1e-7) φ 0.32 → 0.28 (IOM) / 0.26 (none) in 24 orbits; at 160 °C → 0.22 / 0.17.
   The refill moves ~2×10⁴ times the tidal exchange after orbit 1. It draws 6–8.5% of the ocean's mass into the
   core in the first orbit (concentration factor 1.06–1.09), from the instantaneous metal corrosion and
@@ -1261,7 +1261,7 @@ comparison, not implementation (README §7, What tidal-only circulation can reac
 - **N11.** Fluorite and Fluorapatite have no molar volume (not production
   phases). ~~The IOM density for `bulk_density()` is UNSOURCED~~: **sourced 10-29**,
   Delarue et al. (2026) Eq. 10 at the residual IOM's H/C (1.320 g/cm³ at t = 0;
-  README §7).
+  docs/MODEL.md §3).
 
 ## Still open (science), unchanged from 09-20
 

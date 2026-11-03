@@ -1223,3 +1223,13 @@ One commit per item; each commit message has its pass check.
   README: config `max_tidal_stress` defaulted to an UNSOURCED 1e5 Pa before it was derived from the strain
   (10-30), and the 0.39 molal ocean Na quoted earlier came from fixed-porosity runs, not production (the
   reference under "apatite" has 0.051 molal at 1e4 yr, 0.063 without phosphate phases).
+- **README split (11-03).** README.md keeps what ENTICES is, requirements, how to run, the worked examples,
+  the repository map and the references. docs/MODEL.md has the model (parameters, model choices,
+  interpreting outputs, limitations), with the current physics first in the order a run uses it (strain and
+  pore pressure, skin depth and reacting box, the three-volume exchange, porosity evolution, long-run
+  stepping, chemistry) and an appendix, "Earlier formulations (for reproducing older runs)": the fixed-dP
+  whole-layer flow table, the earlier sweep design, the whole-layer limits, the Liao strain and the 24-orbit
+  runs, each with a note on what replaced it. docs/DEVELOPMENT.md has the column-comparison rule, the
+  restart internals and the known failures. References to README sections 5-7 in the code, case files,
+  databases' comments, scripts, PRODUCTION_GUIDE.md, ENTICES_runs.Rmd, data/README.md and docs/PROGRESS.md
+  now point to docs/MODEL.md. The section 7 carbon text quotes the example case's ocean at pH 8.52.

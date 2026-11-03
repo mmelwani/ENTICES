@@ -285,7 +285,7 @@ MINERAL_VOLUMES_CSV <- "data/mineral_molar_volumes.csv"
 # IOM density (g/cm3) from its atomic H/C: Delarue et al. (2026), EPSL 691, 120227, Eq. 10,
 # rho = 1472 - 345 (H/C) + 94 / ((H/C) + 0.122) kg/m3, a fit to kerogens and coals (within 100 kg/m3
 # for H/C below 1; the bulk IOM's H/C is 0.753, 1.320 g/cm3). Compression is left out: their
-# K0 = 10.2 GPa gives 0.25% at the core's 26 MPa. See README section 7 (Rock density).
+# K0 = 10.2 GPa gives 0.25% at the core's 26 MPa. See docs/MODEL.md (Rock density).
 iom_density_delarue2026 <- function(hc) (1472 - 345 * hc + 94 / (hc + 0.122)) / 1000
 # The bulk IOM's C and H (mol per kg of IOM): iom_bulk_formula() in iom_module.R
 # (tests/bulk_density_check.R checks they agree).
@@ -683,7 +683,7 @@ column_differences <- function(A, B, cols, abs_floor = 1e-12, log_abs = 1e-4, ga
 # elemental flux into the ocean (the change of the ocean side, its water, minerals and gas, over the orbit:
 # the ocean exchanges only with the porewater), and the net change of the secondary minerals in the
 # porewater (REACT row) and in the ocean (MIX 4 row), in moles of formula units. A steady state shows as
-# fluxes that stop changing, not necessarily zero (README section 7).
+# fluxes that stop changing, not necessarily zero (docs/MODEL.md).
 steady_state_diagnostics <- function(csv, pqi = sub("\\.csv$", ".pqi", csv), elements = c("C", "Mtg", "Na", "Mg", "Si", "Fe", "Ca", "S", "Cl", "N")) {
   init <- pqi_initial_solids(pqi)
   fate <- sub("^# pore_gas_fate: ", "", grep("^# pore_gas_fate: ", readLines(pqi, n = 80), value = TRUE)[1])

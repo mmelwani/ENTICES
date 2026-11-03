@@ -1,6 +1,6 @@
 # ============================================================================
 # coreclath_C4only.dat -- carbon_mode = "c4_only" (ENTICES)
-# Derived 2026-10-26 from coreclath_CH4uncoupled.dat (sha1 df3f4ac87415, LF line endings)
+# Derived 2026-10-26 from coreclath_CH4uncoupled.dat (sha1 044209c6fcf5, LF line endings)
 # by scripts/make_c4only.py; regenerate it with that script, do not edit by hand.
 #
 # Coupled carbon is C(+4) only. Every coupled carbon species, phase and master
@@ -7586,10 +7586,10 @@ H2Sg(g)
 	-analytic -45.07  -0.02418  0  17.9205 # H2S solubilities, 0 - 300�C, 1 - 987 atm, Jiang et al., 2020, CG 555, 119816
 	-T_c  373.2 ; -P_c  88.20 ; -Omega 0.1  # PR constants restored 2026-10-28 (scripts/gas_eos.py)
 
-# ==== Phosphate phases (scripts/add_phosphate_phases.py; README section 6, Phosphate phases) ====
+# ==== Phosphate phases (scripts/add_phosphate_phases.py; docs/MODEL.md, Phosphate phases) ====
 # Converted to the HPO4-2 basis from Thermoddem V1.10 (BRGM, 15 Dec 2020) with Thermoddem's own
 # H2PO4- = HPO4-2 + H+ (log_k -7.212, delta_h 3.6 kJ/mol); Vivianite and Struvite from the primary
-# literature. Each was checked against a primary solubility product (README section 6). Molar volumes
+# literature. Each was checked against a primary solubility product (docs/MODEL.md). Molar volumes
 # are in data/mineral_molar_volumes.csv, not here (mineral -Vm lines are stripped in these databases).
 
 Hydroxyapatite

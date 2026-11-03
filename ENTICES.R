@@ -736,7 +736,7 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  # radius, mass, core_radius and core_density are the PlanetProfile profile's, rounded (profiles/: R_m 252100,
                                  # M_kg 1.08022e20, RsilMean_m 194243.7, rhoSil_kgm3 2353.19; Styczinski et al. 2023), a structure fitted
                                  # to C/MR2 = 0.335 (Iess et al. 2014). Neither Iess et al. 2014 nor Bagheri et al. 2025 gives these
-                                 # values; both bracket them (Bagheri Table 5: core 2160-2400 kg/m3, 183-213 km). README section 7.
+                                 # values; both bracket them (Bagheri Table 5: core 2160-2400 kg/m3, 183-213 km). docs/MODEL.md.
                                  core_density = 2353,     # Core bulk density [kg/m³]
                                  core_porosity = 0.32,    # Core porosity [volume fraction] #Default assumed value from Stycinski et al 2023
                                  
@@ -744,12 +744,12 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  orbital_period = 118800, # [s]
                                  # Tidal pore-pressure amplitude [Pa]. NULL (default): derived from the strain, dP = alpha eps_v M
                                  # (Simulator$tidal_pressure(); PI 2026-10-30). A number overrides it (the old default was an
-                                 # UNSOURCED 1e5 Pa); README section 6.
+                                 # UNSOURCED 1e5 Pa); docs/MODEL.md.
                                  max_tidal_stress = NULL,
                                  # Ocean tidal loading at the seafloor (PI 2026-10-31): the whole-body surface Love number h2 of
                                  # Bagheri et al. (2025) Table 3, "dissipative core" (|h2| 0.0459 +- 0.0294, lag 2.95 +- 2.69 deg);
                                  # the ocean surface beneath the shell is taken to move with the surface. ocean_load = FALSE drops it.
-                                 # The core's tidal strain (PI item N, 2026-10-31; README section 6, The strain):
+                                 # The core's tidal strain (PI item N, 2026-10-31; docs/MODEL.md, The strain):
                                  #   "layered" (default): the volumetric strain of the core and the seafloor normal stress from a
                                  #     layered forward model of Bagheri et al. (2025)'s structure (TidalPy; scripts/layered_core_strain.py,
                                  #     data/layered_core_strain*.csv), mean over Table 5's parameter ranges for tidal_scenario
@@ -771,7 +771,7 @@ EnceladusConfig <- R6::R6Class("EnceladusConfig",
                                  ocean_load = TRUE,
                                  eccentricity = 0.0047,   # Enceladus's orbital eccentricity (the value with which Liao et al. 2020's Fig. 2a is reproduced)
 
-                                 # Poroelastic exchange (README section 6, Exchange). Core rigidity and viscosity: Bagheri et al.
+                                 # Poroelastic exchange (docs/MODEL.md, Exchange). Core rigidity and viscosity: Bagheri et al.
                                  # (2025) Table 5, "dissipation in the core" (mu 4-70 GPa, eta 4.4e11-2.3e12 Pa s); PLACEHOLDERS at
                                  # the geometric means until the PI picks values. (The Biot coefficient is the Simulator's,
                                  # from porosity: Simulator$biot_alpha().)
@@ -1030,7 +1030,7 @@ FlowUtils <- list(
   #   eps0 = 9/(4 pi) e w^2/(rho G) (5/3) |k2|,  k2 = (3/2) / (1 + 19 mu* / (2 rho g R)),
   #   mu* = mu i w tau / (1 + i w tau), tau = eta / mu (Maxwell), g = (4/3) pi G rho R.
   # Their section 2.2 text and Appendix A write k2 with an extra factor 3/5; the caption's form is the one
-  # that reproduces their Fig. 2a contours (checked 2026-10-29, README section 6), so it is used here.
+  # that reproduces their Fig. 2a contours (checked 2026-10-29, docs/MODEL.md), so it is used here.
   tidal_strain_amplitude = function(mu, eta, rho, R, e, period) {
     w <- 2 * pi / period; tau <- eta / mu
     mus <- mu * (1i * w * tau) / (1 + 1i * w * tau)
@@ -1234,7 +1234,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              print(sprintf("Got stress vector of length %d", length(stress)))
                              
                              # The tidal pressure perturbation diffuses only a skin depth delta into the rock, so the
-                             # gradient acts over L_eff = min(layer_thickness, delta) (skin_depth(); README section 6).
+                             # gradient acts over L_eff = min(layer_thickness, delta) (skin_depth(); docs/MODEL.md).
                              pressure_gradient <- stress / self$skin_depth()$L_eff
                              print(sprintf("Pressure gradient vector length: %d", length(pressure_gradient)))
                              
@@ -1302,7 +1302,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                              return(results)
                            },
                            
-                           # Tidal strain of the reacting box (README section 6, The strain). strain_model = "liao": eps0 is
+                           # Tidal strain of the reacting box (docs/MODEL.md, The strain). strain_model = "liao": eps0 is
                            # Liao et al. (2020)'s polar strain amplitude, and eps_v the volume mean of the compressed part of a
                            # degree-2 dilatation field with pole amplitude eps0 over the box, eps0 * degree2_dilatation_factor(R, L):
                            # (mean |P2| over the sphere = 0.385) / 2 = 0.192 times the radial mean of (r/R)^2 over the box.
@@ -1373,7 +1373,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            # model, |u_ocean - u_core| its mean over the samples (pole, ocean top and core surface, with
                            # their phases). (The layered model's whole normal stress on the core surface, ~880 Pa at the
                            # pole, is larger: most of it is the tidal potential's hydrostatic pressure, which acts on the
-                           # pore fluid as a body force too and so drives no flow; README section 6.)
+                           # pore fluid as a body force too and so drives no flow; docs/MODEL.md.)
                            tidal_load_pressure = function() {
                              cfg <- self$config
                              if (!isTRUE(cfg$ocean_load)) return(list(pole = 0, mean = 0, u_ocean = 0, u_core = 0, h2_core = 0))
@@ -1397,7 +1397,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                                   h2_core = Mod(h2c), h2_core_lag_deg = -Arg(h2c) * 180 / pi)
                            },
 
-                           # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; README section 6):
+                           # Exchange per half-orbit, the smallest of three volumes (PI 2026-10-29; docs/MODEL.md):
                            #   poro:        alpha * eps_v * V_layer, the fluid the tidal volumetric strain expels from the
                            #                matrix (drained limit). eps_v = eps0 * degree2_dilatation_factor(): the
                            #                compressed part of a degree-2 dilatation field whose pole amplitude is eps0,
@@ -1476,7 +1476,7 @@ Simulator <- R6::R6Class("HydrothermalSimulator",
                            exchange_header_line = function() {
                              x <- self$exchange
                              sprintf(paste0("# Reacting box: top %.4g m of the %.4g m layer (reactive_depth = \"%s\"; skin depth %.4g m)\n",
-                                            "# Exchange per half-orbit (min of three, README section 6): %.3e of the pore volume, limited by %s ",
+                                            "# Exchange per half-orbit (min of three, docs/MODEL.md): %.3e of the pore volume, limited by %s ",
                                             "(poro %.3e, darcy %.3e, pore_volume %.3e m3; skin depth %.3g m; strain %s; eps0 %.3e, eps_v/eps0 %.4f, ",
                                             "dP %.4g Pa (%s; ocean load %.3g Pa), mu %.3g GPa, eta %.3g Pa s, alpha %.3f, phi %.3g)"),
                                      self$reactive_thickness(), self$params$layer_thickness, self$params$reactive_depth, x$delta,
@@ -1567,7 +1567,7 @@ PhreeqcIntegrator <- R6::R6Class("PhreeqcIntegrator",
                                    iom_pools = NULL,
                                    profile_file = "profiles/EnceladusProfile_Seawater_10.0ppt_Tb272.4578K_PorousRock.txt",
                                    # Phosphate phases in the porewater and ocean equilibrium-phase lists (PI 2026-11-02;
-                                   # README section 6, Phosphate phases): "apatite" (default: Hydroxyapatite and the
+                                   # docs/MODEL.md, Phosphate phases): "apatite" (default: Hydroxyapatite and the
                                    # precursors) or "precursor" (apatite kinetically inhibited: the precursors only).
                                    # Every generator takes phosphate_phases = and sets this; restarts must match their parent.
                                    phosphate_phases = "apatite",
@@ -2471,7 +2471,7 @@ Forsterite
 	1   REM Ref PK04
 	10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47
 	20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))
-	21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
+	21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
 	22  mw = 140.6715
 	40  k = (kacid + kneut) * SSA * mw * M
 	50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))
@@ -2485,7 +2485,7 @@ Troilite # PK04 has no separate troilite entry; hexagonal pyrrhotite parameters 
   2   REM Hexagonal pyrrhotite formulation (reaction orders H+ = -0.090, Fe3+ = 0.356) used for troilite
   3   REM Rate depends on H+ and Fe3+ activities
   25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356
-  26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  26  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   27  mw = 87.913
   30  k = kacid * SSA * mw * M
   40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))
@@ -2499,7 +2499,7 @@ Diopside
   1   REM Ref PK04
   10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71
   20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   22  mw = 216.55
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))
@@ -2513,7 +2513,7 @@ K-Feldspar
   10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5
   20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823
-  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   32  mw = 278.33
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))
@@ -2561,7 +2561,7 @@ Tephroite
   37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17
   38  IF Ea < 0 THEN Ea = 0
   40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47
-  46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  46  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   47  mw = 201.96
   50  k = kacid * SSA * mw * M
   60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))
@@ -2576,7 +2576,7 @@ Enstatite
   1   REM Ref PK04
   10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6
   20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   22  mw = 100.3725
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))
@@ -2589,7 +2589,7 @@ Anorthite # Ca-endmember of plagioclase
   1   REM Ref PK04
   10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411
   20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))
-  21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  21  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   22  mw = 278.164
   40  k = (kacid + kneut) * SSA * mw * M
   50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))
@@ -2606,7 +2606,7 @@ Albite # Na-endmember of plagioclase
   10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457
   20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))
   30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572
-  31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7
+  31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7
   32  mw = 262.1798
   40  k = (kacid + kneut + kbase) * SSA * mw * M
   50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))
@@ -2652,7 +2652,7 @@ KINETICS 1
     
 EQUILIBRIUM_PHASES 1
 # --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
-#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
+#     in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---
    Fe                   0  {fe_moles}          dissolve_only
    Ni                   0  {ni_moles}          dissolve_only
    Lawrencite           0  {lawrencite_moles}  dissolve_only
@@ -3353,7 +3353,7 @@ REACTION_PRESSURE 2
 {if (pore_gas_fate != "retain") paste0("\n", gas_transfer_block(gas_comps, out = pore_gas_fate == "retain_to_pore_volume", poregas_file = paste0(base_name, "_poregas.csv"))) else ""}
 
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
+# --- Primary minerals (dissolve to equilibrium each cycle). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -3937,7 +3937,7 @@ REACTION_TEMPERATURE 1
 {gas_phase_block(1, gas_comps, .solution_pressure_atm, water_temp_C, "Gas (fixed pressure, starts empty)")}
 
 EQUILIBRIUM_PHASES 1
-# --- Primary minerals (dissolve to equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---
+# --- Primary minerals (dissolve to equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---
    Enstatite            0  {enstatite_moles}   dissolve_only
    Forsterite           0  {forsterite_moles}  dissolve_only
    Troilite             0  {troilite_moles}    dissolve_only
@@ -4286,7 +4286,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -4297,7 +4297,7 @@ END
                                          '\t-start',
                                          '\t1   REM Acid mechanism only (PK04, hexagonal pyrrhotite formulation)',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -4310,7 +4310,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -4323,7 +4323,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -4341,7 +4341,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -4353,7 +4353,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -4365,7 +4365,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -4378,7 +4378,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -4401,7 +4401,7 @@ END
                                      # ---- EQUILIBRIUM_PHASES primary lines: Fe/Ni/Lawrencite (always) + equil_primary (promoted) ----
                                      equil_prim_lines <- paste(
                                        c("# --- Primary minerals (equilibrium; dissolve_only so they can only deplete). Fe and Ni corrode completely
-#     in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
+#     in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---",
                                          sprintf("   Fe                   0  %.6e          dissolve_only", fe_moles),
                                          sprintf("   Ni                   0  %.6e          dissolve_only", ni_moles),
                                          sprintf("   Lawrencite           0  %.6e          dissolve_only", lawrencite_moles),
@@ -4998,7 +4998,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -5009,7 +5009,7 @@ END
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -5022,7 +5022,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -5035,7 +5035,7 @@ END
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -5053,7 +5053,7 @@ END
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -5065,7 +5065,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -5077,7 +5077,7 @@ END
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -5090,7 +5090,7 @@ END
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -5136,7 +5136,7 @@ END
                                        collapse = "\n"
                                      )
                                      equil_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---",
                                          always_equil_prim_lines,
                                          if (length(equil_primary) > 0)
                                            sapply(equil_primary, function(m)
@@ -5615,7 +5615,7 @@ END
                                               "MIX 2\n  2  1.0\n", sprintf("  1  %.15e\n", -refill_kg / soln1_h2o), "SAVE solution 2\nEND\n",
                                               "MIX 1\n", sprintf("  1  %.15e\n", 1 + refill_kg / soln1_h2o), "SAVE solution 1\nEND\n")
                                      } else ""
-                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; README section 6); ocean_scale: %.15g", refill_kg, ocean_scale)
+                                     refill_header_line <- sprintf("# refill_kg: %.6e (ocean -> porewater before the first orbit; docs/MODEL.md); ocean_scale: %.15g", refill_kg, ocean_scale)
 
                                      # The solutions: the parent's exact end state (SOLUTION_RAW from its DUMP; the ocean scaled
                                      # by ocean_scale with a MIX, which scales water, solutes, H and O together), else, for parents
@@ -5689,7 +5689,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.85) * exp(-67.2e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.47',
                                          '\t20  kneut = 10^(-10.64) * exp(-79.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 140.6715',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Forsterite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Forsterite"))',
@@ -5700,7 +5700,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t-start',
                                          '\t1   REM PK04 has no separate troilite entry, hexagonal pyrrhotite parameters used as proxy',
                                          '\t25  kacid = 10^(-6.79) * exp(-63.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.090 * ACT("Fe+3")^0.356',
-                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t26  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t27  mw = 87.913',
                                          '\t30  k = kacid * SSA * mw * M',
                                          '\t40  IF SR("Troilite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Troilite"))',
@@ -5713,7 +5713,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-6.36) * exp(-96.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.71',
                                          '\t20  kneut = 10^(-11.11) * exp(-40.6e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 216.55',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Diopside") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Diopside"))',
@@ -5726,7 +5726,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t10  kacid = 10^(-10.06) * exp(-51.7e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.5',
                                          '\t20  kneut = 10^(-12.41) * exp(-38.0e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-21.20) * exp(-94.1e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.823',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 278.33',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("K-Feldspar") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("K-Feldspar"))',
@@ -5744,7 +5744,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t37  Ea = -60.11*LOG(-LOG10(aH)) + 106.17',
                                          '\t38  IF Ea < 0 THEN Ea = 0',
                                          '\t40  kacid = 10^(-4.46) * exp(-Ea*1e3/8.314 * (1/TK-1/298.15)) * aH^0.47',
-                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t46  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t47  mw = 201.96',
                                          '\t50  k = kacid * SSA * mw * M',
                                          '\t60  IF SR("Tephroite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Tephroite"))',
@@ -5756,7 +5756,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-9.02) * exp(-80.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.6',
                                          '\t20  kneut = 10^(-12.72) * exp(-80.0e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 0.1  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 100.3725',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Enstatite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Enstatite"))',
@@ -5768,7 +5768,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t1   REM Ref PK04',
                                          '\t10  kacid = 10^(-3.50) * exp(-16.6e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^1.411',
                                          '\t20  kneut = 10^(-9.12) * exp(-17.8e3/8.314 * (1/TK-1/298.15))',
-                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t21  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t22  mw = 278.164',
                                          '\t40  k = (kacid + kneut) * SSA * mw * M',
                                          '\t50  IF SR("Anorthite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Anorthite"))',
@@ -5781,7 +5781,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                          '\t10  kacid = 10^(-10.16) * exp(-65.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^0.457',
                                          '\t20  kneut = 10^(-12.56) * exp(-69.8e3/8.314 * (1/TK-1/298.15))',
                                          '\t30  kbase = 10^(-15.60) * exp(-71.0e3/8.314 * (1/TK-1/298.15)) * ACT("H+")^-0.572',
-                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): README section 6, decision D7',
+                                         '\t31  SSA = 5  # UNSOURCED surface area (m2/g): docs/MODEL.md, decision D7',
                                          '\t32  mw = 262.1798',
                                          '\t40  k = (kacid + kneut + kbase) * SSA * mw * M',
                                          '\t50  IF SR("Albite") > 1 THEN rate = 0 ELSE rate = k * (1 - SR("Albite"))',
@@ -5883,7 +5883,7 @@ SOLUTION 2 Enceladus ocean (restarted)
                                      # Fe/Ni/Lawrencite always appear here (porewater), recovered via
                                      # get_ep_moles() from their own native EQUILIBRIUM_PHASES output column.
                                      ep1_prim_lines <- paste(
-                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, README section 6, decision D6 ---",
+                                       c("# --- Primary minerals (equilibrium). Fe and Ni corrode completely in the first step: UNSOURCED instantaneous corrosion, docs/MODEL.md, decision D6 ---",
                                          sapply(always_equil_primary, function(m)
                                            sprintf("   %-20s 0 %.15e  dissolve_only", m, get_ep_moles(m, row_react))),
                                          if (length(equil_primary) > 0)

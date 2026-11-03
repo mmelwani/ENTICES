@@ -45,7 +45,7 @@ A run ends at whichever comes first:
 ### How long
 
 Expect hours to weeks. With the phosphate phases the reference takes ~3 h to 1e4 yr, ~0.5 day to 1e6 yr
-and an estimated 6–24 days to the 1e8 yr backstop (README §6, Step limits). Each case runs two PHREEQC
+and an estimated 6–24 days to the 1e8 yr backstop ([docs/MODEL.md §1.5](docs/MODEL.md#15-long-run-stepping), Step limits). Each case runs two PHREEQC
 processes. `runs/reference/organic/run.log` gets one line per chunk, so watch that to see progress.
 
 ### Resuming
@@ -65,8 +65,8 @@ has reached neither truncates nor reruns it. The rerun says the run is already p
 2. Set `name` (it becomes `runs/<name>/`).
 3. Override only the fields you change. Everything else is inherited from `cases/reference.R`.
 
-`cases/reference.R` lists every field, with units, the allowed range and the README section that
-justifies it. `run_case.R` checks the case before running and lists every problem in plain words: out of
+`cases/reference.R` lists every field, with units, the allowed range and the section of
+[docs/MODEL.md](docs/MODEL.md) that justifies it. `run_case.R` checks the case before running and lists every problem in plain words: out of
 range, φ0 ≥ φc, an unknown field, and so on.
 
 Some details:
@@ -90,7 +90,7 @@ These cases are set apart on purpose:
 - `k_1e-14` has `ss_tol = NULL` and is labelled "not at steady state by design". Its ocean circulation
   time (~5e8 yr) is longer than t_end, so it runs to the 1e8 yr backstop.
 - `k_floor_1e-14` and `k_floor_1e-12` keep a fracture-maintained permeability once the rock clogs,
-  instead of ending the run. See README §6, *Clogging and k_floor*.
+  instead of ending the run. See [docs/MODEL.md §1.4](docs/MODEL.md#14-porosity-evolution), *Clogging and k_floor*.
 
 ### Staged runs (recommended)
 
@@ -102,7 +102,7 @@ A full sweep to the 1e8 yr backstop is weeks of machine time per case. Run it in
 2. Then extend the cases that matter toward 1e8 yr. Add `t_end_yr = 1e8` to those case files (or put it
    back in `cases/reference.R` to extend them all) and rerun `run_case.R` on each, or rerun the sweep.
    Each run resumes from its last chunk, and nothing is redone. Expect 6–24 days per case to 1e8 yr, ~6
-   days once the step limit takes over and ~24 if porosity keeps limiting the steps (README §6, *Step
+   days once the step limit takes over and ~24 if porosity keeps limiting the steps ([docs/MODEL.md §1.5](docs/MODEL.md#15-long-run-stepping), *Step
    limits*).
 
 Runs that ended at a steady state, by clogging or at φc in stage 1 are finished. Stage 2 skips them, and
@@ -207,7 +207,7 @@ failure.** Those are decisions (section 8).
 
 ## 8. What is fixed, and why
 
-The physics choices are documented decisions, not tuning knobs, and README §6 gives the reason for each.
+The physics choices are documented decisions, not tuning knobs, and [docs/MODEL.md §1](docs/MODEL.md#1-the-model-in-the-order-a-run-uses-it) gives the reason for each.
 They are:
 - the rigid-frame porosity evolution, the critical-porosity Biot coefficient and K_d;
 - the layered tidal strain and the ocean load;
@@ -218,7 +218,7 @@ They are:
 - the metal corrosion idealisation;
 - the IOM kinetics and density.
 
-The time-step limits (`phi_tol`, `x_step_max`) were set by validation against much finer steps (README §6,
+The time-step limits (`phi_tol`, `x_step_max`) were set by validation against much finer steps ([docs/MODEL.md §1.5](docs/MODEL.md#15-long-run-stepping),
 *Long runs*). Loosening them changes the answer by more than 1%. The test tolerances guard mass balance
 and reproducibility. A case file changes only what this guide and `cases/reference.R` list. If a result
 seems to need a change to any of the above, that is a question for the PI, not an edit.

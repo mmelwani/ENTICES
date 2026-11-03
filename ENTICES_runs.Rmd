@@ -60,7 +60,7 @@ atm), DIC 9.2e-15 (the seed, since the IOM releases almost none at 25 °C) and 0
 metal's H₂ forms a pore bubble of 0.44 L, 2.8× the pore volume, in the first orbit. Under the default
 `pore_gas_fate = "to_ocean"` it goes to the ocean, which it saturates. `pore_gas_fate =
 "retain_to_pore_volume"` keeps the bubble up to the pore volume and still saturates the ocean (pH 7.62),
-whereas `"retain"` leaves the ocean at 4.2e-9 molal H₂ (README §7, Gas).
+whereas `"retain"` leaves the ocean at 4.2e-9 molal H₂ (docs/MODEL.md §3, Gas).
 
 ## 2. The 160 °C example case
 
@@ -83,7 +83,7 @@ L of ocean gas. The pore bubble is 0.56 L after the first orbit (3.6× the pore 
 the ocean by orbit 12 (5e-4 L). ρ_solid goes from 2.92 to 2.76 g/cm³, and the pores have 0.0024 mol
 hydroxyapatite, with none in the ocean (P 1e-14 molal). The bubble is the metal's H₂, because Fe and Ni
 corrode completely in the first step (an accepted idealisation of early outgassing). `h2_budget()` and
-`scale_to_core()` give the H₂ inventory (1.5e20 mol in the ocean gas for the whole core, README §6).
+`scale_to_core()` give the H₂ inventory (1.5e20 mol in the ocean gas for the whole core, docs/MODEL.md §1.6).
 
 ## 3. A 100 °C organic vs blank pair
 
@@ -123,7 +123,7 @@ the start, the organics' carbon can only be found by the paired difference (exam
 `initial_ocean = cometary_ice_ocean()`). `cometary_ice_ocean(include_O2 = FALSE)` leaves sulfide
 unoxidised and 0.031 molal H₂ (pH 3.8). `include_NH3 = FALSE` gives Miller et al.'s Table 5 as printed
 (pH 1.85). `include_less_volatile = TRUE` adds 21 less-volatile ices (DIC 0.56 molal, pH 5.8, an H₂
-bubble, README §6), and `f` scales the load.
+bubble, docs/MODEL.md §1.6), and `f` scales the load.
 
 ## 5. The pore-gas bracket
 

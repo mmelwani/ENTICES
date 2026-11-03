@@ -1,5 +1,5 @@
 """Adds the validated phosphate phases to databases/coreclath_CH4coupled.dat and coreclath_CH4uncoupled.dat
-(production kit, PI 2026-11-02; README section 6, Phosphate phases), and comments out coreclath's own
+(production kit, PI 2026-11-02; docs/MODEL.md, Phosphate phases), and comments out coreclath's own
 Hydroxyapatite and Fluorapatite. Then rerun scripts/make_c4only.py to carry the change into
 coreclath_C4only.dat.
 
@@ -17,7 +17,7 @@ Sources, all converted to the coreclath basis (HPO4-2 for P(5), NH3 for N(-3)):
   - Struvite: Bhuiyan, Mavinic & Beckie (2007, Environ. Technol. 28, 1015), log10 Ksp = -1157.45 - 0.784 T -
     63.86/T + 556.83 log10 T + 19.54/T^2 (10-60 C; Ksp = (Mg+2)(NH4+)(PO4-3)), with coreclath's
     HPO4-2 = PO4-3 + H+ and NH3 + H+ = NH4+.
-Each phase was checked against a primary solubility product before it was added (README, the table).
+Each phase was checked against a primary solubility product before it was added (docs/MODEL.md, the table).
 
 Idempotent: the inserted block sits between marker lines and is replaced on a rerun; the coreclath apatites
 are commented with the prefix "#tdP# " once.
@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DBS = ["databases/coreclath_CH4coupled.dat", "databases/coreclath_CH4uncoupled.dat"]
 DEFAULT_TD = "C:/Program Files/USGS/phreeqc-3.8.6-17100-x64/database/PHREEQC_ThermoddemV1.10_15Dec2020.dat"
-BEGIN = "# ==== Phosphate phases (scripts/add_phosphate_phases.py; README section 6, Phosphate phases) ===="
+BEGIN = "# ==== Phosphate phases (scripts/add_phosphate_phases.py; docs/MODEL.md, Phosphate phases) ===="
 END = "# ==== end of phosphate phases ===="
 PREFIX = "#tdP# "
 # coreclath's (LLNL) H2PO4-/PO4-3/NH4+ reactions, as written in the coreclath databases
@@ -103,7 +103,7 @@ def block(sp, td):
     L = [BEGIN,
          "# Converted to the HPO4-2 basis from Thermoddem V1.10 (BRGM, 15 Dec 2020) with Thermoddem's own",
          f"# H2PO4- = HPO4-2 + H+ (log_k {sp['log_k']}, delta_h {sp['delta_h']} kJ/mol); Vivianite and Struvite from the primary",
-         "# literature. Each was checked against a primary solubility product (README section 6). Molar volumes",
+         "# literature. Each was checked against a primary solubility product (docs/MODEL.md). Molar volumes",
          "# are in data/mineral_molar_volumes.csv, not here (mineral -Vm lines are stripped in these databases).", ""]
     for name, cname, trange in TD_PHASES:
         e = td[name]
