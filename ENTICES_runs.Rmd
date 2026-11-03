@@ -11,8 +11,11 @@ Numbers quoted are from PHREEQC 3.8.6, all rerun on 2026-11-02 with the phosphat
 "apatite"`, the default); Lucas's earlier notebook is
 `examples/ENTICES_runs_lucas_2026-10.Rmd`.
 
-```{r setup, eval = FALSE}
+```{r opts, include = FALSE}
 knitr::opts_chunk$set(eval = FALSE)
+```
+
+```{r setup}
 source("ENTICES.R")   # also sources iom_module.R, phreeqc_tools.R, organic_contribution.R
 ```
 
