@@ -6,7 +6,7 @@
 # that ended at a steady state stays done. ~20 min on a free machine. From the repo
 # root:  Rscript tests/resume_check.R      (KEEP=1 keeps runs/_resume_test)
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 source("production_kit.R")
 failures <- 0
 check <- function(ok, what) { cat(if (isTRUE(ok)) "[PASS]" else "[FAIL]", what, "\n"); if (!isTRUE(ok)) failures <<- failures + 1 }

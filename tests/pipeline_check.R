@@ -4,7 +4,7 @@
 # every figure renders (PDF and PNG). ~10 min on a free machine. From the repo root:
 #   Rscript tests/pipeline_check.R      (KEEP=1 keeps runs/_pipeline_test)
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 source("production_kit.R"); source("make_figures.R")
 failures <- 0
 check <- function(ok, what) { cat(if (isTRUE(ok)) "[PASS]" else "[FAIL]", what, "\n"); if (!isTRUE(ok)) failures <<- failures + 1 }

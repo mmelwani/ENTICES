@@ -14,7 +14,7 @@ flags <- c("--max-chunks", "--runs-dir", "--name", "--variant")
 pos <- args[!(args %in% c(flags, "--sequential")) & !(seq_along(args) - 1) %in% match(flags, args)]
 if (length(pos) != 1) stop("usage: Rscript run_case.R [--sequential] [--max-chunks N] [--runs-dir DIR] [--name NAME] cases/<case>.R", call. = FALSE)
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 source("production_kit.R")
 max_chunks <- as.numeric(opt("--max-chunks", Inf)); runs_dir <- opt("--runs-dir", "runs")
 variant <- opt("--variant")

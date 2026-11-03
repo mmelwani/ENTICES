@@ -14,7 +14,7 @@
 # Run from the repo root:  Rscript tests/pressure_check.R
 
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 
 failures <- 0
 check <- function(ok, what) {

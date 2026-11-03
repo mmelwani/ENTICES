@@ -35,7 +35,7 @@ The first source that has a phase is used.
    access, so it was not checked]
 
    **Phosphate phases (accepted by the PI 2026-11-02; OCP and Whitlockite PROVISIONAL)** (none is in Core11,
-   ds636 or hp636; README §6, Phosphate phases): Vm = 0.60221 V / Z from unit cells on webmineral.com
+   ds636 or hp636; docs/MODEL.md, Phosphate phases): Vm = 0.60221 V / Z from unit cells on webmineral.com
    (Brushite 75.80, Vivianite 184.84, Bobbierite 190.79, Newberyite 82.25, Struvite 143.80 cm³/mol).
    PROVISIONAL: OCP 182.62, from the cell of Ca₈(HPO₄)₂(PO₄)₄·5H₂O in Mathew, Brown, Schroeder & Dickens
    (1988), *J. Crystallogr. Spectrosc. Res.* 18, 235 (seen through search results, not the paper), per
@@ -92,7 +92,7 @@ WebElements (K, U). Many `-Vm` lines carry a comment naming `thermo.com.V8.R6+.t
 
 The core's tidal response in a layered model of Enceladus (PI item N, 2026-10-31), written by
 `scripts/layered_core_strain.py` (TidalPy 0.8.1's radial solver; Bagheri et al. 2025's structure and
-Table 5 ranges; README section 6, The strain). Regenerate with
+Table 5 ranges; docs/MODEL.md, The strain). Regenerate with
 
 ```
 python -I scripts/layered_core_strain.py data

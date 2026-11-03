@@ -11,7 +11,7 @@ core-density range are rejected).
 Core bulk modulus (PI 2026-11-01): not Bagheri's fixed 100 GPa (an intact-rock value the Love numbers do
 not constrain) but the drained frame modulus of ENTICES's critical-porosity model, K_d = K_grain (1 - phi/phi_c),
 with K_grain the Hill average of the reconstruction's minerals and the IOM (data/mineral_elastic_moduli.csv;
-grain_elastic_moduli() in ENTICES_LF_20260917.R; 15 wt% IOM, 33% of the solid volume): 48.99 GPa, so K_d =
+grain_elastic_moduli() in ENTICES.R; 15 wt% IOM, 33% of the solid volume): 48.99 GPa, so K_d =
 9.798 GPa at phi = 0.32, phi_c = 0.4.
 --k-core sets it (Pa); it is written to both tables (K_core_Pa). The volumetric strain scales as 1/K_core
 (checked here over 2-100 GPa, to 0.2%), which is how the R code follows K_d(phi(t)).

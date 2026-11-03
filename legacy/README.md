@@ -1,7 +1,7 @@
 # legacy/
 
 `ENTICES_v3.R` is an earlier version of the ENTICES generator, kept for
-reference only. **Do not use it for runs.** Use `ENTICES_LF_20260917.R` at the
+reference only. **Do not use it for runs.** Use `ENTICES.R` at the
 repo root.
 
 It has a known organic dosing bug. Its `REACTION` block multiplies each IOM

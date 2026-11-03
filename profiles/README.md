@@ -16,10 +16,10 @@ Columns after the 81 header lines: P (MPa), T (K), r (m), phase ID, density,
 and the other PlanetProfile outputs. The generators read phase 50 (porous
 rock) only:
 - `mean_layer_pressure_MPa()`: mean pressure over the permeable layer,
-  26.47 MPa = **261.2 atm** for the full-core layer (`layer_thickness` 194.2 km).
+  26.47 MPa = 261.2 atm for the full-core layer (`layer_thickness` 194.2 km).
   This is the porewater pressure.
 - `ocean_floor_pressure_MPa()`: the pressure at the top of phase 50,
-  6.76 MPa = **66.7 atm**. This is the ocean pressure.
+  6.76 MPa = 66.7 atm. This is the ocean pressure.
 - `mean_layer_temp_C()`: mean layer temperature, used when
   `porewater_temp = "profile"`.
 
@@ -28,7 +28,7 @@ is the core bulk density (porosity and pore fluid included) of this
 structure model.
 
 Provenance: this is the profile Lucas Fifer's production runs used (their
-inputs carry the same 66.7 / 261.2 atm). Which PlanetProfile version and
+inputs have the same 66.7 / 261.2 atm). Which PlanetProfile version and
 input file produced it is not recorded here [citation needed: PlanetProfile
 version and run configuration].
 

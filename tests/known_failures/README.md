@@ -38,7 +38,7 @@ echo $?   # 139 under Git Bash (0xC0000005 on Windows) while the bug is present
 To regenerate the full input (from the repo root, in R):
 
 ```r
-source("ENTICES_LF_20260917.R")
+source("ENTICES.R")
 sim <- Simulator$new(k = 1e-7, layer_thickness = 194200, config = EnceladusConfig$new()); sim$run_simulation()
 ph <- PhreeqcIntegrator$new(sim); ph$calculate_phreeqc_parameters()
 ph$generate_phreeqc_input_tidal_equil(output_dir = "phreeqc_inputs/segfault", n_orbital_cycles = 1,

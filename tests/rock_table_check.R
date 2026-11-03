@@ -12,7 +12,7 @@
 #     ROCK_MOL_PER_KG; they stay in the mass basis only.
 
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-source("ENTICES_LF_20260917.R")
+source("ENTICES.R")
 
 REL_TOL <- 1e-4
 ABS_TOL <- 1e-6

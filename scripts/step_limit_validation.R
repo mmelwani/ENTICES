@@ -1,10 +1,10 @@
-# Step-limit validation (production kit, PI 2026-11-02; README section 6, Step limits). From the repo root:
+# Step-limit validation (production kit, PI 2026-11-02; docs/MODEL.md, Step limits). From the repo root:
 #   Rscript scripts/step_limit_validation.R <repo> <out> <case: ref|k11> <test: x|phi> <value> <t_end_yr>
 # x test: porosity held fixed, x_step_max = value; phi test: porosity evolving, phi_tol = value, x_step_max 0.1.
 # ref: Kozeny-Carman d = 1.59 cm; k11: d = 1.59e-4 m (k ~ 1e-11). Prints the ocean C(+4), pH, H2, Na at the end.
 a <- commandArgs(TRUE); setwd(a[1]); out <- a[2]; cs <- a[3]; test <- a[4]; v <- as.numeric(a[5]); te <- as.numeric(a[6])
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 d <- if (cs == "ref") 0.0159 else 1.59e-4
 tmpl <- Simulator$new(k = "kozeny_carman", grain_diameter = d, layer_thickness = 194200, config = EnceladusConfig$new(), phi0 = 0.32)
 t0 <- Sys.time()

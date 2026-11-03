@@ -1211,3 +1211,25 @@ One commit per item; each commit message has its pass check.
   and run_sweep.R: stale files (10 min) and a gone process on 6 checks over >= 60 s; no tasklist answer counts as
   alive. tests/liveness_check.R; tests/resume_check.R steps 4-6. PRODUCTION_GUIDE.md: staged runs (1e6 yr, then
   extend).
+- **Entry point renamed (11-03).** ENTICES_LF_20260917.R is now ENTICES.R (git mv, so the history follows it), and
+  every live source() call, script, test, doc and the example notebook use the new name.
+  scripts/export_mineral_volumes.py reads ENTICES.R. ENTICES_LF_20260917.R remains as a shim that sources ENTICES.R
+  with a deprecation message, so existing personal scripts keep working. The shim will be removed in a later release.
+- **Documentation style pass (11-03).** README.md, PRODUCTION_GUIDE.md, the narrative of ENTICES_runs.Rmd and
+  databases/, profiles/ and reconstruction/README.md rewritten for style: no em dashes or prose semicolons,
+  bold only for defined terms and warnings, and no development history (decision tags, item numbers,
+  branch names, planning labels). README section 6 paragraphs became subsections. Code blocks, numbers,
+  units, equations, parameter values and citations unchanged. Two history notes moved here from the
+  README: config `max_tidal_stress` defaulted to an UNSOURCED 1e5 Pa before it was derived from the strain
+  (10-30), and the 0.39 molal ocean Na quoted earlier came from fixed-porosity runs, not production (the
+  reference under "apatite" has 0.051 molal at 1e4 yr, 0.063 without phosphate phases).
+- **README split (11-03).** README.md keeps what ENTICES is, requirements, how to run, the worked examples,
+  the repository map and the references. docs/MODEL.md has the model (parameters, model choices,
+  interpreting outputs, limitations), with the current physics first in the order a run uses it (strain and
+  pore pressure, skin depth and reacting box, the three-volume exchange, porosity evolution, long-run
+  stepping, chemistry) and an appendix, "Earlier formulations (for reproducing older runs)": the fixed-dP
+  whole-layer flow table, the earlier sweep design, the whole-layer limits, the Liao strain and the 24-orbit
+  runs, each with a note on what replaced it. docs/DEVELOPMENT.md has the column-comparison rule, the
+  restart internals and the known failures. References to README sections 5-7 in the code, case files,
+  databases' comments, scripts, PRODUCTION_GUIDE.md, ENTICES_runs.Rmd, data/README.md and docs/PROGRESS.md
+  now point to docs/MODEL.md. The section 7 carbon text quotes the example case's ocean at pH 8.52.

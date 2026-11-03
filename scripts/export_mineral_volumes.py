@@ -65,7 +65,7 @@ def sk_note(p, vm):
             f"({100 * (vm - v) / v:+.1f}% database vs S&K). Formula fixes the hydration number at 6; real sI "
             f"hydrates run ~5.75-6.4")
 # Minerals the generators use that no database defines as a PHASE (Schreibersite enters as a KINETICS
-# -formula; see ENTICES_LF_20260917.R).
+# -formula; see ENTICES.R).
 EXTRA_FORMULA = {"Schreibersite": "Fe3P"}
 # PHREEQC phase -> THERMOCALC / Perple_X endmember name (levels 2-3).
 HP_MAP = {
@@ -185,7 +185,7 @@ def scale(phreeqc, hp):
 
 def production_phases():
     """Minerals in the generators' EQUILIBRIUM_PHASES and KINETICS lists (gases excluded)."""
-    src = (ROOT / "ENTICES_LF_20260917.R").read_text(encoding="utf-8")
+    src = (ROOT / "ENTICES.R").read_text(encoding="utf-8")
     names = set(re.findall(r"^   ([A-Za-z][\w\-\(\):.]*)\s+0\s+(?:0|\{)", src, re.M))
     for vec in re.findall(r"secondary_minerals <- c\((.*?)\)\s*\n", src, re.S):
         names |= set(re.findall(r'"([^"]+)"', vec))

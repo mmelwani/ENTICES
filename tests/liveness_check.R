@@ -3,7 +3,7 @@
 # minimum span; an unanswered process-table check counts as alive. variant_status() reopens only runs that ended at
 # an earlier t_end. ~1 min. From the repo root:  Rscript tests/liveness_check.R
 suppressPackageStartupMessages({ library(tidyverse); library(glue); library(R6) })
-invisible(capture.output(source("ENTICES_LF_20260917.R")))
+invisible(capture.output(source("ENTICES.R")))
 source("production_kit.R")
 failures <- 0
 check <- function(ok, what) { cat(if (isTRUE(ok)) "[PASS]" else "[FAIL]", what, "\n"); if (!isTRUE(ok)) failures <<- failures + 1 }

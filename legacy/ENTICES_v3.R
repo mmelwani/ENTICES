@@ -2,7 +2,7 @@
 # It has the REACTION dosing bug (IOM coefficients multiplied by iom_C_moles,
 # ~36x under-dose). Sourcing it stops unless you explicitly opt in.
 if (!isTRUE(getOption("entices.allow_legacy_v3"))) {
-  stop("legacy/ENTICES_v3.R is retired (REACTION dosing bug): use ENTICES_LF_20260917.R. ",
+  stop("legacy/ENTICES_v3.R is retired (REACTION dosing bug): use ENTICES.R. ",
        "To load it anyway for comparison, set options(entices.allow_legacy_v3 = TRUE).", call. = FALSE)
 }
 
