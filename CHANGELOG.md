@@ -1215,3 +1215,11 @@ One commit per item; each commit message has its pass check.
   every live source() call, script, test, doc and the example notebook use the new name.
   scripts/export_mineral_volumes.py reads ENTICES.R. ENTICES_LF_20260917.R remains as a shim that sources ENTICES.R
   with a deprecation message, so existing personal scripts keep working. The shim will be removed in a later release.
+- **Documentation style pass (11-03).** README.md, PRODUCTION_GUIDE.md, the narrative of ENTICES_runs.Rmd and
+  databases/, profiles/ and reconstruction/README.md rewritten for style: no em dashes or prose semicolons,
+  bold only for defined terms and warnings, and no development history (decision tags, item numbers,
+  branch names, planning labels). README section 6 paragraphs became subsections. Code blocks, numbers,
+  units, equations, parameter values and citations unchanged. Two history notes moved here from the
+  README: config `max_tidal_stress` defaulted to an UNSOURCED 1e5 Pa before it was derived from the strain
+  (10-30), and the 0.39 molal ocean Na quoted earlier came from fixed-porosity runs, not production (the
+  reference under "apatite" has 0.051 molal at 1e4 yr, 0.063 without phosphate phases).

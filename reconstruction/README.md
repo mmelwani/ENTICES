@@ -1,7 +1,7 @@
 # reconstruction/
 
 Reconstruction of the primordial (pre-alteration) CI chondrite mineralogy that
-supplies ENTICES's rock composition. It is kept as a separate module: ENTICES
+supplies ENTICES's rock composition. It is kept as a separate module, and ENTICES
 depends only on its output, `rock_mol_per_kg.csv`.
 
 | File | What it is |
@@ -11,7 +11,7 @@ depends only on its output, `rock_mol_per_kg.csv`.
 | `RECONSTRUCTION_STATUS.md` | Status, verified results, errors found, and the open items (§8). |
 | `rock_mol_per_kg.csv` | Machine-readable output, one row per phase, with columns `phase, formula, mw_g_mol, wt_pct, mol_per_kg, role, scenario`. |
 | `notes/` | Tephroite kinetics notes and kinetics hand-off notes. |
-| `archive/v0_uncommitted_edit_2026-09.patch` | An uncommitted edit (density citations) to the discredited v0 Rmd, saved before it was removed. **Don't use v0 for numbers**; the v0 file itself is in git history. |
+| `archive/v0_uncommitted_edit_2026-09.patch` | An uncommitted edit (density citations) to the discredited v0 Rmd, saved before it was removed. **Don't use v0 for numbers.** The v0 file itself is in git history. |
 
 ## Regenerating the CSV
 
@@ -31,6 +31,6 @@ These are tracked in `RECONSTRUCTION_STATUS.md` §8:
 - surface areas for every kinetic phase (§8 item 5);
 - the schreibersite rate (§8 item 1b).
 
-The tephroite activation energy is now fitted by Lucas, as
-`Ea = −60.11·ln(pH) + 106.17` kJ/mol floored at 0; see `CHANGELOG.md`. §4
-still says "UNRESOLVED" and needs updating.
+The tephroite activation energy is fitted by Lucas, as
+`Ea = −60.11·ln(pH) + 106.17` kJ/mol floored at 0 (see `CHANGELOG.md`).
+`RECONSTRUCTION_STATUS.md` §4 still says "UNRESOLVED" and needs updating.
