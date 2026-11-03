@@ -314,7 +314,7 @@ so only k·ΔP/L matters. ΔP is derived from the strain (§1.1, The tidal pore 
 uses a fixed ΔP. The exchanged fluid per orbit is |q| integrated over the orbit times the
 core's surface area (q is per unit total area). Every orbit's volume is treated as fluid that leaves
 the rock and is replaced by ocean water, so **the oscillating flow is assumed to give net exchange**
-(an open question, Appendix A.2). Production uses k = 1e-7 m² and L = 194.2 km, and the table in
+(an open question, §4). Production uses k = 1e-7 m² and L = 194.2 km, and the table in
 Appendix A.1 uses ΔP = 1e5 Pa. The literature constrains ranges, each with its own limitation:
 - Liao et al. (2020), poroviscoelastic tidal model of the core. They consider k from 1e-12 to
   1e-7 m². Their Fig. B3 has a maximum pore pressure of ~3×10⁴ Pa at the poles and ~0 at
@@ -1087,6 +1087,18 @@ not an Enceladus pH. A run cannot reach 4.5 Gyr at the validated step limits, so
 a steady state or the 1e8 yr backstop (README §3). The k ≈ 1e-14 case, whose circulation time (~5e8 yr)
 exceeds the backstop, is not at steady state by design.
 
+How the oscillating flow becomes net exchange is an open question. The tide moves pore fluid back and
+forth (Liao et al.'s velocities imply ~7 cm of displacement per tide), and the model counts each half-orbit's
+exchanged volume as one-way exchange, fluid that leaves the rock and is replaced by ocean water. That is
+an upper bound if the back-and-forth flow brings the same fluid back. The three-volume exchange (§1.3)
+caps the volume at the smallest of the strain-expelled, drained and pore volumes, and in the skin the
+strain volume binds, so the bound is the fluid the tidal strain expels, ε_v·α/φ of the pore volume per
+half-orbit. The skin-depth argument (§1.2) limits where that fluid comes from, because the pressure change
+reaches only δ, so only the top L_eff = min(L, δ) exchanges and the Darcy gradient acts over L_eff, whereas
+Liao et al.'s pressure varies with latitude over the core's radius. The question sits beside two stated
+assumptions (§1.3, Assumptions stated, not swept): that the water drawn in is bulk ocean, not the fluid
+just expelled, and that the porewater is one well-mixed box.
+
 ## Appendix. Earlier formulations (for reproducing older runs)
 
 ### A.1 Flow driving at a fixed ΔP over the whole layer
@@ -1119,7 +1131,7 @@ gradient over the skin depth (see §1.3), and at production k the poroelastic te
 
 ### A.2 The sweep (designed, not run)
 
-*Replaced by One sweep over (φ, d, strain) (§1.3), which sets k through the grain size and uses the strain in place of ΔP.*
+*Replaced by the current sweep over (φ, d, strain) (§1.3, One sweep over (φ, d, strain)), which sets k through the grain size and uses the strain in place of ΔP.*
 
 1. Treat the driving term as one quantity, reported three ways: k·ΔP/L, the mean Darcy flux, and
    the fluid exchanged per orbit as a fraction of the porewater. k, `max_tidal_stress` and
@@ -1127,11 +1139,6 @@ gradient over the skin depth (see §1.3), and at production k the poroelastic te
 2. Ranges: ΔP 1e4–1e5 Pa (Liao et al.), and k 1e-15–1e-7 m², marking the Choblet (1e-14–1e-13),
    Fisher (1e-13–1e-10) and Liao (1e-12–1e-7) sub-ranges. This brackets Zandanel et al.'s 1–100 cm/yr.
 3. Report each case's ocean circulation time, for comparison with Choblet et al.'s 25–250 Myr.
-4. Open question: how the oscillating flow becomes net exchange. Liao et al.'s velocities imply
-   ~7 cm of pore-fluid displacement per tide, back and forth. The code counts |q| over the whole orbit
-   as one-way exchange, which is an upper bound if back-and-forth flow brings the same fluid back. L,
-   the layer thickness (194.2 km), sets the pressure gradient, whereas Liao et al.'s pressure varies
-   with latitude over the core's radius.
 
 ### A.3 Which limit binds over the whole layer
 
