@@ -2,7 +2,16 @@
 
 Living document: the current state. History lives in git and in `docs/reviews/`.
 
-**Last updated: 2026-11-01** (`exchange-physics`: the exchange (min of three limits, skin depth,
+**Last updated: 2026-11-03.** ENTICES is ready for production runs. Since the 11-01 revision:
+- **`production-kit` (PR #17):** long runs with grouped chunks and validated step limits, resumable
+  unattended runs, case files and one-command runs (`run_case.R`, `run_sweep.R`), `summary.csv`,
+  `make_figures.R`, and `PRODUCTION_GUIDE.md`. Also the phosphate phases from Thermoddem, each
+  checked against a primary K_sp (Part 10, D15).
+- **`style-rename`:** the entry point is now `ENTICES.R` (a shim keeps the old name working). The
+  documentation was rewritten for style, and the README split into `README.md`, `docs/MODEL.md` and
+  `docs/DEVELOPMENT.md`.
+
+Before that, 2026-11-01 (`exchange-physics`: the exchange (min of three limits, skin depth,
 porosity and Biot coefficient, ΔP from the strain, ocean loading), evolving porosity with the refill,
 Kozeny–Carman, the cometary extensions, D6 closed and the H₂ budget by electron balance,
 `retain_to_pore_volume`, the steady-state diagnostic, the core strain from a layered forward model (N)
@@ -91,6 +100,18 @@ Companion documents (paths on `main`):
 | `coreclath_C4only.dat`: every coupled non-C(+4) carbon entry removed. Leak check passes (100.000000% C(+4) in all blocks) | **D3 decided:** `c4_only` is the default at all temperatures | 3 |
 | The 25 °C porewater becomes a ~2.5 molal NaOH brine (pH 14, I 2.4) as albite dissolves with no Na sink. It flushes over ~3×10⁴ orbits (~100 yr) | A transient; outside the activity model while it lasts | 5 |
 | PHREEQC's *printed* SI tables are offset by 0.143 × the H₂O in each phase's reaction (25 °C brine). CSV SIs are correct | Don't read SIs from `.out` tables | 6 |
+
+**Added 2026-11-01 to 11-03:**
+
+| Finding | Effect | Part |
+|---|---|---|
+| Tidal pumping alone reaches only a skin of 22 m (k = 1e-14 m²) to 69 km (k = 1e-7 m²) below the seafloor, at 1.4–31 °C | IOM release is slow at these temperatures. Deep, hot rock is reached only at very high k | 10 (D12) |
+| With the layered strain at K_d, exchange is ~5e-8 of the skin's pore volume per half-orbit. Ocean circulation takes 2.2e8 yr at k = 1e-14 and 1.2e5 yr at 1e-7 | Same order as buoyancy-driven estimates (Choblet et al. 2017: 25–250 Myr) | 10 (D12, D13) |
+| Hydration closes the skin's pores (φ 0.32 → ~0.17 by 5e4 yr in the reference) | The reference may clog before steady state. `k_floor` sweep cases represent fracture-maintained permeability | 10 (D16) |
+| The pure-water reference ocean reaches pH ~13.5 and Na 0.05 molal by 1e4 yr. Albite releases all its Na within ~1 yr, and little Cl or C is available to pair with it | A mass- and charge-balance result, insensitive to the activity model (≤ 0.2 pH). Carbon (cometary f = 1) holds the ocean near pH 7 to at least 1e4 yr | 10 (open science) |
+| Phosphate from schreibersite (0.040 mol per kg of rock) goes into hydroxyapatite. Ca release is only 0.0755 of 0.286 mol per kg (diopside turns supersaturated at pH 13.5–14), so no calcite forms | The hydroxyapatite–calcite buffer (Postberg et al. 2023) is inactive in this rock. Ocean P ~1.6e-6 molal | 10 (D15) |
+| Bundled databases disagree on phosphate solubilities: hydroxyapatite log K −3.1 (LLNL, phreeqc.dat) vs −7.3 (Thermoddem, minteq, McDowell et al. 1977). Thermoddem's vivianite has a sign error, and LLNL's brushite appears to | Each phosphate phase is checked against a primary K_sp before use | 10 (D15) |
+| Step limits set by validation: x_step_max 0.03, phi_tol 0.003 (the earlier 0.1, 0.01 were ~2% off) | Reference to 1e6 yr ≈ 0.5 day, to 1e8 yr ≈ 6–24 days per case | 9 |
 
 **Corrections to statements in this file's 09-20 version:**
 - "`Hdg` carbon decoupling — CONFIRMED". That holds for the mechanism, but
@@ -1126,8 +1147,9 @@ seed is left unbalanced.
 
 # PART 9 — CODE STATE (NEW)
 
-**Branch state.** `gas-ice-docs` (this revision) is open against `main` @
-`f9a0eb8` (PR #14, `docs-1027`, merged). Before that, `main` @ `c33a77f` (PRs #1–#13 merged: IOM module, Lucas
+**Branch state (2026-11-03).** `main` has `gas-ice-docs` (PR #15), `exchange-physics` (#16),
+`production-kit` (#17) and `style-rename` merged. Production runs follow `PRODUCTION_GUIDE.md`.
+Older history: `gas-ice-docs` opened against `main` @ `f9a0eb8` (PR #14, `docs-1027`, merged). Before that, `main` @ `c33a77f` (PRs #1–#13 merged: IOM module, Lucas
 integration, rock composition, fluorine, cleanup, fixes, consistency,
 pairing, eq-parity, docs-progress, ch4-mode-iom, carbon-d, carbon-default).
 `carbon-default` (`c4_only` default, restart mode check, `make_c4only.py`, the
@@ -1149,6 +1171,18 @@ system total (`restart_closure_check.R`). **Open: which production runs
 used `tidal_kinetic_restart` or `bulk_kinetic_restart`?** those lost K, Mn, Cl
 and Ni at each restart.
 
+**Tests now:** 19 in `tests/run_all.R` (14 quick, plus `pipeline_check`, `restart_closure_check`,
+`gas_mass_balance_check`, `resume_check` and `grouped_validation_check`). The full suite takes a few
+hours with the phosphate phases. `--quick` takes minutes.
+
+**Production kit:** `run_case.R`, `run_sweep.R`, `production_kit.R`, `porosity_evolution.R`,
+`make_figures.R`, `cases/reference.R` and 16 cases in `cases/sweep/`. Outputs go to `runs/<case>/`
+(`summary.csv`, `summary_units.csv`, `RUNINFO.txt`). Runs resume after interruption, and raising
+`t_end_yr` extends a run that ended at t_end (the blank in lockstep).
+
+**Entry point:** `ENTICES.R`. `ENTICES_LF_20260917.R` is a shim with a deprecation message, to be
+removed later.
+
 **Rock density.** `bulk_density()` (`phreeqc_tools.R`) with
 `data/mineral_molar_volumes.csv` (docs/MODEL.md, Interpreting outputs).
 
@@ -1156,12 +1190,13 @@ and Ni at each restart.
 
 | Path | Contents |
 |---|---|
-| top level | `ENTICES.R` (main program), `iom_module.R`, `mineral_dissolution_constants.r`, `phreeqc_tools.R`, `organic_contribution.R`, `parameter_sweep.R`, `ENTICES_runs.Rmd` (a sandbox run in chunks; depends on local plot scripts) |
+| top level | `ENTICES.R` (main program), `run_case.R`, `run_sweep.R`, `production_kit.R`, `porosity_evolution.R`, `make_figures.R`, `PRODUCTION_GUIDE.md`, `iom_module.R`, `mineral_dissolution_constants.r`, `phreeqc_tools.R`, `organic_contribution.R`, `parameter_sweep.R`, `ENTICES_runs.Rmd` (a sandbox run in chunks; depends on local plot scripts) |
 | `databases/` | the three `.dat` files |
 | `reconstruction/` | the rock module |
 | `tests/` | the tests |
 | `examples/` | example runs |
-| `docs/` (`reviews/`, `archive/`) | design docs, review exchanges, superseded docs |
+| `cases/` | `reference.R` and `sweep/` |
+| `docs/` (`reviews/`, `archive/`) | `MODEL.md` (model choices, parameters, outputs), `DEVELOPMENT.md` (tests, restarts, known failures), design docs, review exchanges, superseded docs |
 | `legacy/` | retired files |
 | `scripts/` | standalone scripts |
 
@@ -1205,13 +1240,15 @@ rate, rock table and `rec_eqb` default have all changed since.
 | D4 | ~~`IOM_S` coupled or `Sg 1 H 1`~~ | Part 3 | **Decided:** coupled (H₂ stays coupled, so sulfide is stable) |
 | D5 | ~~`IOM_CHn` routing and formate~~ | Part 3 | **Decided:** CHn as `Mtg 1 H -2.2` (a 2.2 e⁻ reduction imposed by hand, documented); formate as a sensitivity case only |
 | D6 | ~~**Metal corrosion**~~ | Part 5 | **Closed 10-29 (PI):** instantaneous `dissolve_only` corrosion is an accepted idealisation of early differentiation's alteration and outgassing, not a rate claim; the first orbits are a transient, judge results on the long runs (N8). `h2_budget()` and `scale_to_core()` give the early H₂ inventory (docs/MODEL.md) |
-| D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | Largest unsourced kinetic input; source them or run a sensitivity |
+| D7 | **Surface areas** (0.1 vs 5 m²/g, unsourced) | Part 5 | **Merged into the grain-size sweep (10-31):** `ssa = "geometric"` takes the area from the same grain size that sets k (Kozeny–Carman). At 1.6 cm grains forsterite's area is ~800× below the legacy 0.1 m²/g, but it still alters in ~10⁴ yr (10⁷–10⁸ yr with a field correction), short against Gyr |
 | D8 | **Cometary-ice initial ocean** | Part 8 | **Implemented 10-28 as an option** (Miller et al. 2026 Table 5); **NH₃ included by default** (PI 10-29); `f` and `include_less_volatile` (21 species, `data/comet67p_volatility.csv`) added 10-31 |
 | D9 | **Spin-up** before tidal cycling | 10-06 review §4 | **Optional** (D6 closed: not needed for realism); kept as the use for the King et al. (2015) CI forward check (reconstruction §8 item 8) |
 | D10 | Where SI Table 9's S = 37 mg/g comes from (S/C 0.019, below Alexander 2007's CR mean 0.036 and Alexander 2021's 0.021–0.090) | `docs/CR_IOM_COMPOSITION_RESOLVED_2026-09-20.md` §3; `docs/CR_IOM_TABLE9_SULFUR_ADDENDUM_2026-10-27.md` (the Project's §8 addendum) | **The PI is checking it:** a zero-filled average of the seven CR rows reproduces Table 9's sulfur (see the addendum) |
 | D11 | `rec_eqb_minerals` on or off | Part 5 | Off by default; a modelling choice |
 | D12 | **Flow driving (k·ΔP/L): swept over the literature ranges** (ΔP 1e4–1e5 Pa, Liao et al. 2020; k 1e-15–1e-7 m², Choblet et al. 2017 / Fisher et al. 2024 / Liao et al. sub-ranges) | docs/MODEL.md (Flow driving) | **Production k = 1e-7 m² is the top of Liao's range**, 3–6 orders above Fisher's aquifers and ~6 above Choblet's preferred 1e-14–1e-13; its ocean circulation time is 78 yr (243 yr before the ×φ fix of 10-29) against Choblet's 25–250 Myr. `max_tidal_stress` = 1e5 Pa is ~3× Liao's plotted peak. **Open:** how oscillating flow becomes net exchange (the code counts \|q\| over the orbit as one-way exchange); the ×φ in the flow rate was a bug, **fixed 10-29** | **10-31: D7 and D12 merged into one (φ, d, strain_scale) sweep:** Kozeny–Carman k and geometric surface areas from the grain size (item 3; docs/MODEL.md).
 | D13 | **Core rigidity and viscosity** for the tidal strain (exchange) | docs/MODEL.md (The strain) | **N (10-31):** the strain and the ocean load come from a layered forward model of Bagheri et al. 2025's structure (TidalPy), validated against their Table 3; `tidal_scenario` and η select it; placeholders µ 17 GPa, η 1e12 Pa·s pending the PI. **11-01:** the core's bulk modulus is the drained frame K_d = K_grain (1 − φ/φc), K_grain the Hill average of the minerals and the IOM (49.0 GPa; K_d 9.80 GPa at φ 0.32, μ_d 5.2 GPa inside Table 5's 4–70); troilite μ an estimate, IOM μ 1–5 GPa from terrestrial kerogen (Othman et al. 2022; Yan & Han 2013) |
+| D15 | ~~**Phosphate phases**~~ | docs/MODEL.md (Phosphate phases) | **Decided 11-02:** phosphates always included. `phosphate_phases = "apatite"` (default: Thermoddem hydroxyapatite plus whitlockite, OCP, brushite, bobbierite, newberyite, vivianite, struvite) or `"precursor"` (apatite excluded, standing for kinetic inhibition; a sweep case). No "none" option. Each phase within 0.5 log units of a primary K_sp; vivianite takes the primary value; struvite from Bhuiyan et al. (2007). OCP and whitlockite molar volumes PROVISIONAL |
+| D16 | ~~**End condition and clogging**~~ | docs/MODEL.md (Long runs; Clogging and k_floor) | **Decided 11-02:** a run ends at steady state (`ss_tol` 0.01), the 1e8 yr backstop, clogging or φ ≥ φc. The k ≈ 1e-14 case runs to the backstop, "not at steady state by design". Two `k_floor` cases (1e-14, 1e-12 m²) keep fracture-maintained permeability after clogging (Kelemen & Hirth 2012) |
 | D14 | **Initial porosity φ0 and critical porosity φc** | docs/MODEL.md (Porosity and the Biot coefficient) | φ0 = 0.32 is one PlanetProfile fit; sweep 0.1–0.4; Bagheri's 2160–2400 kg/m³ is an end-state check (φ 0.27–0.40 at t = 0 with 15 wt% IOM). α = min(1, φ/φc), **φc = 0.4** (PI 10-30; Dvorkin & Nur 2000: 36–40%); φ ≥ φc gives α = 1 (a suspension); placeholders pending the PI: ε_v/ε₀ (0.192 skin, 0.115 layer), η = 1e12 Pa·s, φc = 0.4 |
 
 **Buoyancy-driven flow is out of scope (PI 10-29):** ENTICES tests whether tidally driven circulation
@@ -1226,7 +1263,9 @@ comparison, not implementation (docs/MODEL.md §3, What tidal-only circulation c
 - ~~N3. Rewrite the `iom_module.R` `Hdg` instructions and the
   `carbon_decoupling_note` for `c4_only`.~~ **Done 10-27** (`docs-1027`).
 - ~~N4. Implement D1/D2~~ **Done 10-28** (`gas-ice-docs`; bracket in Part 7).
-- **N5.** Regenerate production runs on current `main` (PHREEQC 3.8.6,
+- **N5 (now).** Production runs with the kit, following `PRODUCTION_GUIDE.md`. Staged: every
+  case to 1e6 yr first (~0.5 day each), then extend chosen cases toward 1e8 yr (6–24 days each). Earlier
+  notes on this item: regenerate production runs on current `main` (PHREEQC 3.8.6,
   `c4_only`, stamped). **Every earlier run is affected** by at least one of:
   - the IOM_CH4 bug below 150 °C;
   - the coupled-carbon artefact above it;
@@ -1244,6 +1283,10 @@ comparison, not implementation (docs/MODEL.md §3, What tidal-only circulation c
   - flow driving (D12): k·ΔP/L over ΔP 1e4–1e5 Pa and k 1e-15–1e-7 m², each
     case reported as k·ΔP/L, mean Darcy flux and exchange per orbit, with its
     ocean circulation time (docs/MODEL.md has the design and the equivalents).
+- **N6 status (11-03):** the one-at-a-time sweep is in `cases/sweep/` (16 cases: grain size for k
+  ≈ 1e-14 and 1e-11, φ0 0.20 and 0.38, η 4.4e11 and 2.3e12, the dissipative-shell scenario, IOM 3 wt%,
+  `coupled`, cometary f = 0.1 and 1, `retain_to_pore_volume`, the 160 °C bound, `"precursor"`
+  phosphates, and the two `k_floor` cases).
 - **N7.** Spin-up and the King et al. comparison (D9).
 - **N8.** Confirm in a long grouped run that the 25 °C porewater brine flushes
   as expected (Part 5).
@@ -1258,12 +1301,27 @@ comparison, not implementation (docs/MODEL.md §3, What tidal-only circulation c
 - ~~N10. D6~~ **Closed 10-29**: the t = 0 metal pulse is the accepted early-outgassing idealisation.
 - ~~N12~~ **Implemented 10-31:** `pore_gas_fate = "retain_to_pore_volume"` (tidal_kinetic and its
   restart; mass balance in `tests/gas_mass_balance_check.R`). The default stays `"to_ocean"`.
+- **N14.** Remove the `ENTICES_LF_20260917.R` shim once no personal scripts call it.
+- **N15 (optional).** A two-box model: the tidal skin plus a closed deep reactor (`bulk_kinetic`) for
+  the water-saturated rock below δ, to estimate H₂ and carbon stored at depth.
 - **N11.** Fluorite and Fluorapatite have no molar volume (not production
   phases). ~~The IOM density for `bulk_density()` is UNSOURCED~~: **sourced 10-29**,
   Delarue et al. (2026) Eq. 10 at the residual IOM's H/C (1.320 g/cm³ at t = 0;
   docs/MODEL.md §3).
 
-## Still open (science), unchanged from 09-20
+## Still open (science)
+
+Added 11-03:
+- **Net exchange from oscillating flow.** Each half-orbit's volume counts as one-way exchange, an
+  upper bound if the same fluid comes back (docs/MODEL.md §4).
+- **The pure-water ocean's pH ~13.5.** The ocean is short of anions as well as carbon: Cl reaches only
+  ~0.025 molal by 1e6 yr, because the rock's only Cl is chondritic lawrencite, delivered through the
+  skin. Postberg et al. (2009) inferred 0.05–0.2 molal Cl. More Cl in the rock or the ocean may become a
+  sweep item.
+- **Apatite crystallinity.** The −3.1 vs −7.3 log K spread may reflect poorly crystalline vs
+  crystalline apatite (unconfirmed). The `"precursor"` case brackets the kinetic side.
+
+Unchanged from 09-20:
 
 - **`IOM_S` rate:** uncalibrated; Miller measures no H₂S.
 - **CHn:** m0 and shift transferred from vitrinite.
@@ -1302,3 +1360,11 @@ comparison, not implementation (docs/MODEL.md §3, What tidal-only circulation c
 5. **Compare like with like.** The residue check mixed a CR start with
    Murchison data. The organic pairing mixed different rock masses. Both
    produced confident, wrong numbers.
+6. **Check database values against primary literature.** Bundled PHREEQC databases disagreed by
+   up to 13 log units on phosphates, and two entries had sign errors. One consistent source plus a
+   per-phase primary check caught them.
+7. **Test the path the user will take.** Raising `t_end` to extend a run looked supported but didn't
+   work. Only a test that did it found the gap.
+8. **Public docs describe the model, not its history.** Decision tags, dates and names went to the
+   CHANGELOG and this file. The README states current behaviour and its reasons.
+
