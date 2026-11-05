@@ -160,6 +160,8 @@ run_tidal_evolution <- function(template, organic_wt_percent, n_orbits = NULL, o
          if (is.na(stopped)) "" else paste0("; already ended: ", stopped))
     if (!is.na(stopped)) return(result())
   } else logf("start: %s", output_dir)
+  pv <- phreeqc_version_check()   # before chunk 1: a version mismatch warns now, not after hours
+  logf("PHREEQC %s%s", pv$version, if (pv$ok) "" else sprintf(" (WARNING: differs from %s)", PHREEQC_EXPECTED_VERSION))
   leader_row <- function(i) {
     lf <- file.path(follow, "state.rds"); dead <- liveness_watch(follow, file.path(follow, "lock"))
     repeat {
