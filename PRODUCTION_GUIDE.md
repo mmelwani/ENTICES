@@ -12,9 +12,13 @@ edit model code, and should not. Every command runs from the repository root.
 2. Install the software:
    - R 4.5 or later, with the packages `tidyverse`, `glue`, `R6` and `patchwork`;
    - PHREEQC 3.8.6 (USGS). It is found at its default Windows install path, on the `PATH`, or through
-     the `PHREEQC_EXE` environment variable.
+     the `PHREEQC_EXE` environment variable. Each run checks the version before its first chunk and
+     records it in `run.log`.
+
+   The kit is tested on Windows and on Linux (Ubuntu 24.04). macOS is being retested after a fix to how
+   output paths are passed to PHREEQC.
 3. Run the test suite: `Rscript tests/run_all.R`.
-   - It takes a few hours under "apatite" (19 tests). `--quick` skips the long tests and takes a few minutes.
+   - It takes a few hours under "apatite" (20 tests). `--quick` skips the long tests and takes a few minutes.
    - Passing ends with `ALL n TESTS PASSED`.
    - If a test fails, it prints `n OF m TESTS FAILED`, and its log is in `tests/output/run_all/`.
      Don't run production then, and send the log (section 7).
@@ -191,6 +195,8 @@ Units are in `summary_units.csv`.
   and the process table, asked again and again over at least a minute, says its process is gone (no
   answer counts as running). The process crashed or was killed. See its `console.log`, then rerun to
   resume.
+- Status 137 (or "killed"): the operating system stopped PHREEQC because it ran out of memory.
+  Send the files below.
 - A PHREEQC crash at one chunk. Rerunning resumes and retries that chunk. If it fails again at the
   same chunk, send the files below.
 - Known PHREEQC 3.8.6 failures are described in `tests/known_failures/README.md`. The kit avoids them.

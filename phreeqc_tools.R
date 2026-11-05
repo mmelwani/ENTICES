@@ -51,7 +51,20 @@ run_phreeqc <- function(input, database, output = tempfile(fileext = ".out"),
   dir.create(workdir, showWarnings = FALSE, recursive = TRUE)
   input <- normalizePath(input, mustWork = TRUE)
   database <- normalizePath(database, mustWork = TRUE)
-  output <- normalizePath(output, mustWork = FALSE)
+  # Every path PHREEQC gets must be absolute before setwd(workdir). normalizePath(mustWork = FALSE) leaves
+  # a path that doesn't exist yet unchanged on macOS and Linux (Windows makes it absolute), so a relative
+  # output path pointed to the wrong place after setwd() and PHREEQC sat at its file-name prompt. Build
+  # the output from its directory, which must exist.
+  if (!dir.exists(dirname(output)))
+    stop(sprintf("run_phreeqc: the output directory %s does not exist", dirname(output)), call. = FALSE)
+  output <- file.path(normalizePath(dirname(output), mustWork = TRUE), basename(output))
+  # PHREEQC prompts for a file it cannot open, and at end of input it re-prompts in a tight loop (measured
+  # on Windows: 50,661 prompts in 20 s, all captured below), which is how a run can grow until the OS kills
+  # it. So make the prompt impossible: the input and database exist (checked above), and the output is
+  # created here, so PHREEQC can open all three.
+  if (!file.create(output, showWarnings = FALSE))
+    stop(sprintf("run_phreeqc: cannot create the output file %s", output), call. = FALSE)
+  workdir <- normalizePath(workdir, mustWork = TRUE)
   old <- setwd(workdir); on.exit(setwd(old), add = TRUE)
   t0 <- Sys.time()
   console <- suppressWarnings(system2(phreeqc_exe(), c(shQuote(input), shQuote(output), shQuote(database)),
@@ -73,6 +86,19 @@ run_phreeqc <- function(input, database, output = tempfile(fileext = ".out"),
   list(status = status, version = ver, output_lines = out,
        errors = sum(startsWith(out, "ERROR")), warnings = sum(startsWith(out, "WARNING")),
        seconds = secs)
+}
+
+# The executable's version, from a one-line run, checked against PHREEQC_EXPECTED_VERSION. The kit
+# calls it before the first chunk, so a mismatch shows before hours of running rather than in the
+# results. Returns list(version, ok); warns when they differ.
+phreeqc_version_check <- function(database = file.path("databases", "coreclath_C4only.dat")) {
+  d <- tempfile("phreeqc_version_"); dir.create(d); on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  inp <- file.path(d, "version.pqi"); writeLines(c("SOLUTION 1", "END"), inp)
+  r <- run_phreeqc(inp, database, output = file.path(d, "version.out"), workdir = d, warn_version = FALSE)
+  ok <- identical(r$version, PHREEQC_EXPECTED_VERSION)
+  if (!ok) warning(sprintf("PHREEQC version %s differs from %s, the version ENTICES inputs are generated for: minor phases and trace species may differ",
+                           r$version, PHREEQC_EXPECTED_VERSION), call. = FALSE)
+  list(version = r$version, ok = ok)
 }
 
 # ---- Carbon by actual oxidation state -------------------------------------
