@@ -15,8 +15,7 @@ edit model code, and should not. Every command runs from the repository root.
      the `PHREEQC_EXE` environment variable. Each run checks the version before its first chunk and
      records it in `run.log`.
 
-   The kit is tested on Windows and on Linux (Ubuntu 24.04). macOS is being retested after a fix to how
-   output paths are passed to PHREEQC.
+   The kit is tested on Windows, Linux and macOS.
 3. Run the test suite: `Rscript tests/run_all.R`.
    - It takes a few hours under "apatite" (20 tests). `--quick` skips the long tests and takes a few minutes.
    - Passing ends with `ALL n TESTS PASSED`.
